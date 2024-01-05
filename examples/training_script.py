@@ -55,13 +55,17 @@ txy, pre_width, tot_unit_length = calc_all_skeleton_and_width(
     params.n_segments,
 )
 
-assert txy.shape == (T, 2, n_segs + 1), "The skeleton and imagesize"
+assert txy.shape == (
+    T,
+    2,
+    params.n_segments + 1,
+), "The skeleton and imagesize got wrong"
 
 theta = calc_theta_from_xy(txy)
 
 alpha = pre_width.min()
 
-cap_span = estimate_batchsize(params.device, T, im_width, im_height, n_segs)
+cap_span = estimate_batchsize(params.device, T, im_width, im_height, params.n_segments)
 
 # %% screen for complex and normal block
 im_model = make_worm_batch(
