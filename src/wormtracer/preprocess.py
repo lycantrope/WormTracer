@@ -11,7 +11,6 @@ from scipy.sparse import csgraph as _csgraph
 from scipy.spatial import distance_matrix as _distance_matrix
 import skimage.morphology as _morphology
 from tqdm import tqdm as _tqdm
-import matplotlib.pyplot as _plt
 
 from wormtracer.types import (
     _IMREAD_T,
@@ -20,7 +19,6 @@ from wormtracer.types import (
     _NP_T,
     _T,
     _OPTIONAL_NP,
-    _OFFSET_T,
     _Offset,
 )
 from wormtracer.utils import eprint
@@ -469,4 +467,3 @@ def find_theta_candidate(theta) -> _T.Tuple[_NP_T, _NP_T]:
 
     theta_subpair = theta_cands[(0, 1), cand_idx, :]
     return theta_pair, theta_subpair
-

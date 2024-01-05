@@ -1,4 +1,4 @@
-from attr import field, define
+import attrs as _attrs
 import numpy as _np
 import torch as _t
 import torch.nn as _nn
@@ -25,12 +25,12 @@ def body_axis_function(body_ratio, n_segments, base=0.5):
     return body_axis_weight.reshape(1, n_segments - 2)
 
 
-@define
+@_attrs.define
 class AnnealingFunction:
-    T: float = field(converter=float)
-    speed: float = field(default=0.2)
-    start: float = field(default=0.0)
-    slope: float = field(default=1.0)
+    T: float = _attrs.field(converter=float)
+    speed: float = _attrs.field(default=0.2)
+    start: float = _attrs.field(default=0.0)
+    slope: float = _attrs.field(default=1.0)
 
     def get_weights(self, epoch: int):
         x = _t.abs(_t.arange(-self.T / 2 + 0.5, self.T / 2 + 0.5)) - self.T / 2
@@ -123,13 +123,13 @@ class CenterLoss(_nn.Module):
         return _t.cdist(ct, init_ct).pow(2) / self.unit * self.weight
 
 
-@define(kw_only=True, frozen=True, order=True)
+@_attrs.define(kw_only=True, frozen=True, order=True)
 class WormLosses:
     image: _NP_T
     continuity: _NP_T
     smoothness: _NP_T
-    length: float = field(eq=False)
-    center: float = field(eq=False)
+    length: float = _attrs.field(eq=False)
+    center: float = _attrs.field(eq=False)
 
     def __ne__(self, other: "WormLosses") -> bool:
         pair = (self, other)

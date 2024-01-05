@@ -4,7 +4,6 @@ import torch.nn as _nn
 import wormtracer.loss as _loss
 from wormtracer.model import WormImageModel as _Model
 import attrs as _attrs
-from wormtracer.plot import make_progress_image
 from wormtracer.types import *
 from wormtracer.parameter import Parameters
 

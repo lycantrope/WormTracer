@@ -2,7 +2,7 @@ import itertools
 from torch.utils import data as _data
 import attrs as _attrs
 import numpy as _np
-from wormtracer.types import _PATH, _T, _Path, _NP_T
+from wormtracer.types import _PATH_T, _T, _Path, _NP_T
 from wormtracer.preprocess import screen_all_blocks
 
 
@@ -133,7 +133,7 @@ def get_use_points(
 
 
 class ImageStack(_data.Dataset):
-    def __init__(self, data_folder: _PATH, ext: str = "png"):
+    def __init__(self, data_folder: _PATH_T, ext: str = "png"):
         super().__init__()
         self.homepath = _Path(data_folder)
         # sort data in lexicographic order
