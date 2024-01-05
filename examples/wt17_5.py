@@ -12,6 +12,7 @@ import cv2
 import torch
 import glob
 import os
+from pathlib import Path
 import datetime
 import json
 import sys
@@ -89,15 +90,20 @@ save_progress_num(int, > 0):
 This value is the number of images that are included in saved progress tracing.
 """
 
-dataset_path = "/content/gdrive/MyDrive/WormTracer/WT"
-functions_path = "/content/gdrive/MyDrive/WormTracer"
+
+home = Path("./WormTracer")
+dataset_path = home.joinpath("WT")
+functions_path = home
+params_path = home.joinpath("hyperparams.json")
 extension = "png"
 
+
+hyperparams = json.load(params_path.open("r"))
 params = {}
-params['start_T'] = 0
-params['end_T'] = 0
+params['start'] = 0
+params['end'] = 0
+params['step'] = 1
 params['rescale'] = 1
-params['Tscale'] = 1
 
 params['continuity_loss_weight'] = 10000
 params['smoothness_loss_weight'] = 100000
@@ -110,13 +116,13 @@ params['speed'] = 0.05
 params['lr'] = 0.05
 params['body_ratio'] = 90
 
-display_option = {}
-display_option['num_t'] = 5 #np.inf
-display_option['show_progress_freq'] = 200
-display_option['save_progress_freq'] = 50
-display_option['save_progress_num'] = 50
-display_option['ShowProgress'] = False
-display_option['SaveProgress'] = False
+display_options = {}
+display_options['num_t'] = 5 #np.inf
+display_options['show_progress_freq'] = 200
+display_options['save_progress_freq'] = 50
+display_options['save_progress_num'] = 50
+display_options['ShowProgress'] = False
+display_options['SaveProgress'] = False
 
 #### make use of GPU ####
 if torch.cuda.is_available():
@@ -126,11 +132,12 @@ else:
   device = 'cpu'
   print('Running using CPU. GPU is recommended')
 
-sys.path.append(functions_path)
-from functions import *
+from legacy.functions import *
 
 # read data property(image size, frame number)
-filenames_all = sorted(glob.glob(os.path.join(dataset_path, "*."+extension)))
+dataset = sorted(dataset_path.glob("*.{}".format(extension)), key = lambda x: x.stem)
+filenames_all = sorted(dataset_path.glob("*.{}".format(extension)), key = lambda x: x.stem)
+
 filenames_full = filenames_all[:params['end_T']][params['start_T']:] if params['end_T'] else filenames_all[params['start_T']:]
 filenames = filenames_full[::params['Tscale']]
 imshape, Worm_is_black = get_property(filenames, params['rescale'])
@@ -156,10 +163,11 @@ show_image(real_image, display_option['num_t'], title='real image')
 show_image(model_image, display_option['num_t'], title='model image')
 print('use_points \n',use_points)
 
-losses_all = []; shape_params = [];
+losses_all = []; 
+shape_params = [];
 unitLength = prepare_for_train(pre_width, simple_area, x, y, params)
 if display_option['SaveProgress']:
-  clear_dir(dataset_path, 'progress_image')
+  rmtree(dataset_path, 'progress_image')
 
 # main loop 1
 for i in range(len(use_points)-1):

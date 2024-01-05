@@ -1,0 +1,25 @@
+{
+    "params": {
+        "start_T": 0,
+        "end_T": 0,
+        "rescale": 1,
+        "Tscale": 1,
+        "continuity_loss_weight": 10000,
+        "smoothness_loss_weight": 100000,
+        "length_loss_weight": 50,
+        "center_loss_weight": 50,
+        "n_segments": 100,
+        "epoch_plus": 1500,
+        "speed": 0.05,
+        "lr": 0.05,
+        "body_ratio": 90
+    },
+    "display_options": {
+        "num_t": 5,
+        "show_progress_freq": 200,
+        "save_progress_freq": 50,
+        "save_progress_num": 50,
+        "show_progress": false,
+        "save_progress": false
+    }
+}

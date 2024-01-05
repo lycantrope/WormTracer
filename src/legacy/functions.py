@@ -259,6 +259,7 @@ def get_image_loss_max(image_losses, real_image, x, y, x_st, y_st, params, image
   """Create bad image and get bad image_loss to judge complex area."""
   small_loss_frame = np.argmin(image_losses)
   im = real_image[small_loss_frame].reshape(-1,real_image.shape[1],real_image.shape[2])
+  
   x0 = torch.ones(params['plot_n']) * x[small_loss_frame,0].reshape(1,-1)
   y0 = torch.ones(params['plot_n']) * y[small_loss_frame,0].reshape(1,-1)
   im0 = make_image(x0, y0, x_st, y_st, params, image_info, cap_span)
@@ -423,11 +424,9 @@ def make_progress_image(image, num_t=20):
 
 
 def save_progress(image, dataset_path, display_option, txt='real'):
-  if display_option['SaveProgress']:
-    use_area = display_option['use_area']
-    progress_image = make_progress_image(image, display_option['save_progress_num'])
-    filename = os.path.join(dataset_path, 'progress_image', '{}-{}_{}.png'.format(use_area[0], use_area[1], txt))
-    cv2.imwrite(filename, progress_image)
+  progress_image = make_progress_image(image, display_option['save_progress_num'])
+  filename = os.path.join(dataset_path, 'progress_image', '{}-{}_{}.png'.format(use_area[0], use_area[1], txt))
+  cv2.imwrite(filename, progress_image)
 
 
 def remove_progress(dataset_path, filename):
