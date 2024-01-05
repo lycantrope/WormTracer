@@ -3,7 +3,6 @@ from torch.utils import data as _data
 import attrs as _attrs
 import numpy as _np
 from wormtracer.types import _PATH_T, _T, _Path, _NP_T
-from wormtracer.preprocess import screen_all_blocks
 
 
 class Block(_T.NamedTuple):
