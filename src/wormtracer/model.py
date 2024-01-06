@@ -1,9 +1,9 @@
+import numpy as _np
 import torch as _torch
 import torch.nn as _nn
 from torch.nn.parameter import Parameter as _Parameter
 
-from wormtracer.formula import pixel_value
-from wormtracer.types import _NP_T, _T
+from wormtracer.types import _NP_T
 from wormtracer.parameter import ShapeParameters as _ShapeParams
 
 
@@ -67,39 +67,44 @@ class WormSkeletonLayer(_nn.Module):
         return (txy - txy_mean) * units + cts
 
 
-class WormImageModel(_nn.Module):
-    def __init__(
+class WormPixelLayer(_nn.Module):
+    def __init__(self, *, contrast: float = 1.2, sharpness: float = 2.0):
+        self.contrast = _Parameter(_torch.tensor(contrast), requires_grad=False)
+        self.sharpness = _Parameter(_torch.tensor(sharpness), requires_grad=False)
+        self.scale = _Parameter(_torch.tensor(6.0), requires_grad=False)
+        self.relu6 = _nn.ReLU6()
+        self.sig = _nn.Sigmoid()
+
+    def forward(self, im: _torch.Tensor) -> _torch.Tensor:
+        im = self.sig(im * self.sharpness) * self.contrast
+        return self.relu6(im) / self.scale
+
+
+class WormImageLayer(_nn.Module):
+    def __init__(self, *, width: int, height: int):
+        self.width = _Parameter(_torch.tensor(width), requires_grad=False)
+        self.height = _Parameter(_torch.tensor(height), requires_grad=False)
+        self.pixel_value = WormPixelLayer()
+
+    def forward(
         self,
-        *,
-        shape_layer: WormShapeLayer,
-        skel_layer: WormSkeletonLayer,
-        imshape: _T.Tuple[int, int],
-    ):
-        super(WormImageModel, self).__init__()
-        self.shape_layer = shape_layer
-        self.skel_layer = skel_layer
-        self.im_height, self.im_width = imshape
-
-    def forward(self):
-        # theta: shape [T, n_segs]
-        txy = self.skel_layer()
-        T = txy.size(dim=0)
-        n_pts = txy.size(dim=2)
-        n_segs = n_pts - 1
-        worm_width = self.shape_layer(n_segs)
-
+        skel: _torch.Tensor,
+        shape: _torch.Tensor,
+    ) -> _torch.Tensor:
+        """Get pixel value when distance from midline and worm width is given."""
         # txy: [T, 2, n_pts]
-        cent_mid = (txy[:, :, :-1] + txy[:, :, 1:]) * 0.5
+        T = skel.size(dim=0)
+        cent_mid = (skel[:, :, :-1] + skel[:, :, 1:]) * 0.5
         # cent_mid_3d: [T, 2, n_pts-1, 1, 1]
-        cent_mid_3d = cent_mid.reshape(T, 2, n_segs, 1, 1)
+        cent_mid_3d = cent_mid.reshape(T, 2, -1, 1, 1)
 
         cent_mid_x_3d = cent_mid_3d[:, 0]
         cent_mid_y_3d = cent_mid_3d[:, 1]
         # worm_wid_3d: [1, n_pts-1, 1, 1]
-        worm_wid_3d = worm_width.reshape(1, n_segs, 1, 1)
+        worm_wid_3d = shape.reshape(1, -1, 1, 1)
 
-        y_3d = _torch.arange(self.im_height).reshape(1, 1, self.im_height, 1)
-        x_3d = _torch.arange(self.im_width).reshape(1, 1, 1, self.im_width)
+        y_3d = _torch.arange(self.height).reshape(1, 1, -1, 1)
+        x_3d = _torch.arange(self.width).reshape(1, 1, 1, -1)
 
         # segment_distance_3d: [T, n_segs, im_height, im_width]
         # worm_wid_3d: [1, n_segs, 1, 1]
@@ -109,5 +114,78 @@ class WormImageModel(_nn.Module):
 
         # image_3d = [T, n_segs, im_height, im_width]
         delta_max, _ = _torch.max(segment_distance_3d - worm_wid_3d, dim=1)
-        image = pixel_value(delta_max)
+        return self.pixel_value(delta_max)
+
+
+class WormModel(_nn.Module):
+    def __init__(
+        self,
+        *,
+        shape_layer: WormShapeLayer,
+        skel_layer: WormSkeletonLayer,
+        image_layer: WormImageLayer,
+    ):
+        super(WormModel, self).__init__()
+        self.shape_layer = shape_layer
+        self.skel_layer = skel_layer
+        self.image_layer = image_layer
+
+    def forward(self):
+        # theta: shape [T, n_segs]
+        txy = self.skel_layer()
+        n_pts = txy.size(dim=2)
+        n_segs = n_pts - 1
+        worm_width = self.shape_layer(n_segs)
+        image = self.image_layer(txy, worm_width)
         return image
+
+
+def make_worm_batch(
+    txy: _NP_T,
+    pre_width: _NP_T,
+    width: int,
+    height: int,
+    batchsize: int,
+    device: str,
+) -> _NP_T:
+    """Create model image by dividing them to avoid CUDA memory error."""
+    from numpy import split
+
+    T = txy.shape[0]
+    imagestack = _np.zeros((T, height, width))
+    cut = _np.arange(0, T, step=batchsize)
+    chunks = zip(
+        split(imagestack, cut),
+        split(txy, cut),
+        split(pre_width, cut),
+    )
+    with _torch.no_grad():
+        image_layer = WormImageLayer(width=width, height=height)
+        for dst, t, w in chunks:
+            im = image_layer(
+                skel=_torch.from_numpy(t).to(device),
+                shape=_torch.from_numpy(w).to(device),
+            )
+            dst[:, :, :] = im.detach().cpu().numpy()
+
+    return imagestack
+
+
+def get_image_loss_max(
+    im: _NP_T,
+    skel: _NP_T,
+    shape: _NP_T,
+) -> float:
+    """Create bad image and get bad image_loss to judge complex area."""
+    height, width = im.shape
+    image_layer = WormImageLayer(width=width, height=height)
+
+    skel_bad = _np.ones_like(skel) * skel.mean(axis=1).reshape(2, 1)
+
+    with _torch.no_grad():
+        im_bad = image_layer(
+            skel=_torch.from_numpy(skel_bad).reshape(1, 2, -1),
+            shape=_torch.from_numpy(shape).reshape(1, -1),
+        ).reshape(height, width)
+    image_loss_max = _np.mean((im - im_bad) ** 2)
+    return image_loss_max

@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import wormtracer as wt
 from wormtracer.dataset import get_use_points
-from wormtracer.formula import get_image_loss_max, make_worm_batch
+from wormtracer.formula import get_image_loss_max
 from wormtracer.loss import find_outliner
 from wormtracer.train import train3
 from wormtracer.preprocess import (
@@ -15,7 +15,13 @@ from wormtracer.preprocess import (
     read_imagestack,
     calc_all_skeleton_and_width,
 )
-from wormtracer.model import WormImageModel, WormSkeletonLayer, WormShapeLayer
+from wormtracer.model import (
+    make_worm_batch,
+    WormModel,
+    WormSkeletonLayer,
+    WormShapeLayer,
+    WormImageLayer,
+)
 from pathlib import Path
 
 from wormtracer.utils import calc_avg_shape_params
@@ -81,8 +87,10 @@ image_losses = np.mean(
     axis=(1, 2),
 )
 
-nearest_idx = np.argmin(image_losses)
-image_loss_max = get_image_loss_max(nearest_idx, txy, imagestack, pre_width)
+min_idx = np.argmin(image_losses)
+image_loss_max = get_image_loss_max(
+    imagestack[min_idx], txy[min_idx], pre_width[min_idx]
+)
 
 training_blocks = get_use_points(image_losses, image_loss_max)
 
@@ -119,10 +127,10 @@ for idx, is_complex, start, end in training_blocks.batch_iter(cap_span):
         theta=theta_block,
         unit_length=unit_length,
     )
-    model = WormImageModel(
+    model = WormModel(
         shape_layer=shape_layer,
         skel_layer=skel_layer,
-        imshape=(H, W),
+        image_layer=WormImageLayer(width=W, height=H),
     )
     # make model instance and training
     optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
@@ -170,14 +178,14 @@ for idx, is_complex, start, end in training_blocks.batch_iter(cap_span):
     target_theta, _ = find_theta_candidate(theta_block)
 
     init_theta = np.linspace(theta_block[0, :], target_theta[0], T)
-    model = WormImageModel(
+    model = WormModel(
         skel_layer=WormSkeletonLayer(
             ct=init_ct.copy(),
             theta=init_theta,
             unit_length=unit_length,
         ),
         shape_layer=shape_layer,
-        imshape=(H, W),
+        image_layer=WormImageLayer(width=W, height=H),
     )
     # make model instance and training
     optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
@@ -193,14 +201,14 @@ for idx, is_complex, start, end in training_blocks.batch_iter(cap_span):
     # flip final theta to trace again
     init_theta_filp = np.linspace(theta_block[0, :], target_theta[1], T)
 
-    model2 = WormImageModel(
+    model2 = WormModel(
         skel_layer=WormSkeletonLayer(
             ct=init_ct.copy(),
             theta=init_theta_filp,
             unit_length=unit_length,
         ),
         shape_layer=shape_layer,
-        imshape=(H, W),
+        image_layer=WormImageLayer(width=W, height=H),
     )
 
     optimizer = torch.optim.Adam(model2.parameters(), lr=params["lr"])
@@ -255,14 +263,14 @@ for idx, is_complex, start, end in training_blocks.batch_iter(cap_span):
     _, target_theta = find_theta_candidate(theta_block)
 
     init_theta_filp = np.linspace(theta_block[0, :], target_theta[0], T)
-    model = WormImageModel(
+    model = WormModel(
         shape_layer=WormSkeletonLayer(
             ct=init_ct.copy(),
             theta=init_theta_filp,
             unit_length=unit_length,
         ),
         skel_layer=skel_layer,
-        imshape=(H, W),
+        image_layer=WormImageLayer(width=W, height=H),
     )
     # make model instance and training
     optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
@@ -281,14 +289,14 @@ for idx, is_complex, start, end in training_blocks.batch_iter(cap_span):
 
     init_theta_flip = np.linspace(theta_block[0, :], target_theta[1], T)
 
-    model2 = WormImageModel(
+    model2 = WormModel(
         skel_layer=WormSkeletonLayer(
             ct=init_ct.copy(),
             theta=init_theta_flip,
             unit_length=unit_length,
         ),
         shape_layer=shape_layer,
-        imshape=(H, W),
+        image_layer=WormImageLayer(width=W, height=H),
     )
 
     optimizer = torch.optim.Adam(model2.parameters(), lr=params["lr"])
