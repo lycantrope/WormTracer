@@ -6,15 +6,12 @@ from wormtracer.types import _NP_T
 
 
 def pixel_value(
-    d: _torch.Tensor,
-    width: _torch.Tensor,
+    delta: _torch.Tensor,
     contrast: float = 1.2,
     sharpness: float = 2.0,
 ) -> _torch.Tensor:
     """Get pixel value when distance from midline and worm width is given."""
-    return 255 * contrast * _torch.sigmoid((width - d) * sharpness) + 127.5 * (
-        1.0 - contrast
-    )
+    return 255 * contrast * _torch.sigmoid(delta * sharpness) + 127.5 * (1.0 - contrast)
 
 
 def calc_worm_width(
@@ -77,8 +74,8 @@ def make_worm(txy: _torch.Tensor, worm_width: _torch.Tensor, im_width, im_height
     # the max_span will be used in here (n_segs * im_height*im_width)
 
     # image_3d = [T, n_pts-1, im_height, im_width]
-    image_3d = pixel_value(segment_distance_3d, worm_wid_3d)
-    image, _ = _torch.max(image_3d, dim=1)
+    image_max, _ = _torch.max(segment_distance_3d - worm_wid_3d, dim=1)
+    image = pixel_value(image_max)
     return image
 
 

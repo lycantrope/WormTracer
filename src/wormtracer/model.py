@@ -9,7 +9,7 @@ from wormtracer.parameter import ShapeParameters as _ShapeParams
 
 class WormShapeLayer(_nn.Module):
     def __init__(self, *, alpha: float, delta: float, gamma: float):
-        super().__init__()
+        super(WormShapeLayer, self).__init__()
         self.alpha = _Parameter(_torch.tensor(alpha))
         self.delta = _Parameter(_torch.tensor(delta))
         self.gamma = _Parameter(_torch.tensor(gamma))
@@ -47,7 +47,7 @@ class WormSkeletonLayer(_nn.Module):
         theta: _NP_T,
         unit_length: float,
     ):
-        super().__init__()
+        super(WormSkeletonLayer, self).__init__()
         T, _ = ct.shape
         unit_vec = _torch.ones(T) * unit_length
         self.ct = _Parameter(_torch.from_numpy(ct))
@@ -75,7 +75,7 @@ class WormImageModel(_nn.Module):
         skel_layer: WormSkeletonLayer,
         imshape: _T.Tuple[int, int],
     ):
-        super().__init__()
+        super(WormImageModel, self).__init__()
         self.shape_layer = shape_layer
         self.skel_layer = skel_layer
         self.im_height, self.im_width = imshape
