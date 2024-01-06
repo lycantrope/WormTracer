@@ -3,7 +3,7 @@ import torch as _torch
 import torch.nn as _nn
 from torch.nn.parameter import Parameter as _Parameter
 
-from wormtracer.types import _NP_T
+from wormtracer.types import _NP_T, _T
 from wormtracer.parameter import ShapeParameters as _ShapeParams
 
 
@@ -81,10 +81,18 @@ class WormPixelLayer(_nn.Module):
 
 
 class WormImageLayer(_nn.Module):
-    def __init__(self, *, width: int, height: int):
+    def __init__(
+        self,
+        *,
+        width: int,
+        height: int,
+        pixel_layer: _T.Optional[WormPixelLayer] = None,
+    ):
         self.width = _Parameter(_torch.tensor(width), requires_grad=False)
         self.height = _Parameter(_torch.tensor(height), requires_grad=False)
-        self.pixel_value = WormPixelLayer()
+        if pixel_layer is None:
+            self.pixel_layer = WormPixelLayer()
+        self.pixel_layer = pixel_layer
 
     def forward(
         self,
@@ -114,7 +122,7 @@ class WormImageLayer(_nn.Module):
 
         # image_3d = [T, n_segs, im_height, im_width]
         delta_max, _ = _torch.max(segment_distance_3d - worm_wid_3d, dim=1)
-        return self.pixel_value(delta_max)
+        return self.pixel_layer(delta_max)
 
 
 class WormModel(_nn.Module):
