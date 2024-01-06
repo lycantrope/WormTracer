@@ -1,8 +1,7 @@
-import matplotlib.pyplot as plt
-import matplotlib.figure as _figure
+import matplotlib.pyplot as _plt
 import numpy as _np
-import typing as _T
-import math
+import typing as _T, _Figure, _OPTIONAL_NP
+from math import ceil as _ceil
 
 
 def show_image(
@@ -10,9 +9,9 @@ def show_image(
     num_t: int = 5,
     title: str = "",
     n_cols: int = 5,
-    xy1: _T.Optional[_T.Tuple[_np.ndarray, _np.ndarray]] = None,
-    xy2: _T.Optional[_T.Tuple[_np.ndarray, _np.ndarray]] = None,
-) -> _figure.Figure:
+    xy1: _OPTIONAL_NP = None,
+    xy2: _OPTIONAL_NP = None,
+) -> _Figure:
     """
     Display a stack of images over time with optional point annotations.
 
@@ -21,10 +20,10 @@ def show_image(
         num_t (int, optional): Number of time points to display. Defaults to 5.
         title (str, optional): Title for the plot. Defaults to an empty string.
         n_cols (int, optional): Number of columns in the display grid. Defaults to 5.
-        xy1 (Optional[Tuple[np.ndarray, np.ndarray]], optional): Optional coordinates
-            (X, Y) to annotate on the plot for the first set of points. Defaults to None.
-        xy2 (Optional[Tuple[np.ndarray, np.ndarray]], optional): Optional coordinates
-            (X, Y) to annotate on the plot for the second set of points. Defaults to None.
+        xy1 (Optional[np.ndarray]], optional): Optional coordinates
+            (T, XY, N) to annotate on the plot for the first set of points. Defaults to None.
+        xy2 (Optional[np.ndarray]], optional): Optional coordinates
+            (T, XY, N) to annotate on the plot for the first set of points. Defaults to None.
 
     Returns:
         plt.Figure: The Matplotlib figure object.
@@ -58,8 +57,8 @@ def show_image(
 
     n_axes = len(t_slice)
     # binning plot into n_cols
-    n_rows = math.ceil(n_axes / n_cols)
-    fig, _ = plt.subplots(
+    n_rows = _ceil(n_axes / n_cols)
+    fig, _ = _plt.subplots(
         n_rows,
         n_cols,
         figsize=(2.4 * n_cols + 0.8, 2 * n_rows),
@@ -81,13 +80,11 @@ def show_image(
         ax.set_ylim(0, H)
         ax.set_title("{} t = {}".format(title, idx))
 
-        if xy1 is not None and xy1[0].shape == xy1[1].shape:
-            x1, y1 = xy1
-            ax.scatter(x1[idx], y1[idx], c="r", s=30, label="xy1")
+        if xy1 is not None:
+            ax.scatter(xy1[idx, 0], xy1[idx, 1], c="r", s=30, label="xy1")
 
-        if xy2 is not None and xy2[0].shape == xy2[1].shape:
-            x2, y2 = xy2
-            ax.scatter(x2[idx], y2[idx], c="y", s=30, label="xy2")
+        if xy2 is not None and xy1.ndim == 3:
+            ax.scatter(xy2[idx, 0], xy2[idx, 1], c="y", s=30, label="xy2")
 
         ax.set_axis_on()
 
@@ -103,7 +100,7 @@ def make_progress_image(im_stack: _np.ndarray, num_t=20, n_cols: int = 5):
     step = max(T // (num_t - 1), 1)
     t_slice = [*range(0, T, step)]
     n_im = len(t_slice)
-    n_rows = math.ceil(n_im / n_cols)
+    n_rows = _ceil(n_im / n_cols)
     # binning plot into n_cols
     progress_image = _np.zeros((H * n_rows, W * n_cols), dtype="uint8")
     for i, idx in enumerate(t_slice):

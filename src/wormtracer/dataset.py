@@ -1,4 +1,4 @@
-import itertools
+from itertools import count as _Counter
 from torch.utils import data as _data
 import attrs as _attrs
 import numpy as _np
@@ -61,7 +61,7 @@ class TrainingBlocks:
         label, onset = _np.unique(self._blocks, return_index=True)
         offset = onset + block_sizes - 1
         mask = _np.isin(label, self.complex_block)
-        counter = itertools.count()
+        counter = _Counter()
         for m, start, end in zip(mask, onset, offset):
             if batchsize is None:
                 yield Block(next(counter), m, start, end)

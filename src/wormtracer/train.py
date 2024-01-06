@@ -5,7 +5,7 @@ import wormtracer.loss as _loss
 import attrs as _attrs
 
 from .types import *
-from .parameter import HyperParameters
+from .parameter import HyperParameters as _HyperParams
 from .model import WormModel as _Model
 
 
