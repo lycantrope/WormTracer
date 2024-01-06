@@ -1,5 +1,4 @@
 # %% import dependency
-import typing
 import numpy as np
 import torch
 import wormtracer as wt
@@ -19,7 +18,7 @@ from wormtracer.preprocess import (
 from wormtracer.model import WormImageModel, WormSkeletonLayer, WormShapeLayer
 from pathlib import Path
 
-from wormtracer.utils import get_shape_params_from_history
+from wormtracer.utils import calc_avg_shape_params
 
 #  %%
 home = Path(".")
@@ -95,7 +94,7 @@ unit_length = np.sqrt((np.diff(txy[simple_mask], axis=2) ** 2).sum(axis=1).media
 shape_layer = WormShapeLayer(alpha=pre_width[simple_mask].mean(), delta=0.0, gamma=0.0)
 
 losses_all = []
-shape_params: typing.Dict[int, typing.Dict] = {}
+shape_params = []
 for idx, is_complex, start, end in training_blocks.batch_iter(cap_span):
     if is_complex:
         continue
@@ -138,8 +137,7 @@ for idx, is_complex, start, end in training_blocks.batch_iter(cap_span):
     ct_model = skel_layer.ct.detach().cpu().numpy()
 
     losses_all.append((idx, losses))
-    shape_params[idx] = model.shape_layer.get_width_params()
-    shape_params[idx]["T"] = T
+    shape_params.append((T, model.shape_layer.get_shape_params()))
 
     txy[start:end, :, :] = (
         txy_model + ct_model.reshape(T, 2, 1) - np.array(all_offset).reshape(1, 2, 1)
@@ -147,8 +145,9 @@ for idx, is_complex, start, end in training_blocks.batch_iter(cap_span):
 
 # %%
 
+avg_shape_params = calc_avg_shape_params(shape_params)
 # main loop 2
-shape_layer = WormShapeLayer(**get_shape_params_from_history(shape_params))
+shape_layer = WormShapeLayer.from_shape_params(avg_shape_params)
 
 # main loop 2
 for idx, is_complex, start, end in training_blocks.batch_iter(cap_span):

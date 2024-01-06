@@ -1,18 +1,17 @@
 import torch as _torch
 import torch.nn as _nn
 from torch.nn.parameter import Parameter as _Parameter
-import typing as _T
 
 from wormtracer.formula import pixel_value
-from wormtracer.types import _NP_T
+from wormtracer.types import _NP_T, _T, ShapeParams
 
 
 class WormShapeLayer(_nn.Module):
-    def __init__(self, alpha: float, delta: float, gamma: float):
+    def __init__(self, *, alpha: float, delta: float, gamma: float):
         super().__init__()
-        self.alpha = _Parameter(_torch.from_numpy(alpha))
-        self.delta = _Parameter(_torch.from_numpy(delta))
-        self.gamma = _Parameter(_torch.from_numpy(gamma))
+        self.alpha = _Parameter(_torch.tensor(alpha))
+        self.delta = _Parameter(_torch.tensor(delta))
+        self.gamma = _Parameter(_torch.tensor(gamma))
 
     def forward(self, n_pts: int):
         unit_i = _torch.arange(n_pts - 1)
@@ -27,17 +26,22 @@ class WormShapeLayer(_nn.Module):
 
         return worm_wid
 
-    def get_width_params(self) -> _T.Dict[str, float]:
-        return dict(
-            alpha=self.alpha.detach().cpu(),
-            gamma=self.gamma.detach().cpu(),
-            delta=self.delta.detach().cpu(),
+    def get_shape_params(self) -> ShapeParams:
+        return ShapeParams(
+            alpha=self.alpha.item(),
+            delta=self.delta.item(),
+            gamma=self.gamma.item(),
         )
+
+    @classmethod
+    def from_shape_params(cls, params: ShapeParams) -> "WormShapeLayer":
+        return cls(alpha=params.alpha, delta=params.delta, gamma=params.gamma)
 
 
 class WormSkeletonLayer(_nn.Module):
     def __init__(
         self,
+        *,
         ct: _NP_T,
         theta: _NP_T,
         unit_length: float,
@@ -65,6 +69,7 @@ class WormSkeletonLayer(_nn.Module):
 class WormImageModel(_nn.Module):
     def __init__(
         self,
+        *,
         shape_layer: WormShapeLayer,
         skel_layer: WormSkeletonLayer,
         imshape: _T.Tuple[int, int],

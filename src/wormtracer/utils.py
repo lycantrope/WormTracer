@@ -2,7 +2,7 @@ import json as _json
 import sys as _sys
 import numpy as _np
 
-from .types import _PATH_LIST_T, _PATH_T, _Path, _T
+from .types import _PATH_LIST_T, _PATH_T, _Path, _T, ShapeParams as _ShapeParams
 
 __all__ = [
     "eprint",
@@ -72,22 +72,14 @@ def glob(data_folder: _PATH_T, ext: str = "png") -> _PATH_LIST_T:
     return sorted(_Path(data_folder).glob("*.{}".format(ext)), key=lambda x: x.stem)
 
 
-def get_shape_params_from_history(history: _T.Dict[str, float]) -> _T.Dict[str, float]:
-    data = _np.array(
-        [
-            (
-                val["T"],
-                val["alpha"],
-                val["gamma"],
-                val["delta"],
-            )
-            for val in history.values()
-        ]
-    ).T
+def calc_avg_shape_params(
+    history: _T.List[_T.Tuple[int, _ShapeParams]]
+) -> _ShapeParams:
+    data = _np.array([(t, p.alpha, p.delta, p.gamma) for (t, p) in history]).T
     data[1] *= data[0]
     data[2] *= data[0]
     data[3] *= data[0]
 
     data_sum = data.sum(axis=1)
     data_sum[1:] /= data_sum[0]
-    return {"alpha": data_sum[1], "gamma": data_sum[2], "delta": data_sum[3]}
+    return _ShapeParams(alpha=data_sum[1], delta=data_sum[2], gamma=data_sum[3])
