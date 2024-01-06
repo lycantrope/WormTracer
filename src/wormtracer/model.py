@@ -108,6 +108,6 @@ class WormImageModel(_nn.Module):
         )
 
         # image_3d = [T, n_segs, im_height, im_width]
-        image_3d = pixel_value(segment_distance_3d, worm_wid_3d)
-        image, _ = _torch.max(image_3d, dim=1)
+        delta_max, _ = _torch.max(segment_distance_3d - worm_wid_3d, dim=1)
+        image = pixel_value(delta_max)
         return image
