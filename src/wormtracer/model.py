@@ -3,7 +3,8 @@ import torch.nn as _nn
 from torch.nn.parameter import Parameter as _Parameter
 
 from wormtracer.formula import pixel_value
-from wormtracer.types import _NP_T, _T, ShapeParams
+from wormtracer.types import _NP_T, _T
+from wormtracer.parameter import ShapeParameters as _ShapeParams
 
 
 class WormShapeLayer(_nn.Module):
@@ -26,15 +27,15 @@ class WormShapeLayer(_nn.Module):
 
         return worm_wid
 
-    def get_shape_params(self) -> ShapeParams:
-        return ShapeParams(
+    def get_shape_params(self) -> _ShapeParams:
+        return _ShapeParams(
             alpha=self.alpha.item(),
             delta=self.delta.item(),
             gamma=self.gamma.item(),
         )
 
     @classmethod
-    def from_shape_params(cls, params: ShapeParams) -> "WormShapeLayer":
+    def from_shape_params(cls, params: _ShapeParams) -> "WormShapeLayer":
         return cls(alpha=params.alpha, delta=params.delta, gamma=params.gamma)
 
 

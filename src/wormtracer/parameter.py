@@ -3,7 +3,7 @@ import typing as _T
 
 
 @_attrs.define(kw_only=True, frozen=True)
-class Parameters:
+class HyperParameters:
     lr: float
     speed: float
     epoch_plus: int
@@ -18,3 +18,17 @@ class Parameters:
 
     def as_dict(self) -> _T.Dict[str, _T.Any]:
         return _attrs.asdict(self)
+
+
+@_attrs.define(kw_only=True, frozen=True)
+class ShapeParameters:
+    alpha: float
+    delta: float
+    gamma: float
+
+    def as_tuple(self) -> _T.Tuple[float, float, float]:
+        """
+        Returns:
+            (alpha, delta, gamma)
+        """
+        return _attrs.astuple(self)

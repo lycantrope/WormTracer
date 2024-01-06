@@ -5,7 +5,7 @@ import wormtracer.loss as _loss
 from wormtracer.model import WormImageModel as _Model
 import attrs as _attrs
 from wormtracer.types import *
-from wormtracer.parameter import Parameters
+from wormtracer.parameter import HyperParameters
 
 
 @_attrs.define
@@ -42,7 +42,7 @@ def train3(
     model: _Model,
     real_image: _np.ndarray,
     optimizer,
-    params: Parameters,
+    params: HyperParameters,
     is_complex=True,
 ) -> _T.Tuple[_Model, _NP_T, _NP_T, _loss.WormLosses]:
     T = real_image.shape[0]

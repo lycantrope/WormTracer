@@ -27,7 +27,7 @@ n_segs = 100
 ext = "png"
 
 
-params = wt.parameter.Parameters(
+params = wt.parameter.HyperParameters(
     continuity_loss_weight=1e5,
     smoothness_loss_weight=1e6,
     length_loss_weight=50,
