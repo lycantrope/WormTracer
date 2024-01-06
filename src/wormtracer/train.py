@@ -2,10 +2,11 @@ import numpy as _np
 import torch as _torch
 import torch.nn as _nn
 import wormtracer.loss as _loss
-from wormtracer.model import WormImageModel as _Model
 import attrs as _attrs
+
 from .types import *
 from .parameter import HyperParameters
+from .model import WormModel as _Model
 
 
 @_attrs.define
