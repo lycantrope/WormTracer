@@ -124,7 +124,7 @@ class ImageReader:
         binarize_fn: _T.Optional[_TRANSFORM_T] = None,
     ) -> "ImageReader":
         im = imread(im_path)
-        is_binarized = _np.all((0 == im) | (im == 255))
+        is_binarized = _np.unique(im).size == 2
         if not is_binarized:
             if binarize_fn is None:
                 im = _cv.threshold(im, 0, 255, _cv.THRESH_BINARY + _cv.THRESH_OTSU)
@@ -228,7 +228,8 @@ def flip_check(x: _NP_T, y: _NP_T):
 
 
 def read_imagestack(
-    filenames: _T.List[_PATH_T], reader: ImageReader
+    filenames: _T.List[_PATH_T],
+    reader: ImageReader,
 ) -> _T.Tuple[_NP_T, _Offset]:
     assert len(filenames), "Input is empty"
     T = len(filenames)
@@ -242,8 +243,8 @@ def read_imagestack(
 
     for t, f in items:
         imagestack[t, :, :] = reader(f)
-
-    return trim_imagestack(imagestack)
+    imagestack, offset = trim_imagestack(imagestack)
+    return (imagestack > 0).astype("f8"), offset
 
 
 def get_skeleton(im: _NP_T, n_seg: int = 100) -> _OPTIONAL_NP:
