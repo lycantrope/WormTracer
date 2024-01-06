@@ -2,7 +2,8 @@ import json as _json
 import sys as _sys
 import numpy as _np
 
-from .types import _PATH_LIST_T, _PATH_T, _Path, _T, ShapeParams as _ShapeParams
+from .types import _PATH_LIST_T, _PATH_T, _Path, _T
+from .parameter import ShapeParameters as _ShapeParams
 
 __all__ = [
     "eprint",

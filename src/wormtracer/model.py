@@ -3,8 +3,8 @@ import torch as _torch
 import torch.nn as _nn
 from torch.nn.parameter import Parameter as _Parameter
 
-from wormtracer.types import _NP_T, _T
-from wormtracer.parameter import ShapeParameters as _ShapeParams
+from .types import _NP_T, _T
+from .parameter import ShapeParameters as _ShapeParams
 
 
 class WormShapeLayer(_nn.Module):

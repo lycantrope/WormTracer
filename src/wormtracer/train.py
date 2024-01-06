@@ -4,8 +4,8 @@ import torch.nn as _nn
 import wormtracer.loss as _loss
 from wormtracer.model import WormImageModel as _Model
 import attrs as _attrs
-from wormtracer.types import *
-from wormtracer.parameter import HyperParameters
+from .types import *
+from .parameter import HyperParameters
 
 
 @_attrs.define
