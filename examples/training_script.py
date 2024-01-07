@@ -3,7 +3,6 @@ import numpy as np
 import torch
 import wormtracer as wt
 from wormtracer.dataset import get_use_points
-from wormtracer.formula import get_image_loss_max
 from wormtracer.loss import find_outliner
 from wormtracer.train import train3
 from wormtracer.preprocess import (
@@ -16,6 +15,7 @@ from wormtracer.preprocess import (
     calc_all_skeleton_and_width,
 )
 from wormtracer.model import (
+    get_image_loss_max,
     make_worm_batch,
     WormModel,
     WormSkeletonLayer,

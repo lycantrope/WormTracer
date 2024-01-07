@@ -3,7 +3,7 @@ import torch as _torch
 import torch.nn as _nn
 import attrs as _attrs
 
-import loss as _loss
+import wormtracer.loss as _loss
 from .types import *
 from .parameter import HyperParameters as _HyperParams
 from .model import WormModel as _Model
@@ -43,7 +43,7 @@ def train3(
     model: _Model,
     real_image: _np.ndarray,
     optimizer,
-    params: HyperParameters,
+    params: _HyperParams,
     is_complex=True,
 ) -> _T.Tuple[_Model, _NP_T, _NP_T, _loss.WormLosses]:
     T = real_image.shape[0]
