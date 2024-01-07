@@ -22,18 +22,19 @@ class TrainingBlocks:
     @classmethod
     def from_loss(
         cls,
-        image_losses: _NP_T,
+        *,
+        losses: _NP_T,
         relaxed: float,
         rigid: float,
     ) -> "TrainingBlocks":
         assert rigid > relaxed, "rigid margin must be greater than relaxed margin"
-        complex_area = image_losses > relaxed
+        complex_area = losses > relaxed
         distinct_from_prev = _np.zeros_like(complex_area).astype(bool)
         distinct_from_prev[1:] = complex_area[:-1] ^ complex_area[1:]
         # labeling all blocks in 0-index
         blocks = distinct_from_prev.astype(int).cumsum()
         # filter the block that fulfilled rigid criteria
-        complex_block_count = _np.bincount(blocks[image_losses > rigid])
+        complex_block_count = _np.bincount(blocks[losses > rigid])
         complex_block = _np.where(complex_block_count > 0)[0]
 
         return cls(
@@ -58,7 +59,7 @@ class TrainingBlocks:
         """
         block_sizes = _np.bincount(self.blocks)
         # it will return the index of first occurence.
-        label, onset = _np.unique(self._blocks, return_index=True)
+        label, onset = _np.unique(self.blocks, return_index=True)
         offset = onset + block_sizes - 1
         mask = _np.isin(label, self.complex_block)
         counter = _Counter()
@@ -128,7 +129,7 @@ def get_use_points(
     rigid = 0.4 * image_loss_max + 0.6 * _np.min(image_losses)
     relaxed = 0.2 * image_loss_max + 0.8 * _np.min(image_losses)
 
-    return TrainingBlocks.from_loss(image_losses, relaxed, rigid)
+    return TrainingBlocks.from_loss(losses = image_losses, relaxed= relaxed, rigid= rigid)
 
 
 class ImageStack(_data.Dataset):
