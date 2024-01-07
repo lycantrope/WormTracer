@@ -1,8 +1,9 @@
 # %% import dependency
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 import wormtracer as wt
-from wormtracer.dataset import get_use_points
+from wormtracer.dataset import TrainingBlocks, get_use_points
 from wormtracer.loss import find_outliner
 from wormtracer.train import train3
 from wormtracer.preprocess import (
@@ -27,10 +28,10 @@ from pathlib import Path
 from wormtracer.utils import calc_avg_shape_params
 
 #  %%
-home = Path(".")
+home = Path(r"C:\Users\iiiss\Desktop\kuan\pile_data")
 
 n_segs = 100
-ext = "png"
+ext = "jpg"
 
 
 params = wt.parameter.HyperParameters(
@@ -48,15 +49,48 @@ params = wt.parameter.HyperParameters(
 # %%
 filenames = sorted(home.glob("*.{}".format(ext)), key=lambda x: x.stem)
 
-reader = ImageReader.build_reader_from_image(filenames[0], 1.0)
+# %% 
+import cv2 as cv
+
+def binary_function_builder(filenames, size:int = 50):
+    cands = np.random.choice(filenames, size)
+    imgs = np.array([cv.imread(str(p), flags= cv.IMREAD_GRAYSCALE) for p in cands])
+    background = np.median(imgs, axis = 0).astype(np.uint8)
+    kernel =cv.getStructuringElement(cv.MORPH_ELLIPSE, (3,3))
+    def threshold(im:np.ndarray)->np.ndarray:
+        im = (im <= background).astype(np.uint8) * 255
+        # _, im = cv.threshold(im, 0, 255, cv.THRESH_OTSU+cv.THRESH_BINARY)
+
+        im = cv.morphologyEx(im, cv.MORPH_OPEN, kernel = kernel, iterations = 2)
+        return im
+    return threshold
+
+
+test_im = cv.imread(str(filenames[0]), cv.IMREAD_GRAYSCALE)
+binarize_fn = binary_function_builder(filenames)
+binarize_fn(test_im)
+# %%
+# reader = ImageReader.build_reader_from_image(filenames[0], 1.0, binarize_fn= binary_function_builder(filenames),)
+# custom reader
+
+reader = ImageReader(worm_is_black=True, is_binarized=False, binarize_fn=binarize_fn)
+
+# %%
 imagestack, all_offset = read_imagestack(
-    filenames,
+    filenames[:100],
     reader,
 )
-T, im_height, im_width = imagestack.shape
+imagestack_all = imagestack
+imagestack = imagestack[:, 100:600, 65:370] == 0
+imagestack = imagestack.astype("f8")
 
+
+
+
+# %%
+T, im_height, im_width = imagestack.shape
 txy, pre_width, tot_unit_length = calc_all_skeleton_and_width(
-    imagestack,
+    imagestack.astype("u1"),
     params.n_segments,
 )
 
@@ -81,24 +115,39 @@ im_model = make_worm_batch(
     cap_span,
     params.device,
 )
-
 image_losses = np.mean(
-    (im_model.astype("i4") - imagestack.astype("i4")) ** 2,
+    (im_model - imagestack) ** 2,
     axis=(1, 2),
 )
 
+q25, q75 = np.percentile(image_losses, q = [25, 75])
 min_idx = np.argmin(image_losses)
 image_loss_max = get_image_loss_max(
-    imagestack[min_idx], txy[min_idx], pre_width[min_idx]
+    imagestack[min_idx], txy[min_idx], pre_width
 )
 
+# %%
+fig, ax = plt.subplots(1,1)
+ax.plot(image_losses)
+ax.axhline(image_loss_max, 0.0, 1.0)
+plt.show()
+
+# %%
 training_blocks = get_use_points(image_losses, image_loss_max)
 
+# %%
+for xy, im, im_m in zip(txy, imagestack, im_model):
+    fig, ax = plt.subplots(1,2)
+    cax = ax[0].imshow(im, cmap ="grey")
+    ax[1].imshow((im_m *255), cmap ="gray")
+    ax[0].plot(xy[0], xy[1], color="red")
+    plt.show()
+    
 
 # %%
 # main loop 1
 simple_mask = training_blocks.get_block_mask(get_complex=False)
-unit_length = np.sqrt((np.diff(txy[simple_mask], axis=2) ** 2).sum(axis=1).median())
+unit_length = np.sqrt(np.median((np.diff(txy[simple_mask], axis=2) ** 2).sum(axis=1)))
 shape_layer = WormShapeLayer(alpha=pre_width[simple_mask].mean(), delta=0.0, gamma=0.0)
 
 losses_all = []
@@ -133,7 +182,7 @@ for idx, is_complex, start, end in training_blocks.batch_iter(cap_span):
         image_layer=WormImageLayer(width=W, height=H),
     )
     # make model instance and training
-    optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
+    optimizer = torch.optim.Adam(model.parameters(), lr=params.lr)
 
     model, im_model, txy_model, losses = train3(
         model, ims_block, optimizer, params, is_complex
@@ -188,7 +237,7 @@ for idx, is_complex, start, end in training_blocks.batch_iter(cap_span):
         image_layer=WormImageLayer(width=W, height=H),
     )
     # make model instance and training
-    optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
+    optimizer = torch.optim.Adam(model.parameters(), lr=params.lr)
 
     model, im_model, txy_model, losses = train3(
         model,
@@ -211,7 +260,7 @@ for idx, is_complex, start, end in training_blocks.batch_iter(cap_span):
         image_layer=WormImageLayer(width=W, height=H),
     )
 
-    optimizer = torch.optim.Adam(model2.parameters(), lr=params["lr"])
+    optimizer = torch.optim.Adam(model2.parameters(), lr=params.lr)
     model2, im_rev_model, txy_model_rev, losses_rev = train3(
         model2,
         ims_block,
@@ -273,7 +322,7 @@ for idx, is_complex, start, end in training_blocks.batch_iter(cap_span):
         image_layer=WormImageLayer(width=W, height=H),
     )
     # make model instance and training
-    optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
+    optimizer = torch.optim.Adam(model.parameters(), lr=params.lr)
 
     model, im_model, txy_model, losses = train3(
         model,
@@ -299,7 +348,7 @@ for idx, is_complex, start, end in training_blocks.batch_iter(cap_span):
         image_layer=WormImageLayer(width=W, height=H),
     )
 
-    optimizer = torch.optim.Adam(model2.parameters(), lr=params["lr"])
+    optimizer = torch.optim.Adam(model2.parameters(), lr=params.lr)
     model2, im_rev_model, txy_model_rev, losses_rev = train3(
         model2,
         ims_block,
