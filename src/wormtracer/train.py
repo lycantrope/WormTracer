@@ -67,7 +67,7 @@ def train3(
 
     im_loss_fn = _loss.ImageLoss()
     smo_loss_fn = _loss.SmoothnessLoss(
-        smoothness_loss_weight,
+        smoothness_loss_weight = smoothness_loss_weight,
         body_axis_weight=_loss.body_axis_function(
             body_ratio=params.body_ratio,
             n_segments=params.n_segments,
@@ -108,7 +108,7 @@ def train3(
     early_stopping.reset()
 
     smo_loss_fn = _loss.SmoothnessLoss(
-        smoothness_loss_weight,
+        smoothness_loss_weight=smoothness_loss_weight,
         body_axis_weight=_loss.body_axis_function(
             params.body_ratio,
             params.n_segs,
