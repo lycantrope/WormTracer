@@ -4,9 +4,9 @@ import torch.nn as _nn
 import attrs as _attrs
 
 import wormtracer.loss as _loss
-from .types import *
-from .parameter import HyperParameters as _HyperParams
-from .model import WormModel as _Model
+from wormtracer.types import *
+from wormtracer.parameter import HyperParameters as _HyperParams
+from wormtracer.model import WormModel as _Model
 
 
 @_attrs.define

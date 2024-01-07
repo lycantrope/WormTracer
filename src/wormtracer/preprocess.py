@@ -12,7 +12,7 @@ from scipy.spatial import distance_matrix as _distance_matrix
 import skimage.morphology as _morphology
 from tqdm import tqdm as _tqdm
 
-from .types import (
+from wormtracer.types import (
     _IMREAD_T,
     _PATH_T,
     _TRANSFORM_T,
@@ -21,7 +21,7 @@ from .types import (
     _OPTIONAL_NP,
     _Offset,
 )
-from .utils import eprint
+from wormtracer.utils import eprint
 
 
 __all__ = ["get_skeleton", "imread", "ImageReader"]
