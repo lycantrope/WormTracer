@@ -1,9 +1,9 @@
 import numpy as _np
 import torch as _torch
 import torch.nn as _nn
-import wormtracer.loss as _loss
 import attrs as _attrs
 
+import loss as _loss
 from .types import *
 from .parameter import HyperParameters as _HyperParams
 from .model import WormModel as _Model

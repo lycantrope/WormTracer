@@ -1,8 +1,8 @@
 import matplotlib.pyplot as _plt
 import numpy as _np
-import typing as _T, _Figure, _OPTIONAL_NP
 from math import ceil as _ceil
 
+from .types import _Figure, _OPTIONAL_NP
 
 def show_image(
     im_stack: _np.ndarray,
