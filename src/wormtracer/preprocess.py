@@ -44,6 +44,13 @@ def _find_max_contour(im: _NP_T) -> _NP_T:
     im[label_im != stuts[1:, 4].argmax() + 1] = 0
     return im
 
+def _otsu(im: _NP_T) -> _NP_T:
+    _, im = _cv.threshold(im, 
+            thresh=0,
+            maxval=255,
+            type=_cv.THRESH_BINARY + _cv.THRESH_OTSU,
+            dst=None,)
+    return im
 
 @_attrs.define
 class ImageReader:
@@ -53,13 +60,7 @@ class ImageReader:
     use_max_contour: bool = _attrs.field(kw_only=True, default=True)
     binarize_fn: _TRANSFORM_T = _attrs.field(
         kw_only=True,
-        default=_partial(
-            _cv.threshold,
-            thresh=0,
-            maxval=255,
-            type=_cv.THRESH_BINARY + _cv.THRESH_OTSU,
-            dst=None,
-        ),
+        default=_otsu,
     )
     # hidden property
     src_width: int = _attrs.field(init=False, default=0)
@@ -82,7 +83,7 @@ class ImageReader:
         if self.use_max_contour:
             steps.append(_find_max_contour)
 
-        if not _isclose(self.rescale, 1.0, rel_tot=1e2):
+        if not _isclose(self.rescale, 1.0, rel_tol=1e2):
             # scaling
             resize = _partial(
                 _cv.resize,
@@ -102,7 +103,7 @@ class ImageReader:
     ) -> _IMREAD_T:
         def chain_func(im_path: _PATH_T):
             im = imread(im_path)
-            return _reduce(lambda x, f: f(x), operators, initial=im)
+            return _reduce(lambda x, f: f(x), operators, im)
 
         return chain_func
 
@@ -127,7 +128,7 @@ class ImageReader:
         is_binarized = _np.unique(im).size == 2
         if not is_binarized:
             if binarize_fn is None:
-                im = _cv.threshold(im, 0, 255, _cv.THRESH_BINARY + _cv.THRESH_OTSU)
+                im = _otsu(im)
                 eprint(
                     "[Warning] Input images seem not to be binary.",
                     "Automatically threshold by otsu or use `ImageReader.build_reader_from_image_with_binarized` to setup thesholding method",
@@ -172,7 +173,7 @@ def trim_imagestack(imagestack: _NP_T) -> _T.Tuple[_NP_T, _Offset]:
     max_h, max_w = thresh.shape
 
     contours, hierarchy = _cv.findContours(
-        thresh,
+        thresh.astype("u1"),
         _cv.RETR_TREE,
         _cv.CHAIN_APPROX_SIMPLE,
     )
@@ -233,7 +234,8 @@ def read_imagestack(
 ) -> _T.Tuple[_NP_T, _Offset]:
     assert len(filenames), "Input is empty"
     T = len(filenames)
-    items = _tqdm(enumerate(filenames), desc="loading: ")
+
+    items = iter(_tqdm(enumerate(filenames), total = T, desc="loading: "))
     # read the first item to get size of
     _, f0 = next(items)
     im = reader.imread(f0)
@@ -242,7 +244,7 @@ def read_imagestack(
     imagestack[0, :, :] = im
 
     for t, f in items:
-        imagestack[t, :, :] = reader(f)
+        imagestack[t, :, :] = reader.imread(f)
     imagestack, offset = trim_imagestack(imagestack)
     return (imagestack > 0).astype("f8"), offset
 
@@ -320,8 +322,8 @@ def calc_all_skeleton_and_width(
     pre_width = _np.zeros(T)
 
     # first item does not require the flipping check
-    items = _tqdm(enumerate(imagestack), desc="skeletonize & get_width: ")
-    _, im = items.__next__()
+    items = iter(_tqdm(enumerate(imagestack), total = T, desc="skeletonize & get_width: "))
+    _, im = next(items)
     txy[0, :, :] = get_skeleton(im, n_segs)
     pre_width[0] = get_width(imagestack[0], txy[0])
 
@@ -357,19 +359,20 @@ def calc_theta_from_xy(txy: _NP_T) -> _NP_T:
     t_gap = _np.diff(theta[:, mid], n=1)
     t_adjust = _np.sign(t_gap) * 2 * pi
     t_adjust[_np.abs(t_gap) < pi] = 0
-    theta[1:, :] -= t_adjust.cumsum()
+    theta[1:, :] -= t_adjust.cumsum().reshape(-1, 1)
 
     # adjust right hand side of theta within same time points
     r_gap = _np.diff(theta[:, mid:], n=1, axis=1)
     r_adjust = _np.sign(r_gap) * 2 * pi
     r_adjust[_np.abs(r_gap) < pi] = 0
-    theta[:, mid + 1 :] -= r_adjust.cumsum()
+    theta[:, mid + 1 :] -= r_adjust.cumsum(axis = 1)
 
     # adjust left hand side
     l_gap = _np.diff(theta[:, : mid + 1], n=1, axis=1)
     l_adjust = _np.sign(l_gap) * (-2) * pi
     l_adjust[_np.abs(l_gap) < pi] = 0
-    theta[:, :mid] += _np.cumsum(l_adjust[::-1])[::-1]
+    l_adjust_rev = _np.flip(l_adjust, axis = 1)
+    theta[:, :mid] += _np.flip(_np.cumsum(l_adjust_rev, axis = 1), axis=1)
 
     return theta
 
