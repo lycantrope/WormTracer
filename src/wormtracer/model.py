@@ -69,6 +69,7 @@ class WormSkeletonLayer(_nn.Module):
 
 class WormPixelLayer(_nn.Module):
     def __init__(self, *, contrast: float = 1.2, sharpness: float = 2.0):
+        super(WormPixelLayer,self).__init__()
         self.contrast = _Parameter(_torch.tensor(contrast), requires_grad=False)
         self.sharpness = _Parameter(_torch.tensor(sharpness), requires_grad=False)
         self.scale = _Parameter(_torch.tensor(6.0), requires_grad=False)
@@ -87,12 +88,11 @@ class WormImageLayer(_nn.Module):
         width: int,
         height: int,
         pixel_layer: _T.Optional[WormPixelLayer] = None,
-    ):
-        self.width = _Parameter(_torch.tensor(width), requires_grad=False)
-        self.height = _Parameter(_torch.tensor(height), requires_grad=False)
-        if pixel_layer is None:
-            self.pixel_layer = WormPixelLayer()
-        self.pixel_layer = pixel_layer
+    ):  
+        super(WormImageLayer,self).__init__()
+        self.y_3d = _Parameter(_torch.arange(height).reshape(1, 1, -1, 1), requires_grad=False)
+        self.x_3d = _Parameter(_torch.arange(width).reshape(1, 1, 1, -1), requires_grad=False)
+        self.pixel_layer = pixel_layer or WormPixelLayer()
 
     def forward(
         self,
@@ -110,14 +110,11 @@ class WormImageLayer(_nn.Module):
         cent_mid_y_3d = cent_mid_3d[:, 1]
         # worm_wid_3d: [1, n_pts-1, 1, 1]
         worm_wid_3d = shape.reshape(1, -1, 1, 1)
-
-        y_3d = _torch.arange(self.height).reshape(1, 1, -1, 1)
-        x_3d = _torch.arange(self.width).reshape(1, 1, 1, -1)
-
+        
         # segment_distance_3d: [T, n_segs, im_height, im_width]
         # worm_wid_3d: [1, n_segs, 1, 1]
         segment_distance_3d = _torch.sqrt(
-            _torch.pow(cent_mid_x_3d - x_3d, 2) + _torch.pow(cent_mid_y_3d - y_3d, 2)
+            _torch.pow(cent_mid_x_3d - self.x_3d, 2) + _torch.pow(cent_mid_y_3d - self.y_3d, 2)
         )
 
         # image_3d = [T, n_segs, im_height, im_width]
@@ -161,18 +158,18 @@ def make_worm_batch(
 
     T = txy.shape[0]
     imagestack = _np.zeros((T, height, width))
-    cut = _np.arange(0, T, step=batchsize)
+    cut = _np.arange(0, T, step=batchsize)[1:]
     chunks = zip(
         split(imagestack, cut),
         split(txy, cut),
-        split(pre_width, cut),
+       
     )
     with _torch.no_grad():
-        image_layer = WormImageLayer(width=width, height=height)
-        for dst, t, w in chunks:
+        image_layer = WormImageLayer(width=width, height=height).to(device)
+        for dst, t in chunks:
             im = image_layer(
-                skel=_torch.from_numpy(t).to(device),
-                shape=_torch.from_numpy(w).to(device),
+                skel=_torch.from_numpy(t.copy()).to(device),
+                shape=_torch.from_numpy(pre_width).to(device),
             )
             dst[:, :, :] = im.detach().cpu().numpy()
 
@@ -180,20 +177,20 @@ def make_worm_batch(
 
 
 def get_image_loss_max(
-    im: _NP_T,
+    im_ref: _NP_T,
     skel: _NP_T,
-    shape: _NP_T,
+    pre_width: _NP_T,
 ) -> float:
     """Create bad image and get bad image_loss to judge complex area."""
-    height, width = im.shape
+    height, width = im_ref.shape
     image_layer = WormImageLayer(width=width, height=height)
 
-    skel_bad = _np.ones_like(skel) * skel.mean(axis=1).reshape(2, 1)
+    skel_bad = _np.ones_like(skel) * skel[:,0].reshape(2, 1)
 
     with _torch.no_grad():
         im_bad = image_layer(
             skel=_torch.from_numpy(skel_bad).reshape(1, 2, -1),
-            shape=_torch.from_numpy(shape).reshape(1, -1),
-        ).reshape(height, width)
-    image_loss_max = _np.mean((im - im_bad) ** 2)
+            shape=_torch.from_numpy(pre_width).reshape(1, -1),
+        ).reshape(height, width).detach().numpy()
+    image_loss_max = _np.mean((im_ref - im_bad) ** 2)
     return image_loss_max
