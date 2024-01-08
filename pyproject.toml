@@ -17,13 +17,12 @@ readme = "README.md"
 classifiers = ["License :: OSI Approved :: MIT"]
 dependencies = [
     "numpy",
-    "opencv-python",
+    "opencv-python-headless",
     "scipy",
     "scikit-image",
     "matplotlib",
     "attrs",
     "tqdm",
-    "torch",
 ]
 
 
