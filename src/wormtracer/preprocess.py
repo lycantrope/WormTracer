@@ -1,5 +1,4 @@
 from functools import partial as _partial, reduce as _reduce
-from math import isclose as _isclose
 
 import attrs as _attrs
 import cv2 as _cv
@@ -40,17 +39,26 @@ def imread(path: _PATH_T) -> _NP_T:
 
 
 def _find_max_contour(im: _NP_T) -> _NP_T:
-    _, label_im, stuts, _ = _cv.connectedComponentsWithStats(im, connectivity=4)
-    im[label_im != stuts[1:, 4].argmax() + 1] = 0
+    _, label_im, stats, _ = _cv.connectedComponentsWithStatsWithAlgorithm(
+        im,
+        connectivity=8,
+        ltype=_cv.CV_16U,
+        ccltype=_cv.CCL_BBDT,
+    )
+    im[label_im != stats[1:, 4].argmax() + 1] = 0
     return im
 
+
 def _otsu(im: _NP_T) -> _NP_T:
-    _, im = _cv.threshold(im, 
-            thresh=0,
-            maxval=255,
-            type=_cv.THRESH_BINARY + _cv.THRESH_OTSU,
-            dst=None,)
+    _, im = _cv.threshold(
+        im,
+        thresh=0,
+        maxval=255,
+        type=_cv.THRESH_BINARY + _cv.THRESH_OTSU,
+        dst=None,
+    )
     return im
+
 
 @_attrs.define
 class ImageReader:
@@ -83,7 +91,7 @@ class ImageReader:
         if self.use_max_contour:
             steps.append(_find_max_contour)
 
-        if not _isclose(self.rescale, 1.0, rel_tol=1e2):
+        if not _np.isclose(self.rescale, 1.0, atol=1e2):
             # scaling
             resize = _partial(
                 _cv.resize,
@@ -138,7 +146,7 @@ class ImageReader:
                 im = binarize_fn(im)
 
         # use 0.01 as a cut off.
-        if not _isclose(rescale, 1.0, rel_tol=1e-2):
+        if not _np.isclose(rescale, 1.0, atol=1e-2):
             im: _NP_T = _cv.resize(
                 im,
                 dsize=None,
@@ -211,6 +219,16 @@ def get_width(
     return wid
 
 
+def get_width_by_distance(im: _NP_T, splines: _NP_T) -> float:
+    im_filled = _ndi.binary_fill_holes(im)
+    x = splines[0].astype(int)
+    y = splines[1].astype(int)
+    ret = im_filled[y, x].max()
+    dist = _cv.distanceTransform((im_filled != ret).astype("u1"), _cv.DIST_L2, 3)
+    wid = dist[y, x]
+    return wid.max()
+
+
 def flip_check(x: _NP_T, y: _NP_T):
     """Check if plots of head and tail is flipping."""
     gap_headtail = _np.mean(
@@ -235,7 +253,7 @@ def read_imagestack(
     assert len(filenames), "Input is empty"
     T = len(filenames)
 
-    items = iter(_tqdm(enumerate(filenames), total = T, desc="loading: "))
+    items = iter(_tqdm(enumerate(filenames), total=T, desc="loading: "))
     # read the first item to get size of
     _, f0 = next(items)
     im = reader.imread(f0)
@@ -322,10 +340,12 @@ def calc_all_skeleton_and_width(
     pre_width = _np.zeros(T)
 
     # first item does not require the flipping check
-    items = iter(_tqdm(enumerate(imagestack), total = T, desc="skeletonize & get_width: "))
+    items = iter(
+        _tqdm(enumerate(imagestack), total=T, desc="skeletonize & get_width: ")
+    )
     _, im = next(items)
     txy[0, :, :] = get_skeleton(im, n_segs)
-    pre_width[0] = get_width(imagestack[0], txy[0])
+    pre_width[0] = get_width_by_distance(imagestack[0], txy[0])
 
     for t, im in items:
         xy1 = get_skeleton(im, n_segs)
@@ -339,7 +359,7 @@ def calc_all_skeleton_and_width(
         else:
             txy[t] = xy1
 
-        pre_width[t] = get_width(imagestack[t], txy[t])
+        pre_width[t] = get_width_by_distance(imagestack[t], txy[t])
 
     delta = _np.diff(txy, n=1, axis=2).sum(axis=1)
     unit_per_seg = _np.sqrt(_np.median(delta))
@@ -365,14 +385,14 @@ def calc_theta_from_xy(txy: _NP_T) -> _NP_T:
     r_gap = _np.diff(theta[:, mid:], n=1, axis=1)
     r_adjust = _np.sign(r_gap) * 2 * pi
     r_adjust[_np.abs(r_gap) < pi] = 0
-    theta[:, mid + 1 :] -= r_adjust.cumsum(axis = 1)
+    theta[:, mid + 1 :] -= r_adjust.cumsum(axis=1)
 
     # adjust left hand side
     l_gap = _np.diff(theta[:, : mid + 1], n=1, axis=1)
     l_adjust = _np.sign(l_gap) * (-2) * pi
     l_adjust[_np.abs(l_gap) < pi] = 0
-    l_adjust_rev = _np.flip(l_adjust, axis = 1)
-    theta[:, :mid] += _np.flip(_np.cumsum(l_adjust_rev, axis = 1), axis=1)
+    l_adjust_rev = _np.flip(l_adjust, axis=1)
+    theta[:, :mid] += _np.flip(_np.cumsum(l_adjust_rev, axis=1), axis=1)
 
     return theta
 
