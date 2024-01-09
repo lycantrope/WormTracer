@@ -177,29 +177,22 @@ def trim_imagestack(imagestack: _NP_T) -> _T.Tuple[_NP_T, _Offset]:
         imagestack.ndim == 3
     ), "Only accept 3D-image stack in (time, width, height) order"
 
-    thresh = _np.bitwise_or.reduce(imagestack, axis=0) > 0
+    thresh = _np.bitwise_or.reduce(imagestack > 0, axis=0)
     max_h, max_w = thresh.shape
 
-    contours, hierarchy = _cv.findContours(
-        thresh.astype("u1"),
-        _cv.RETR_TREE,
-        _cv.CHAIN_APPROX_SIMPLE,
-    )
-    if not contours:
+    (ys, xs) = _np.nonzero(thresh)
+    if ys.size == 0:
         eprint("[Warning] the imagestack have no signal")
         return imagestack, _Offset()
 
-    cnt = contours[0]
-    # straight rectangle
-    x, y, w, h = _cv.boundingRect(cnt)
     # padding the border with 5 pixel width if possible
-    x1 = max(x - 5, 0)
-    x2 = min(x + w + 5, max_w)
-    y1 = max(y - 5, 0)
-    y2 = max(y + h + 5, max_h)
+    x1 = max(xs.min() - 5, 0)
+    x2 = min(xs.max() + 5, max_w)
+    y1 = max(ys.min() - 5, 0)
+    y2 = min(ys.max() + 5, max_h)
     imagestack = imagestack[:, y1:y2, x1:x2]
     # because we knew the size of trimmed image
-    return imagestack, _Offset(x1, y2)
+    return imagestack, _Offset(x1, y1)
 
 
 def get_width(
@@ -295,7 +288,7 @@ def get_skeleton(im: _NP_T, n_seg: int = 100) -> _OPTIONAL_NP:
 
     # get tips of longest path
     d1 = _csgraph.shortest_path(csr, indices=_np.argmax(adj_sum < 1.5))
-    while _np.sum(d1 == _np.inf) > d1.shape[0] // 2:
+    while _np.sum(d1 == _np.inf) > (d1.shape[0] >> 1):
         adj_sum[_np.argmax(adj_sum < 1.5)] = 2
         d1 = _csgraph.shortest_path(csr, indices=_np.argmax(adj_sum < 1.5))
     d1[d1 == _np.inf] = 0
