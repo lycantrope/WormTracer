@@ -217,7 +217,7 @@ def get_width_by_distance(im: _NP_T, splines: _NP_T) -> float:
     x = splines[0].astype(int)
     y = splines[1].astype(int)
     ret = im_filled[y, x].max()
-    dist = _cv.distanceTransform((im_filled != ret).astype("u1"), _cv.DIST_L2, 3)
+    dist = _cv.distanceTransform((im_filled == ret).astype("u1"), _cv.DIST_L2, 5)
     wid = dist[y, x]
     return wid.max()
 
