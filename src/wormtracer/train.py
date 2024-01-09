@@ -1,11 +1,12 @@
 import numpy as _np
 import torch as _torch
 import torch.nn as _nn
-import wormtracer.loss as _loss
-from wormtracer.model import WormImageModel as _Model
 import attrs as _attrs
-from .types import *
-from .parameter import HyperParameters
+
+import wormtracer.loss as _loss
+from wormtracer.types import *
+from wormtracer.parameter import HyperParameters as _HyperParams
+from wormtracer.model import WormModel as _Model
 
 
 @_attrs.define
@@ -42,7 +43,7 @@ def train3(
     model: _Model,
     real_image: _np.ndarray,
     optimizer,
-    params: HyperParameters,
+    params: _HyperParams,
     is_complex=True,
 ) -> _T.Tuple[_Model, _NP_T, _NP_T, _loss.WormLosses]:
     T = real_image.shape[0]
@@ -66,7 +67,7 @@ def train3(
 
     im_loss_fn = _loss.ImageLoss()
     smo_loss_fn = _loss.SmoothnessLoss(
-        smoothness_loss_weight,
+        smoothness_loss_weight = smoothness_loss_weight,
         body_axis_weight=_loss.body_axis_function(
             body_ratio=params.body_ratio,
             n_segments=params.n_segments,
@@ -107,7 +108,7 @@ def train3(
     early_stopping.reset()
 
     smo_loss_fn = _loss.SmoothnessLoss(
-        smoothness_loss_weight,
+        smoothness_loss_weight=smoothness_loss_weight,
         body_axis_weight=_loss.body_axis_function(
             params.body_ratio,
             params.n_segs,

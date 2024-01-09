@@ -2,7 +2,7 @@ import attrs as _attrs
 import numpy as _np
 import torch as _t
 import torch.nn as _nn
-from .types import _T, _NP_T
+from wormtracer.types import _T, _NP_T
 
 __all__ = [
     "AnnealingFunction",

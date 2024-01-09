@@ -1,6 +1,7 @@
 numpy
-opencv-python
+opencv-python-headless
+scikit-image
+matplotlib
 scipy
-torch
 attrs
 tqdm

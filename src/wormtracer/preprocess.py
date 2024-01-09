@@ -1,5 +1,4 @@
 from functools import partial as _partial, reduce as _reduce
-from math import isclose as _isclose
 
 import attrs as _attrs
 import cv2 as _cv
@@ -12,7 +11,7 @@ from scipy.spatial import distance_matrix as _distance_matrix
 import skimage.morphology as _morphology
 from tqdm import tqdm as _tqdm
 
-from .types import (
+from wormtracer.types import (
     _IMREAD_T,
     _PATH_T,
     _TRANSFORM_T,
@@ -21,7 +20,7 @@ from .types import (
     _OPTIONAL_NP,
     _Offset,
 )
-from .utils import eprint
+from wormtracer.utils import eprint
 
 
 __all__ = ["get_skeleton", "imread", "ImageReader"]
@@ -40,8 +39,24 @@ def imread(path: _PATH_T) -> _NP_T:
 
 
 def _find_max_contour(im: _NP_T) -> _NP_T:
-    _, label_im, stuts, _ = _cv.connectedComponentsWithStats(im, connectivity=4)
-    im[label_im != stuts[1:, 4].argmax() + 1] = 0
+    _, label_im, stats, _ = _cv.connectedComponentsWithStatsWithAlgorithm(
+        im,
+        connectivity=8,
+        ltype=_cv.CV_16U,
+        ccltype=_cv.CCL_BBDT,
+    )
+    im[label_im != stats[1:, 4].argmax() + 1] = 0
+    return im
+
+
+def _otsu(im: _NP_T) -> _NP_T:
+    _, im = _cv.threshold(
+        im,
+        thresh=0,
+        maxval=255,
+        type=_cv.THRESH_BINARY + _cv.THRESH_OTSU,
+        dst=None,
+    )
     return im
 
 
@@ -53,13 +68,7 @@ class ImageReader:
     use_max_contour: bool = _attrs.field(kw_only=True, default=True)
     binarize_fn: _TRANSFORM_T = _attrs.field(
         kw_only=True,
-        default=_partial(
-            _cv.threshold,
-            thresh=0,
-            maxval=255,
-            type=_cv.THRESH_BINARY + _cv.THRESH_OTSU,
-            dst=None,
-        ),
+        default=_otsu,
     )
     # hidden property
     src_width: int = _attrs.field(init=False, default=0)
@@ -82,7 +91,7 @@ class ImageReader:
         if self.use_max_contour:
             steps.append(_find_max_contour)
 
-        if not _isclose(self.rescale, 1.0, rel_tot=1e2):
+        if not _np.isclose(self.rescale, 1.0, atol=1e2):
             # scaling
             resize = _partial(
                 _cv.resize,
@@ -102,7 +111,7 @@ class ImageReader:
     ) -> _IMREAD_T:
         def chain_func(im_path: _PATH_T):
             im = imread(im_path)
-            return _reduce(lambda x, f: f(x), operators, initial=im)
+            return _reduce(lambda x, f: f(x), operators, im)
 
         return chain_func
 
@@ -127,7 +136,7 @@ class ImageReader:
         is_binarized = _np.unique(im).size == 2
         if not is_binarized:
             if binarize_fn is None:
-                im = _cv.threshold(im, 0, 255, _cv.THRESH_BINARY + _cv.THRESH_OTSU)
+                im = _otsu(im)
                 eprint(
                     "[Warning] Input images seem not to be binary.",
                     "Automatically threshold by otsu or use `ImageReader.build_reader_from_image_with_binarized` to setup thesholding method",
@@ -137,7 +146,7 @@ class ImageReader:
                 im = binarize_fn(im)
 
         # use 0.01 as a cut off.
-        if not _isclose(rescale, 1.0, rel_tol=1e-2):
+        if not _np.isclose(rescale, 1.0, atol=1e-2):
             im: _NP_T = _cv.resize(
                 im,
                 dsize=None,
@@ -168,29 +177,22 @@ def trim_imagestack(imagestack: _NP_T) -> _T.Tuple[_NP_T, _Offset]:
         imagestack.ndim == 3
     ), "Only accept 3D-image stack in (time, width, height) order"
 
-    thresh = _np.bitwise_or.reduce(imagestack, axis=0) > 0
+    thresh = _np.bitwise_or.reduce(imagestack > 0, axis=0)
     max_h, max_w = thresh.shape
 
-    contours, hierarchy = _cv.findContours(
-        thresh,
-        _cv.RETR_TREE,
-        _cv.CHAIN_APPROX_SIMPLE,
-    )
-    if not contours:
+    (ys, xs) = _np.nonzero(thresh)
+    if ys.size == 0:
         eprint("[Warning] the imagestack have no signal")
         return imagestack, _Offset()
 
-    cnt = contours[0]
-    # straight rectangle
-    x, y, w, h = _cv.boundingRect(cnt)
     # padding the border with 5 pixel width if possible
-    x1 = max(x - 5, 0)
-    x2 = min(x + w + 5, max_w)
-    y1 = max(y - 5, 0)
-    y2 = max(y + h + 5, max_h)
+    x1 = max(xs.min() - 5, 0)
+    x2 = min(xs.max() + 5, max_w)
+    y1 = max(ys.min() - 5, 0)
+    y2 = min(ys.max() + 5, max_h)
     imagestack = imagestack[:, y1:y2, x1:x2]
     # because we knew the size of trimmed image
-    return imagestack, _Offset(x1, y2)
+    return imagestack, _Offset(x1, y1)
 
 
 def get_width(
@@ -208,6 +210,16 @@ def get_width(
     new_segment_distance = (segment_distance / max_dist + im_filled) * max_dist
     wid = new_segment_distance.min(axis=(1, 2)).max()
     return wid
+
+
+def get_width_by_distance(im: _NP_T, splines: _NP_T) -> float:
+    im_filled = _ndi.binary_fill_holes(im)
+    x = splines[0].astype(int)
+    y = splines[1].astype(int)
+    ret = im_filled[y, x].max()
+    dist = _cv.distanceTransform((im_filled != ret).astype("u1"), _cv.DIST_L2, 3)
+    wid = dist[y, x]
+    return wid.max()
 
 
 def flip_check(x: _NP_T, y: _NP_T):
@@ -233,7 +245,8 @@ def read_imagestack(
 ) -> _T.Tuple[_NP_T, _Offset]:
     assert len(filenames), "Input is empty"
     T = len(filenames)
-    items = _tqdm(enumerate(filenames), desc="loading: ")
+
+    items = iter(_tqdm(enumerate(filenames), total=T, desc="loading: "))
     # read the first item to get size of
     _, f0 = next(items)
     im = reader.imread(f0)
@@ -242,7 +255,7 @@ def read_imagestack(
     imagestack[0, :, :] = im
 
     for t, f in items:
-        imagestack[t, :, :] = reader(f)
+        imagestack[t, :, :] = reader.imread(f)
     imagestack, offset = trim_imagestack(imagestack)
     return (imagestack > 0).astype("f8"), offset
 
@@ -275,7 +288,7 @@ def get_skeleton(im: _NP_T, n_seg: int = 100) -> _OPTIONAL_NP:
 
     # get tips of longest path
     d1 = _csgraph.shortest_path(csr, indices=_np.argmax(adj_sum < 1.5))
-    while _np.sum(d1 == _np.inf) > d1.shape[0] // 2:
+    while _np.sum(d1 == _np.inf) > (d1.shape[0] >> 1):
         adj_sum[_np.argmax(adj_sum < 1.5)] = 2
         d1 = _csgraph.shortest_path(csr, indices=_np.argmax(adj_sum < 1.5))
     d1[d1 == _np.inf] = 0
@@ -320,10 +333,12 @@ def calc_all_skeleton_and_width(
     pre_width = _np.zeros(T)
 
     # first item does not require the flipping check
-    items = _tqdm(enumerate(imagestack), desc="skeletonize & get_width: ")
-    _, im = items.__next__()
+    items = iter(
+        _tqdm(enumerate(imagestack), total=T, desc="skeletonize & get_width: ")
+    )
+    _, im = next(items)
     txy[0, :, :] = get_skeleton(im, n_segs)
-    pre_width[0] = get_width(imagestack[0], txy[0])
+    pre_width[0] = get_width_by_distance(imagestack[0], txy[0])
 
     for t, im in items:
         xy1 = get_skeleton(im, n_segs)
@@ -337,7 +352,7 @@ def calc_all_skeleton_and_width(
         else:
             txy[t] = xy1
 
-        pre_width[t] = get_width(imagestack[t], txy[t])
+        pre_width[t] = get_width_by_distance(imagestack[t], txy[t])
 
     delta = _np.diff(txy, n=1, axis=2).sum(axis=1)
     unit_per_seg = _np.sqrt(_np.median(delta))
@@ -357,19 +372,20 @@ def calc_theta_from_xy(txy: _NP_T) -> _NP_T:
     t_gap = _np.diff(theta[:, mid], n=1)
     t_adjust = _np.sign(t_gap) * 2 * pi
     t_adjust[_np.abs(t_gap) < pi] = 0
-    theta[1:, :] -= t_adjust.cumsum()
+    theta[1:, :] -= t_adjust.cumsum().reshape(-1, 1)
 
     # adjust right hand side of theta within same time points
     r_gap = _np.diff(theta[:, mid:], n=1, axis=1)
     r_adjust = _np.sign(r_gap) * 2 * pi
     r_adjust[_np.abs(r_gap) < pi] = 0
-    theta[:, mid + 1 :] -= r_adjust.cumsum()
+    theta[:, mid + 1 :] -= r_adjust.cumsum(axis=1)
 
     # adjust left hand side
     l_gap = _np.diff(theta[:, : mid + 1], n=1, axis=1)
     l_adjust = _np.sign(l_gap) * (-2) * pi
     l_adjust[_np.abs(l_gap) < pi] = 0
-    theta[:, :mid] += _np.cumsum(l_adjust[::-1])[::-1]
+    l_adjust_rev = _np.flip(l_adjust, axis=1)
+    theta[:, :mid] += _np.flip(_np.cumsum(l_adjust_rev, axis=1), axis=1)
 
     return theta
 

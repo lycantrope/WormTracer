@@ -1,0 +1,3 @@
+shape = (100, 500, 305)
+compressed_ims = np.load("wt.npy")
+imagestack = np.unpackbits(compressed_ims).reshape(100, 500, 305)

@@ -1,6 +1,7 @@
 import typing as _T
 import numpy as _np
 from pathlib import Path as _Path
+from matplotlib.figure import Figure as _Figure
 
 _NP_T: _T.TypeAlias = _np.ndarray
 _OPTIONAL_NP: _T.TypeAlias = _T.Optional[_NP_T]
@@ -16,13 +17,14 @@ class _Offset(_T.NamedTuple):
 
 
 __all__ = [
-    "_T",
+    "_Figure",
+    "_IMREAD_T",
     "_NP_T",
     "_OPTIONAL_NP",
-    "_PATH_T",
-    "_PATH_LIST_T",
-    "_IMREAD_T",
-    "_TRANSFORM_T",
-    "_Path",
     "_Offset",
+    "_PATH_LIST_T",
+    "_PATH_T",
+    "_Path",
+    "_T",
+    "_TRANSFORM_T",
 ]

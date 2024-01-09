@@ -75,3 +75,4 @@ docs/_build/
 
 # pytest benchmark
 .benchmarks
+segWorm

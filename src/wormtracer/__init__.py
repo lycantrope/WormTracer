@@ -31,6 +31,5 @@ from . import (
     plot,
     preprocess,
     train,
-    types,
     utils,
 )
