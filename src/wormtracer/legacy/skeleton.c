@@ -4636,7 +4636,7 @@ static CYTHON_INLINE NPY_DATETIMEUNIT __pyx_f_5numpy_get_datetime64_unit(PyObjec
  * 
  * @_cython.boundscheck(False)             # <<<<<<<<<<<<<<
  * @_cython.wraparound(False)
- * def get_skeleton(_np.ndarray[unsigned char, ndim=2, mode="c"] im, size_t n_seg):
+ * def get_skeleton(np.ndarray[unsigned char, ndim=2, mode="c"] im, size_t n_seg):
  */
 
 /* Python wrapper */
@@ -4853,10 +4853,10 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
   __pyx_pybuffer_pts.refcount = 0;
   __pyx_pybuffernd_pts.data = NULL;
   __pyx_pybuffernd_pts.rcbuffer = &__pyx_pybuffer_pts;
-  __pyx_pybuffer_plots_np.pybuffer.buf = NULL;
-  __pyx_pybuffer_plots_np.refcount = 0;
-  __pyx_pybuffernd_plots_np.data = NULL;
-  __pyx_pybuffernd_plots_np.rcbuffer = &__pyx_pybuffer_plots_np;
+  __pyx_pybuffer_plotsnp.pybuffer.buf = NULL;
+  __pyx_pybuffer_plotsnp.refcount = 0;
+  __pyx_pybuffernd_plotsnp.data = NULL;
+  __pyx_pybuffernd_plotsnp.rcbuffer = &__pyx_pybuffer_plots_np;
   __pyx_pybuffer_adj_sum.pybuffer.buf = NULL;
   __pyx_pybuffer_adj_sum.refcount = 0;
   __pyx_pybuffernd_adj_sum.data = NULL;
@@ -4873,10 +4873,10 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
   __pyx_pybuffer_d2.refcount = 0;
   __pyx_pybuffernd_d2.data = NULL;
   __pyx_pybuffernd_d2.rcbuffer = &__pyx_pybuffer_d2;
-  __pyx_pybuffer_arclen_np.pybuffer.buf = NULL;
-  __pyx_pybuffer_arclen_np.refcount = 0;
-  __pyx_pybuffernd_arclen_np.data = NULL;
-  __pyx_pybuffernd_arclen_np.rcbuffer = &__pyx_pybuffer_arclen_np;
+  __pyx_pybuffer_arclennp.pybuffer.buf = NULL;
+  __pyx_pybuffer_arclennp.refcount = 0;
+  __pyx_pybuffernd_arclennp.data = NULL;
+  __pyx_pybuffernd_arclennp.rcbuffer = &__pyx_pybuffer_arclen_np;
   __pyx_pybuffer_adj_mtx.pybuffer.buf = NULL;
   __pyx_pybuffer_adj_mtx.refcount = 0;
   __pyx_pybuffernd_adj_mtx.data = NULL;
@@ -4896,7 +4896,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
  *     # skeletonize image
  *     im_filled = _ndi.binary_fill_holes(im)             # <<<<<<<<<<<<<<
  *     im_skeleton = _morphology.skeletonize(im_filled)
- *     if _np.sum(im_skeleton) == 0:
+ *     if np.sum(im_skeleton) == 0:
  */
   __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_ndi); if (unlikely(!__pyx_t_2)) __PYX_ERR(1, 30, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
@@ -4952,7 +4952,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
  *     # skeletonize image
  *     im_filled = _ndi.binary_fill_holes(im)
  *     im_skeleton = _morphology.skeletonize(im_filled)             # <<<<<<<<<<<<<<
- *     if _np.sum(im_skeleton) == 0:
+ *     if np.sum(im_skeleton) == 0:
  *         return None,None
  */
   __Pyx_GetModuleGlobalName(__pyx_t_3, __pyx_n_s_morphology); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 31, __pyx_L1_error)
@@ -5008,7 +5008,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
   /* "wormtracer/skeleton.pyx":32
  *     im_filled = _ndi.binary_fill_holes(im)
  *     im_skeleton = _morphology.skeletonize(im_filled)
- *     if _np.sum(im_skeleton) == 0:             # <<<<<<<<<<<<<<
+ *     if np.sum(im_skeleton) == 0:             # <<<<<<<<<<<<<<
  *         return None,None
  * 
  */
@@ -5045,10 +5045,10 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
 
     /* "wormtracer/skeleton.pyx":33
  *     im_skeleton = _morphology.skeletonize(im_filled)
- *     if _np.sum(im_skeleton) == 0:
+ *     if np.sum(im_skeleton) == 0:
  *         return None,None             # <<<<<<<<<<<<<<
  * 
- *     pts =_np.ascontiguousarray(_np.argwhere(im_skeleton == 1))
+ *     pts =np.ascontiguousarray(np.argwhere(im_skeleton == 1))
  */
     __Pyx_XDECREF(__pyx_r);
     __Pyx_INCREF(__pyx_tuple__3);
@@ -5058,7 +5058,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
     /* "wormtracer/skeleton.pyx":32
  *     im_filled = _ndi.binary_fill_holes(im)
  *     im_skeleton = _morphology.skeletonize(im_filled)
- *     if _np.sum(im_skeleton) == 0:             # <<<<<<<<<<<<<<
+ *     if np.sum(im_skeleton) == 0:             # <<<<<<<<<<<<<<
  *         return None,None
  * 
  */
@@ -5067,7 +5067,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
   /* "wormtracer/skeleton.pyx":35
  *         return None,None
  * 
- *     pts =_np.ascontiguousarray(_np.argwhere(im_skeleton == 1))             # <<<<<<<<<<<<<<
+ *     pts =np.ascontiguousarray(np.argwhere(im_skeleton == 1))             # <<<<<<<<<<<<<<
  *     n_pts = len(pts)
  *     if n_pts == 1:
  */
@@ -5153,20 +5153,20 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
 
   /* "wormtracer/skeleton.pyx":36
  * 
- *     pts =_np.ascontiguousarray(_np.argwhere(im_skeleton == 1))
+ *     pts =np.ascontiguousarray(np.argwhere(im_skeleton == 1))
  *     n_pts = len(pts)             # <<<<<<<<<<<<<<
  *     if n_pts == 1:
- *         x_splined = _np.ones(n_seg) * pts[0][1]
+ *         x_splined = np.ones(n_seg) * pts[0][1]
  */
   __pyx_t_14 = PyObject_Length(((PyObject *)__pyx_v_pts)); if (unlikely(__pyx_t_14 == ((Py_ssize_t)-1))) __PYX_ERR(1, 36, __pyx_L1_error)
   __pyx_v_n_pts = __pyx_t_14;
 
   /* "wormtracer/skeleton.pyx":37
- *     pts =_np.ascontiguousarray(_np.argwhere(im_skeleton == 1))
+ *     pts =np.ascontiguousarray(np.argwhere(im_skeleton == 1))
  *     n_pts = len(pts)
  *     if n_pts == 1:             # <<<<<<<<<<<<<<
- *         x_splined = _np.ones(n_seg) * pts[0][1]
- *         y_splined = _np.ones(n_seg) * pts[0][0]
+ *         x_splined = np.ones(n_seg) * pts[0][1]
+ *         y_splined = np.ones(n_seg) * pts[0][0]
  */
   __pyx_t_9 = (__pyx_v_n_pts == 1);
   if (__pyx_t_9) {
@@ -5174,8 +5174,8 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
     /* "wormtracer/skeleton.pyx":38
  *     n_pts = len(pts)
  *     if n_pts == 1:
- *         x_splined = _np.ones(n_seg) * pts[0][1]             # <<<<<<<<<<<<<<
- *         y_splined = _np.ones(n_seg) * pts[0][0]
+ *         x_splined = np.ones(n_seg) * pts[0][1]             # <<<<<<<<<<<<<<
+ *         y_splined = np.ones(n_seg) * pts[0][0]
  *         return x_splined, y_splined
  */
     __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_np); if (unlikely(!__pyx_t_2)) __PYX_ERR(1, 38, __pyx_L1_error)
@@ -5242,8 +5242,8 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
 
     /* "wormtracer/skeleton.pyx":39
  *     if n_pts == 1:
- *         x_splined = _np.ones(n_seg) * pts[0][1]
- *         y_splined = _np.ones(n_seg) * pts[0][0]             # <<<<<<<<<<<<<<
+ *         x_splined = np.ones(n_seg) * pts[0][1]
+ *         y_splined = np.ones(n_seg) * pts[0][0]             # <<<<<<<<<<<<<<
  *         return x_splined, y_splined
  * 
  */
@@ -5310,8 +5310,8 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
     __pyx_t_1 = 0;
 
     /* "wormtracer/skeleton.pyx":40
- *         x_splined = _np.ones(n_seg) * pts[0][1]
- *         y_splined = _np.ones(n_seg) * pts[0][0]
+ *         x_splined = np.ones(n_seg) * pts[0][1]
+ *         y_splined = np.ones(n_seg) * pts[0][0]
  *         return x_splined, y_splined             # <<<<<<<<<<<<<<
  * 
  *     # make distance matrix
@@ -5330,11 +5330,11 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
     goto __pyx_L0;
 
     /* "wormtracer/skeleton.pyx":37
- *     pts =_np.ascontiguousarray(_np.argwhere(im_skeleton == 1))
+ *     pts =np.ascontiguousarray(np.argwhere(im_skeleton == 1))
  *     n_pts = len(pts)
  *     if n_pts == 1:             # <<<<<<<<<<<<<<
- *         x_splined = _np.ones(n_seg) * pts[0][1]
- *         y_splined = _np.ones(n_seg) * pts[0][0]
+ *         x_splined = np.ones(n_seg) * pts[0][1]
+ *         y_splined = np.ones(n_seg) * pts[0][0]
  */
   }
 
@@ -5394,7 +5394,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
  * 
  *     adj_mtx[adj_mtx >= 1.5] = 0  # delete distance between isolated points             # <<<<<<<<<<<<<<
  *     csr = _csr_matrix(adj_mtx)
- *     adj_sum = _np.sum(adj_mtx, axis=0)
+ *     adj_sum = np.sum(adj_mtx, axis=0)
  */
   __pyx_t_11 = PyObject_RichCompare(((PyObject *)__pyx_v_adj_mtx), __pyx_float_1_5, Py_GE); __Pyx_XGOTREF(__pyx_t_11); if (unlikely(!__pyx_t_11)) __PYX_ERR(1, 45, __pyx_L1_error)
   if (unlikely((PyObject_SetItem(((PyObject *)__pyx_v_adj_mtx), __pyx_t_11, __pyx_int_0) < 0))) __PYX_ERR(1, 45, __pyx_L1_error)
@@ -5404,7 +5404,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
  * 
  *     adj_mtx[adj_mtx >= 1.5] = 0  # delete distance between isolated points
  *     csr = _csr_matrix(adj_mtx)             # <<<<<<<<<<<<<<
- *     adj_sum = _np.sum(adj_mtx, axis=0)
+ *     adj_sum = np.sum(adj_mtx, axis=0)
  * 
  */
   __Pyx_GetModuleGlobalName(__pyx_t_3, __pyx_n_s_csr_matrix); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 46, __pyx_L1_error)
@@ -5437,7 +5437,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
   /* "wormtracer/skeleton.pyx":47
  *     adj_mtx[adj_mtx >= 1.5] = 0  # delete distance between isolated points
  *     csr = _csr_matrix(adj_mtx)
- *     adj_sum = _np.sum(adj_mtx, axis=0)             # <<<<<<<<<<<<<<
+ *     adj_sum = np.sum(adj_mtx, axis=0)             # <<<<<<<<<<<<<<
  * 
  *     # get tips of longest path
  */
@@ -5485,9 +5485,9 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
   /* "wormtracer/skeleton.pyx":50
  * 
  *     # get tips of longest path
- *     d1 = _csgraph.shortest_path(csr, indices=_np.argmax(adj_sum < 1.5))             # <<<<<<<<<<<<<<
- *     while _np.sum(d1 == _np.inf) > d1.shape[0] // 2:
- *         adj_sum[_np.argmax(adj_sum < 1.5)] = 2
+ *     d1 = _csgraph.shortest_path(csr, indices=np.argmax(adj_sum < 1.5))             # <<<<<<<<<<<<<<
+ *     while np.sum(d1 == np.inf) > d1.shape[0] // 2:
+ *         adj_sum[np.argmax(adj_sum < 1.5)] = 2
  */
   __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_n_s_csgraph); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 50, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
@@ -5562,10 +5562,10 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
 
   /* "wormtracer/skeleton.pyx":51
  *     # get tips of longest path
- *     d1 = _csgraph.shortest_path(csr, indices=_np.argmax(adj_sum < 1.5))
- *     while _np.sum(d1 == _np.inf) > d1.shape[0] // 2:             # <<<<<<<<<<<<<<
- *         adj_sum[_np.argmax(adj_sum < 1.5)] = 2
- *         d1 = _csgraph.shortest_path(csr, indices=_np.argmax(adj_sum < 1.5))
+ *     d1 = _csgraph.shortest_path(csr, indices=np.argmax(adj_sum < 1.5))
+ *     while np.sum(d1 == np.inf) > d1.shape[0] // 2:             # <<<<<<<<<<<<<<
+ *         adj_sum[np.argmax(adj_sum < 1.5)] = 2
+ *         d1 = _csgraph.shortest_path(csr, indices=np.argmax(adj_sum < 1.5))
  */
   while (1) {
     __Pyx_GetModuleGlobalName(__pyx_t_11, __pyx_n_s_np); if (unlikely(!__pyx_t_11)) __PYX_ERR(1, 51, __pyx_L1_error)
@@ -5614,11 +5614,11 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
     if (!__pyx_t_9) break;
 
     /* "wormtracer/skeleton.pyx":52
- *     d1 = _csgraph.shortest_path(csr, indices=_np.argmax(adj_sum < 1.5))
- *     while _np.sum(d1 == _np.inf) > d1.shape[0] // 2:
- *         adj_sum[_np.argmax(adj_sum < 1.5)] = 2             # <<<<<<<<<<<<<<
- *         d1 = _csgraph.shortest_path(csr, indices=_np.argmax(adj_sum < 1.5))
- *     d1[d1 == _np.inf] = 0
+ *     d1 = _csgraph.shortest_path(csr, indices=np.argmax(adj_sum < 1.5))
+ *     while np.sum(d1 == np.inf) > d1.shape[0] // 2:
+ *         adj_sum[np.argmax(adj_sum < 1.5)] = 2             # <<<<<<<<<<<<<<
+ *         d1 = _csgraph.shortest_path(csr, indices=np.argmax(adj_sum < 1.5))
+ *     d1[d1 == np.inf] = 0
  */
     __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_n_s_np); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 52, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
@@ -5653,11 +5653,11 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
     __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
 
     /* "wormtracer/skeleton.pyx":53
- *     while _np.sum(d1 == _np.inf) > d1.shape[0] // 2:
- *         adj_sum[_np.argmax(adj_sum < 1.5)] = 2
- *         d1 = _csgraph.shortest_path(csr, indices=_np.argmax(adj_sum < 1.5))             # <<<<<<<<<<<<<<
- *     d1[d1 == _np.inf] = 0
- *     d2, p = _csgraph.shortest_path(csr, indices=_np.argmax(d1), return_predecessors=True)
+ *     while np.sum(d1 == np.inf) > d1.shape[0] // 2:
+ *         adj_sum[np.argmax(adj_sum < 1.5)] = 2
+ *         d1 = _csgraph.shortest_path(csr, indices=np.argmax(adj_sum < 1.5))             # <<<<<<<<<<<<<<
+ *     d1[d1 == np.inf] = 0
+ *     d2, p = _csgraph.shortest_path(csr, indices=np.argmax(d1), return_predecessors=True)
  */
     __Pyx_GetModuleGlobalName(__pyx_t_11, __pyx_n_s_csgraph); if (unlikely(!__pyx_t_11)) __PYX_ERR(1, 53, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_11);
@@ -5732,11 +5732,11 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
   }
 
   /* "wormtracer/skeleton.pyx":54
- *         adj_sum[_np.argmax(adj_sum < 1.5)] = 2
- *         d1 = _csgraph.shortest_path(csr, indices=_np.argmax(adj_sum < 1.5))
- *     d1[d1 == _np.inf] = 0             # <<<<<<<<<<<<<<
- *     d2, p = _csgraph.shortest_path(csr, indices=_np.argmax(d1), return_predecessors=True)
- *     d2[d2 == _np.inf] = 0
+ *         adj_sum[np.argmax(adj_sum < 1.5)] = 2
+ *         d1 = _csgraph.shortest_path(csr, indices=np.argmax(adj_sum < 1.5))
+ *     d1[d1 == np.inf] = 0             # <<<<<<<<<<<<<<
+ *     d2, p = _csgraph.shortest_path(csr, indices=np.argmax(d1), return_predecessors=True)
+ *     d2[d2 == np.inf] = 0
  */
   __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_np); if (unlikely(!__pyx_t_2)) __PYX_ERR(1, 54, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
@@ -5749,10 +5749,10 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
   /* "wormtracer/skeleton.pyx":55
- *         d1 = _csgraph.shortest_path(csr, indices=_np.argmax(adj_sum < 1.5))
- *     d1[d1 == _np.inf] = 0
- *     d2, p = _csgraph.shortest_path(csr, indices=_np.argmax(d1), return_predecessors=True)             # <<<<<<<<<<<<<<
- *     d2[d2 == _np.inf] = 0
+ *         d1 = _csgraph.shortest_path(csr, indices=np.argmax(adj_sum < 1.5))
+ *     d1[d1 == np.inf] = 0
+ *     d2, p = _csgraph.shortest_path(csr, indices=np.argmax(d1), return_predecessors=True)             # <<<<<<<<<<<<<<
+ *     d2[d2 == np.inf] = 0
  * 
  */
   __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_csgraph); if (unlikely(!__pyx_t_2)) __PYX_ERR(1, 55, __pyx_L1_error)
@@ -5874,9 +5874,9 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
   __pyx_t_2 = 0;
 
   /* "wormtracer/skeleton.pyx":56
- *     d1[d1 == _np.inf] = 0
- *     d2, p = _csgraph.shortest_path(csr, indices=_np.argmax(d1), return_predecessors=True)
- *     d2[d2 == _np.inf] = 0             # <<<<<<<<<<<<<<
+ *     d1[d1 == np.inf] = 0
+ *     d2, p = _csgraph.shortest_path(csr, indices=np.argmax(d1), return_predecessors=True)
+ *     d2[d2 == np.inf] = 0             # <<<<<<<<<<<<<<
  * 
  * 
  */
@@ -5895,7 +5895,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
  *     # get longest path
  *     plots = []             # <<<<<<<<<<<<<<
  *     arclen = []
- *     point = _np.argmax(d2)  # This is the start point(the end point is _np.argmax(d1))
+ *     point = np.argmax(d2)  # This is the start point(the end point is np.argmax(d1))
  */
   __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 60, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
@@ -5906,8 +5906,8 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
  *     # get longest path
  *     plots = []
  *     arclen = []             # <<<<<<<<<<<<<<
- *     point = _np.argmax(d2)  # This is the start point(the end point is _np.argmax(d1))
- *     while point != _np.argmax(d1) and point >= 0:
+ *     point = np.argmax(d2)  # This is the start point(the end point is np.argmax(d1))
+ *     while point != np.argmax(d1) and point >= 0:
  */
   __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 61, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
@@ -5917,8 +5917,8 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
   /* "wormtracer/skeleton.pyx":62
  *     plots = []
  *     arclen = []
- *     point = _np.argmax(d2)  # This is the start point(the end point is _np.argmax(d1))             # <<<<<<<<<<<<<<
- *     while point != _np.argmax(d1) and point >= 0:
+ *     point = np.argmax(d2)  # This is the start point(the end point is np.argmax(d1))             # <<<<<<<<<<<<<<
+ *     while point != np.argmax(d1) and point >= 0:
  *         plots.append(pts[point])
  */
   __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_np); if (unlikely(!__pyx_t_2)) __PYX_ERR(1, 62, __pyx_L1_error)
@@ -5954,8 +5954,8 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
 
   /* "wormtracer/skeleton.pyx":63
  *     arclen = []
- *     point = _np.argmax(d2)  # This is the start point(the end point is _np.argmax(d1))
- *     while point != _np.argmax(d1) and point >= 0:             # <<<<<<<<<<<<<<
+ *     point = np.argmax(d2)  # This is the start point(the end point is np.argmax(d1))
+ *     while point != np.argmax(d1) and point >= 0:             # <<<<<<<<<<<<<<
  *         plots.append(pts[point])
  *         arclen.append(d2[point])
  */
@@ -6005,8 +6005,8 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
     if (!__pyx_t_9) break;
 
     /* "wormtracer/skeleton.pyx":64
- *     point = _np.argmax(d2)  # This is the start point(the end point is _np.argmax(d1))
- *     while point != _np.argmax(d1) and point >= 0:
+ *     point = np.argmax(d2)  # This is the start point(the end point is np.argmax(d1))
+ *     while point != np.argmax(d1) and point >= 0:
  *         plots.append(pts[point])             # <<<<<<<<<<<<<<
  *         arclen.append(d2[point])
  *         point = p[point]
@@ -6017,7 +6017,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
     /* "wormtracer/skeleton.pyx":65
- *     while point != _np.argmax(d1) and point >= 0:
+ *     while point != np.argmax(d1) and point >= 0:
  *         plots.append(pts[point])
  *         arclen.append(d2[point])             # <<<<<<<<<<<<<<
  *         point = p[point]
@@ -6048,7 +6048,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
  * 
  *     plots.append(pts[point])             # <<<<<<<<<<<<<<
  *     arclen.append(d2[point])
- *     plots_np = _np.array(plots)
+ *     plots_np = np.array(plots)
  */
   __pyx_t_1 = __Pyx_GetItemInt(((PyObject *)__pyx_v_pts), __pyx_v_point, long, 1, __Pyx_PyInt_From_long, 0, 0, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 68, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
@@ -6059,8 +6059,8 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
  * 
  *     plots.append(pts[point])
  *     arclen.append(d2[point])             # <<<<<<<<<<<<<<
- *     plots_np = _np.array(plots)
- *     arclen_np = _np.array(arclen[::-1])
+ *     plots_np = np.array(plots)
+ *     arclen_np = np.array(arclen[::-1])
  */
   __pyx_t_24 = __pyx_v_point;
   __pyx_t_1 = PyFloat_FromDouble((*__Pyx_BufPtrCContig1d(double *, __pyx_pybuffernd_d2.rcbuffer->pybuffer.buf, __pyx_t_24, __pyx_pybuffernd_d2.diminfo[0].strides))); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 69, __pyx_L1_error)
@@ -6071,8 +6071,8 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
   /* "wormtracer/skeleton.pyx":70
  *     plots.append(pts[point])
  *     arclen.append(d2[point])
- *     plots_np = _np.array(plots)             # <<<<<<<<<<<<<<
- *     arclen_np = _np.array(arclen[::-1])
+ *     plots_np = np.array(plots)             # <<<<<<<<<<<<<<
+ *     arclen_np = np.array(arclen[::-1])
  * 
  */
   __Pyx_GetModuleGlobalName(__pyx_t_11, __pyx_n_s_np); if (unlikely(!__pyx_t_11)) __PYX_ERR(1, 70, __pyx_L1_error)
@@ -6106,11 +6106,11 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
   __pyx_t_13 = ((PyArrayObject *)__pyx_t_1);
   {
     __Pyx_BufFmt_StackElem __pyx_stack[1];
-    __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_plots_np.rcbuffer->pybuffer);
-    __pyx_t_4 = __Pyx_GetBufferAndValidate(&__pyx_pybuffernd_plots_np.rcbuffer->pybuffer, (PyObject*)__pyx_t_13, &__Pyx_TypeInfo_long, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 2, 0, __pyx_stack);
+    __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_plotsnp.rcbuffer->pybuffer);
+    __pyx_t_4 = __Pyx_GetBufferAndValidate(&__pyx_pybuffernd_plotsnp.rcbuffer->pybuffer, (PyObject*)__pyx_t_13, &__Pyx_TypeInfo_long, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 2, 0, __pyx_stack);
     if (unlikely(__pyx_t_4 < 0)) {
       PyErr_Fetch(&__pyx_t_6, &__pyx_t_7, &__pyx_t_8);
-      if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_plots_np.rcbuffer->pybuffer, (PyObject*)__pyx_v_plots_np, &__Pyx_TypeInfo_long, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 2, 0, __pyx_stack) == -1)) {
+      if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_plotsnp.rcbuffer->pybuffer, (PyObject*)__pyx_v_plots_np, &__Pyx_TypeInfo_long, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 2, 0, __pyx_stack) == -1)) {
         Py_XDECREF(__pyx_t_6); Py_XDECREF(__pyx_t_7); Py_XDECREF(__pyx_t_8);
         __Pyx_RaiseBufferFallbackError();
       } else {
@@ -6118,7 +6118,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
       }
       __pyx_t_6 = __pyx_t_7 = __pyx_t_8 = 0;
     }
-    __pyx_pybuffernd_plots_np.diminfo[0].strides = __pyx_pybuffernd_plots_np.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_plots_np.diminfo[0].shape = __pyx_pybuffernd_plots_np.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_plots_np.diminfo[1].strides = __pyx_pybuffernd_plots_np.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_plots_np.diminfo[1].shape = __pyx_pybuffernd_plots_np.rcbuffer->pybuffer.shape[1];
+    __pyx_pybuffernd_plotsnp.diminfo[0].strides = __pyx_pybuffernd_plotsnp.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_plotsnp.diminfo[0].shape = __pyx_pybuffernd_plotsnp.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_plotsnp.diminfo[1].strides = __pyx_pybuffernd_plotsnp.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_plotsnp.diminfo[1].shape = __pyx_pybuffernd_plotsnp.rcbuffer->pybuffer.shape[1];
     if (unlikely((__pyx_t_4 < 0))) __PYX_ERR(1, 70, __pyx_L1_error)
   }
   __pyx_t_13 = 0;
@@ -6127,8 +6127,8 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
 
   /* "wormtracer/skeleton.pyx":71
  *     arclen.append(d2[point])
- *     plots_np = _np.array(plots)
- *     arclen_np = _np.array(arclen[::-1])             # <<<<<<<<<<<<<<
+ *     plots_np = np.array(plots)
+ *     arclen_np = np.array(arclen[::-1])             # <<<<<<<<<<<<<<
  * 
  *     # interpolation
  */
@@ -6166,11 +6166,11 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
   __pyx_t_17 = ((PyArrayObject *)__pyx_t_1);
   {
     __Pyx_BufFmt_StackElem __pyx_stack[1];
-    __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_arclen_np.rcbuffer->pybuffer);
-    __pyx_t_4 = __Pyx_GetBufferAndValidate(&__pyx_pybuffernd_arclen_np.rcbuffer->pybuffer, (PyObject*)__pyx_t_17, &__Pyx_TypeInfo_double, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 1, 0, __pyx_stack);
+    __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_arclennp.rcbuffer->pybuffer);
+    __pyx_t_4 = __Pyx_GetBufferAndValidate(&__pyx_pybuffernd_arclennp.rcbuffer->pybuffer, (PyObject*)__pyx_t_17, &__Pyx_TypeInfo_double, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 1, 0, __pyx_stack);
     if (unlikely(__pyx_t_4 < 0)) {
       PyErr_Fetch(&__pyx_t_8, &__pyx_t_7, &__pyx_t_6);
-      if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_arclen_np.rcbuffer->pybuffer, (PyObject*)__pyx_v_arclen_np, &__Pyx_TypeInfo_double, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 1, 0, __pyx_stack) == -1)) {
+      if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_arclennp.rcbuffer->pybuffer, (PyObject*)__pyx_v_arclen_np, &__Pyx_TypeInfo_double, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 1, 0, __pyx_stack) == -1)) {
         Py_XDECREF(__pyx_t_8); Py_XDECREF(__pyx_t_7); Py_XDECREF(__pyx_t_6);
         __Pyx_RaiseBufferFallbackError();
       } else {
@@ -6178,7 +6178,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
       }
       __pyx_t_8 = __pyx_t_7 = __pyx_t_6 = 0;
     }
-    __pyx_pybuffernd_arclen_np.diminfo[0].strides = __pyx_pybuffernd_arclen_np.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_arclen_np.diminfo[0].shape = __pyx_pybuffernd_arclen_np.rcbuffer->pybuffer.shape[0];
+    __pyx_pybuffernd_arclennp.diminfo[0].strides = __pyx_pybuffernd_arclennp.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_arclennp.diminfo[0].shape = __pyx_pybuffernd_arclennp.rcbuffer->pybuffer.shape[0];
     if (unlikely((__pyx_t_4 < 0))) __PYX_ERR(1, 71, __pyx_L1_error)
   }
   __pyx_t_17 = 0;
@@ -6188,7 +6188,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
   /* "wormtracer/skeleton.pyx":74
  * 
  *     # interpolation
- *     div_linespace = _np.linspace(0, _np.max(arclen_np), n_seg)             # <<<<<<<<<<<<<<
+ *     div_linespace = np.linspace(0, np.max(arclen_np), n_seg)             # <<<<<<<<<<<<<<
  *     f_x = _interp1d(arclen_np, plots_np[:, 1], kind="linear")
  *     f_y = _interp1d(arclen_np, plots_np[:, 0], kind="linear")
  */
@@ -6275,7 +6275,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
 
   /* "wormtracer/skeleton.pyx":75
  *     # interpolation
- *     div_linespace = _np.linspace(0, _np.max(arclen_np), n_seg)
+ *     div_linespace = np.linspace(0, np.max(arclen_np), n_seg)
  *     f_x = _interp1d(arclen_np, plots_np[:, 1], kind="linear")             # <<<<<<<<<<<<<<
  *     f_y = _interp1d(arclen_np, plots_np[:, 0], kind="linear")
  *     x_splined = f_x(div_linespace).round().astype("long")
@@ -6304,7 +6304,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
   __pyx_t_11 = 0;
 
   /* "wormtracer/skeleton.pyx":76
- *     div_linespace = _np.linspace(0, _np.max(arclen_np), n_seg)
+ *     div_linespace = np.linspace(0, np.max(arclen_np), n_seg)
  *     f_x = _interp1d(arclen_np, plots_np[:, 1], kind="linear")
  *     f_y = _interp1d(arclen_np, plots_np[:, 0], kind="linear")             # <<<<<<<<<<<<<<
  *     x_splined = f_x(div_linespace).round().astype("long")
@@ -6562,7 +6562,7 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
  * 
  * @_cython.boundscheck(False)             # <<<<<<<<<<<<<<
  * @_cython.wraparound(False)
- * def get_skeleton(_np.ndarray[unsigned char, ndim=2, mode="c"] im, size_t n_seg):
+ * def get_skeleton(np.ndarray[unsigned char, ndim=2, mode="c"] im, size_t n_seg):
  */
 
   /* function exit code */
@@ -6580,14 +6580,14 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
     __Pyx_ErrFetch(&__pyx_type, &__pyx_value, &__pyx_tb);
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_adj_mtx.rcbuffer->pybuffer);
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_adj_sum.rcbuffer->pybuffer);
-    __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_arclen_np.rcbuffer->pybuffer);
+    __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_arclennp.rcbuffer->pybuffer);
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_d1.rcbuffer->pybuffer);
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_d2.rcbuffer->pybuffer);
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_div_linespace.rcbuffer->pybuffer);
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_im.rcbuffer->pybuffer);
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_im_filled.rcbuffer->pybuffer);
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_im_skeleton.rcbuffer->pybuffer);
-    __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_plots_np.rcbuffer->pybuffer);
+    __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_plotsnp.rcbuffer->pybuffer);
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_pts.rcbuffer->pybuffer);
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_x_splined.rcbuffer->pybuffer);
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_y_splined.rcbuffer->pybuffer);
@@ -6598,14 +6598,14 @@ static PyObject *__pyx_pf_10wormtracer_8skeleton_get_skeleton(CYTHON_UNUSED PyOb
   __pyx_L0:;
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_adj_mtx.rcbuffer->pybuffer);
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_adj_sum.rcbuffer->pybuffer);
-  __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_arclen_np.rcbuffer->pybuffer);
+  __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_arclennp.rcbuffer->pybuffer);
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_d1.rcbuffer->pybuffer);
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_d2.rcbuffer->pybuffer);
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_div_linespace.rcbuffer->pybuffer);
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_im.rcbuffer->pybuffer);
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_im_filled.rcbuffer->pybuffer);
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_im_skeleton.rcbuffer->pybuffer);
-  __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_plots_np.rcbuffer->pybuffer);
+  __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_plotsnp.rcbuffer->pybuffer);
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_pts.rcbuffer->pybuffer);
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_x_splined.rcbuffer->pybuffer);
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_y_splined.rcbuffer->pybuffer);
@@ -6773,10 +6773,10 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
 
   /* "wormtracer/skeleton.pyx":33
  *     im_skeleton = _morphology.skeletonize(im_filled)
- *     if _np.sum(im_skeleton) == 0:
+ *     if np.sum(im_skeleton) == 0:
  *         return None,None             # <<<<<<<<<<<<<<
  * 
- *     pts =_np.ascontiguousarray(_np.argwhere(im_skeleton == 1))
+ *     pts =np.ascontiguousarray(np.argwhere(im_skeleton == 1))
  */
   __pyx_tuple__3 = PyTuple_Pack(2, Py_None, Py_None); if (unlikely(!__pyx_tuple__3)) __PYX_ERR(1, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__3);
@@ -6784,8 +6784,8 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
 
   /* "wormtracer/skeleton.pyx":71
  *     arclen.append(d2[point])
- *     plots_np = _np.array(plots)
- *     arclen_np = _np.array(arclen[::-1])             # <<<<<<<<<<<<<<
+ *     plots_np = np.array(plots)
+ *     arclen_np = np.array(arclen[::-1])             # <<<<<<<<<<<<<<
  * 
  *     # interpolation
  */
@@ -6795,7 +6795,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
 
   /* "wormtracer/skeleton.pyx":75
  *     # interpolation
- *     div_linespace = _np.linspace(0, _np.max(arclen_np), n_seg)
+ *     div_linespace = np.linspace(0, np.max(arclen_np), n_seg)
  *     f_x = _interp1d(arclen_np, plots_np[:, 1], kind="linear")             # <<<<<<<<<<<<<<
  *     f_y = _interp1d(arclen_np, plots_np[:, 0], kind="linear")
  *     x_splined = f_x(div_linespace).round().astype("long")
@@ -6808,7 +6808,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __Pyx_GIVEREF(__pyx_tuple__6);
 
   /* "wormtracer/skeleton.pyx":76
- *     div_linespace = _np.linspace(0, _np.max(arclen_np), n_seg)
+ *     div_linespace = np.linspace(0, np.max(arclen_np), n_seg)
  *     f_x = _interp1d(arclen_np, plots_np[:, 1], kind="linear")
  *     f_y = _interp1d(arclen_np, plots_np[:, 0], kind="linear")             # <<<<<<<<<<<<<<
  *     x_splined = f_x(div_linespace).round().astype("long")
@@ -6845,7 +6845,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  * @_cython.boundscheck(False)             # <<<<<<<<<<<<<<
  * @_cython.wraparound(False)
- * def get_skeleton(_np.ndarray[unsigned char, ndim=2, mode="c"] im, size_t n_seg):
+ * def get_skeleton(np.ndarray[unsigned char, ndim=2, mode="c"] im, size_t n_seg):
  */
   __pyx_tuple__12 = PyTuple_Pack(22, __pyx_n_s_im, __pyx_n_s_n_seg, __pyx_n_s_point, __pyx_n_s_n_pts, __pyx_n_s_x_splined, __pyx_n_s_y_splined, __pyx_n_s_im_filled, __pyx_n_s_im_skeleton, __pyx_n_s_pts, __pyx_n_s_plots_np, __pyx_n_s_adj_sum, __pyx_n_s_div_linespace, __pyx_n_s_d1, __pyx_n_s_d2, __pyx_n_s_arclen_np, __pyx_n_s_adj_mtx, __pyx_n_s_csr, __pyx_n_s_p, __pyx_n_s_plots, __pyx_n_s_arclen, __pyx_n_s_f_x, __pyx_n_s_f_y); if (unlikely(!__pyx_tuple__12)) __PYX_ERR(1, 12, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__12);
@@ -7403,7 +7403,7 @@ if (!__Pyx_RefNanny) {
  * 
  * @_cython.boundscheck(False)             # <<<<<<<<<<<<<<
  * @_cython.wraparound(False)
- * def get_skeleton(_np.ndarray[unsigned char, ndim=2, mode="c"] im, size_t n_seg):
+ * def get_skeleton(np.ndarray[unsigned char, ndim=2, mode="c"] im, size_t n_seg):
  */
   __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_10wormtracer_8skeleton_1get_skeleton, 0, __pyx_n_s_get_skeleton, NULL, __pyx_n_s_wormtracer_skeleton, __pyx_d, ((PyObject *)__pyx_codeobj__13)); if (unlikely(!__pyx_t_2)) __PYX_ERR(1, 12, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);

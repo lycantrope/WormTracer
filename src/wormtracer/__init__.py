@@ -21,6 +21,9 @@ body_ratio(float, > 0):
 This value is body (rigid part of the object) ratio of the object.
 If the object is a typical worm, set it around 90.
 """
+
+from __future__ import annotations
+
 __version__ = "0.1.0"
 
 from . import (
@@ -33,3 +36,14 @@ from . import (
     train,
     utils,
 )
+
+__all__ = [
+    "dataset",
+    "loss",
+    "model",
+    "parameter",
+    "plot",
+    "preprocess",
+    "train",
+    "utils",
+]

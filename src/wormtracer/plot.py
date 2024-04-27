@@ -1,17 +1,21 @@
-import matplotlib.pyplot as _plt
-import numpy as _np
+import typing as _T
 from math import ceil as _ceil
 
-from wormtracer.types import _Figure, _OPTIONAL_NP
+import matplotlib.figure as _figure
+import matplotlib.pyplot as _plt
+import numpy as np
+
+_OPTIONAL_NP: _T.TypeAlias = _T.Optional[np.ndarray]
+
 
 def show_image(
-    im_stack: _np.ndarray,
+    im_stack: np.ndarray,
     num_t: int = 5,
     title: str = "",
     n_cols: int = 5,
     xy1: _OPTIONAL_NP = None,
     xy2: _OPTIONAL_NP = None,
-) -> _Figure:
+) -> _figure.Figure:
     """
     Display a stack of images over time with optional point annotations.
 
@@ -68,9 +72,9 @@ def show_image(
     # turn off all axes before plotting
     [ax.set_axis_off() for ax in fig.get_axes()]
 
-    vmax = _np.max(im_stack)
+    vmax = np.max(im_stack)
     for idx, ax in zip(t_slice, fig.get_axes()):
-        cax = ax.imshow(
+        _ = ax.imshow(
             im_stack[idx, :, :],
             cmap="gray",
             vmin=0,
@@ -92,7 +96,7 @@ def show_image(
     return fig
 
 
-def make_progress_image(im_stack: _np.ndarray, num_t=20, n_cols: int = 5):
+def make_progress_image(im_stack: np.ndarray, num_t=20, n_cols: int = 5):
     """Make one large image with images laid out on it."""
     assert im_stack.ndim == 3, "stack is not a 3-D ndarray (T, H, W)"
 
@@ -102,7 +106,7 @@ def make_progress_image(im_stack: _np.ndarray, num_t=20, n_cols: int = 5):
     n_im = len(t_slice)
     n_rows = _ceil(n_im / n_cols)
     # binning plot into n_cols
-    progress_image = _np.zeros((H * n_rows, W * n_cols), dtype="uint8")
+    progress_image = np.zeros((H * n_rows, W * n_cols), dtype="uint8")
     for i, idx in enumerate(t_slice):
         y1 = (i // n_cols) * H
         y2 = y1 + H

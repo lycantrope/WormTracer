@@ -1,8 +1,13 @@
-import attrs as _attrs
-import numpy as _np
-import torch as _t
-import torch.nn as _nn
-from wormtracer.types import _T, _NP_T
+import typing as _T
+
+import numpy as np
+import torch
+import torch.nn as nn
+from attrs import define as _define
+from attrs import field as _field
+
+_NP_T: _T.TypeAlias = np.ndarray
+
 
 __all__ = [
     "AnnealingFunction",
@@ -17,27 +22,29 @@ __all__ = [
 
 
 def body_axis_function(body_ratio, n_segments, base=0.5):
-    x = _t.arange(-0.5 * n_segments + 2, 0.5 * n_segments) - 0.5
+    x = torch.arange(-0.5 * n_segments + 2, 0.5 * n_segments) - 0.5
     n = 1 / base - 1
     body_axis_weight = (
-        n * (_t.sigmoid(x + body_ratio // 2) + _t.sigmoid(-x + body_ratio // 2) - 1) + 1
+        n
+        * (torch.sigmoid(x + body_ratio // 2) + torch.sigmoid(-x + body_ratio // 2) - 1)
+        + 1
     ) / (n + 1)
     return body_axis_weight.reshape(1, n_segments - 2)
 
 
-@_attrs.define
+@_define
 class AnnealingFunction:
-    T: float = _attrs.field(converter=float)
-    speed: float = _attrs.field(default=0.2)
-    start: float = _attrs.field(default=0.0)
-    slope: float = _attrs.field(default=1.0)
+    T: float = _field(converter=float)
+    speed: float = _field(default=0.2)
+    start: float = _field(default=0.0)
+    slope: float = _field(default=1.0)
 
     def get_weights(self, epoch: int):
-        x = _t.abs(_t.arange(-self.T / 2 + 0.5, self.T / 2 + 0.5)) - self.T / 2
-        return _t.sigmoid((x + self.start + epoch * self.speed) * self.slope)
+        x = torch.abs(torch.arange(-self.T / 2 + 0.5, self.T / 2 + 0.5)) - self.T / 2
+        return torch.sigmoid((x + self.start + epoch * self.speed) * self.slope)
 
 
-class ImageLoss(_nn.Module):
+class ImageLoss(nn.Module):
     def __init__(self, weight=1.0):
         super(ImageLoss, self).__init__()
         self.weight = weight
@@ -48,7 +55,7 @@ class ImageLoss(_nn.Module):
         return loss * self.weight
 
 
-class SmoothnessLoss(_nn.Module):
+class SmoothnessLoss(nn.Module):
     def __init__(self, body_axis_weight, smoothness_weight=1.0):
         super(SmoothnessLoss, self).__init__()
         self.body_axis_weight = body_axis_weight
@@ -56,23 +63,23 @@ class SmoothnessLoss(_nn.Module):
 
     def forward(
         self,
-        theta: _t.Tensor,
+        theta: torch.Tensor,
     ):
         loss = (theta.diff(n=1, axis=1) * self.body_axis_weight).pow(2) * self.weight
         return loss
 
 
-class ContinuityLoss(_nn.Module):
+class ContinuityLoss(nn.Module):
     def __init__(self, weight=1.0):
         super(ContinuityLoss, self).__init__()
         self.weight = weight
 
-    def forward(self, theta: _t.Tensor) -> _t.Tensor:
+    def forward(self, theta: torch.Tensor) -> torch.Tensor:
         loss = theta.diff(n=1, axis=0).float_power(2).mean()
         return loss.mean() * self.weight
 
 
-class ISCLoss(_nn.Module):
+class ISCLoss(nn.Module):
     """ISCLoss: abbreviation loss of (Image + Smoothness + Continuity)"""
 
     def __init__(
@@ -80,7 +87,7 @@ class ISCLoss(_nn.Module):
         im_loss_fn: ImageLoss,
         smooth_loss_fn: SmoothnessLoss,
         continuity_loss_fn: ContinuityLoss,
-        annealing_fn: _t.Optional[AnnealingFunction] = None,
+        annealing_fn: torch.Optional[AnnealingFunction] = None,
     ):
         super(ISCLoss, self).__init__()
         self.image_loss_fn = im_loss_fn
@@ -88,7 +95,7 @@ class ISCLoss(_nn.Module):
         self.continuity_loss_fn = continuity_loss_fn
         self.annealing_fn = annealing_fn
 
-    def forward(self, pred, target, theta: _t.Tensor, epoch: int) -> _t.Tensor:
+    def forward(self, pred, target, theta: torch.Tensor, epoch: int) -> torch.Tensor:
         img_loss = self.image_loss_fn(pred, target)
         smo_loss = self.smooth_loss_fn(theta)
         img_smo_loss = img_loss + smo_loss
@@ -99,17 +106,17 @@ class ISCLoss(_nn.Module):
         return img_smo_loss.mean() + cont_loss
 
 
-class LengthLoss(_nn.Module):
+class LengthLoss(nn.Module):
     def __init__(self, weight: float = 1.0):
         super(CenterLoss, self).__init__()
         self.weight = weight
 
-    def forward(self, unit_length: _t.Tensor) -> _t.Tensor:
+    def forward(self, unit_length: torch.Tensor) -> torch.Tensor:
         loss = unit_length.diff(n=1, axis=0).pow(2)
         return loss * self.weight
 
 
-class CenterLoss(_nn.Module):
+class CenterLoss(nn.Module):
     def __init__(self, unit: float, weight: float = 1.0):
         super(CenterLoss, self).__init__()
         self.unit = unit
@@ -117,19 +124,19 @@ class CenterLoss(_nn.Module):
 
     def forward(
         self,
-        ct: _t.Tensor,
-        init_ct: _t.Tensor,
+        ct: torch.Tensor,
+        init_ct: torch.Tensor,
     ):
-        return _t.cdist(ct, init_ct).pow(2) / self.unit * self.weight
+        return torch.cdist(ct, init_ct).pow(2) / self.unit * self.weight
 
 
-@_attrs.define(kw_only=True, frozen=True, order=True)
+@_define(kw_only=True, frozen=True, order=True)
 class WormLosses:
     image: _NP_T
     continuity: _NP_T
     smoothness: _NP_T
-    length: float = _attrs.field(eq=False)
-    center: float = _attrs.field(eq=False)
+    length: float = _field(eq=False)
+    center: float = _field(eq=False)
 
     def __ne__(self, other: "WormLosses") -> bool:
         pair = (self, other)
@@ -153,25 +160,25 @@ class WormLosses:
         smo_max = pair[im_select].smoothness
 
         def _weight(min_l, max_l):
-            q75, q50, q25 = _np.percentile(min_l, (75, 50, 25))
+            q75, q50, q25 = np.percentile(min_l, (75, 50, 25))
             return (max(max_l) - q50) / (q75 - q25)
 
         im_exrate = _weight(im_min, im_max)
         con_exrate = _weight(con_min, con_max)
         smo_exrate = _weight(smo_min, smo_max)
 
-        exrate_loss = _np.argmax([im_exrate, con_exrate, smo_exrate])
+        exrate_loss = np.argmax([im_exrate, con_exrate, smo_exrate])
         return bool([im_select, con_select, smo_select][exrate_loss])
 
 
 def find_outliner(losses_all: _T.List[LengthLoss]):
-    mask = _np.zeros(len(losses_all)).astype(bool)
+    mask = np.zeros(len(losses_all)).astype(bool)
 
     def _helper(losses: _T.List[_NP_T]):
-        q75, q50, q25 = _np.percentile(_np.concatenate(losses, axis=0), (75, 50, 25))
+        q25, q50, q75 = np.percentile(np.concatenate(losses, axis=0), (25, 50, 75))
 
         def pred(loss: _NP_T) -> bool:
-            return _np.max(loss) - q50 > (q75 - q25) * 4
+            return np.max(loss) - q50 > (q75 - q25) * 4
 
         return pred
 
@@ -181,6 +188,8 @@ def find_outliner(losses_all: _T.List[LengthLoss]):
         "smoothness",
     ]
     for n in loss_attrs:
-        pred = _helper([getattr(l, n) for l in losses_all])
-        mask = mask | _np.array([pred(getattr(l, n)) for l in losses_all]).astype(bool)
+        pred = _helper([getattr(loss, n) for loss in losses_all])
+        mask = mask | np.array([pred(getattr(loss, n)) for loss in losses_all]).astype(
+            bool
+        )
     return mask

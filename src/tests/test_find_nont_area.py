@@ -1,7 +1,6 @@
 # from wormtracer.preprocess import find_nont_area as new_find_nont_area
 
 
-import pytest
 import numpy as np
 
 

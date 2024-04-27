@@ -1,5 +1,6 @@
-import attrs as _attrs
 import typing as _T
+
+import attrs as _attrs
 
 
 @_attrs.define(kw_only=True, frozen=True)

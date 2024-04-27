@@ -1,7 +1,6 @@
+import numpy as np
 import pytest
 from wormtracer import preprocess, skeleton
-import numpy as np
-
 
 # content of test_sample.py
 

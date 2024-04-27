@@ -1,7 +1,0 @@
-numpy
-opencv-python-headless
-scikit-image
-matplotlib
-scipy
-attrs
-tqdm

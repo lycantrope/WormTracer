@@ -1,26 +1,31 @@
-from functools import partial as _partial, reduce as _reduce
+import typing as _T
+from functools import partial as _partial
+from functools import reduce as _reduce
+from pathlib import Path
 
 import attrs as _attrs
 import cv2 as _cv
-import numpy as _np
-from scipy.interpolate import interp1d as _interp1d
+import numpy as np
 import scipy.ndimage as _ndi
-from scipy.sparse import csr_matrix as _csr_matrix
-from scipy.sparse import csgraph as _csgraph
-from scipy.spatial import distance_matrix as _distance_matrix
 import skimage.morphology as _morphology
+from scipy.interpolate import interp1d as _interp1d
+from scipy.sparse import csgraph as _csgraph
+from scipy.sparse import csr_matrix as _csr_matrix
+from scipy.spatial import distance_matrix as _distance_matrix
 from tqdm import tqdm as _tqdm
 
-from wormtracer.types import (
-    _IMREAD_T,
-    _PATH_T,
-    _TRANSFORM_T,
-    _NP_T,
-    _T,
-    _OPTIONAL_NP,
-    _Offset,
-)
 from wormtracer.utils import eprint
+
+_NP_T: _T.TypeAlias = np.ndarray
+_OPTIONAL_NP: _T.TypeAlias = _T.Optional[_NP_T]
+_PATH_T: _T.TypeAlias = _T.Union[str, Path]
+_IMREAD_T: _T.TypeAlias = _T.Callable[[_PATH_T], _NP_T]
+_TRANSFORM_T: _T.TypeAlias = _T.Callable[[_NP_T], _NP_T]
+
+
+class Offset(_T.NamedTuple):
+    x: int = 0
+    y: int = 0
 
 
 __all__ = ["get_skeleton", "imread", "ImageReader"]
@@ -33,7 +38,7 @@ def imread(path: _PATH_T) -> _NP_T:
         path (_T.Union[str,_Path]): An image path
 
     Returns:
-        _np.ndarray: image loaded by cv2.imread
+        np.ndarray: image loaded by cv2.imread
     """
     return _cv.imread(str(path), flags=_cv.IMREAD_GRAYSCALE)
 
@@ -91,7 +96,7 @@ class ImageReader:
         if self.use_max_contour:
             steps.append(_find_max_contour)
 
-        if not _np.isclose(self.rescale, 1.0, atol=1e2):
+        if not np.isclose(self.rescale, 1.0, atol=1e2):
             # scaling
             resize = _partial(
                 _cv.resize,
@@ -133,7 +138,7 @@ class ImageReader:
         binarize_fn: _T.Optional[_TRANSFORM_T] = None,
     ) -> "ImageReader":
         im = imread(im_path)
-        is_binarized = _np.unique(im).size == 2
+        is_binarized = np.unique(im).size == 2
         if not is_binarized:
             if binarize_fn is None:
                 im = _otsu(im)
@@ -146,7 +151,7 @@ class ImageReader:
                 im = binarize_fn(im)
 
         # use 0.01 as a cut off.
-        if not _np.isclose(rescale, 1.0, atol=1e-2):
+        if not np.isclose(rescale, 1.0, atol=1e-2):
             im: _NP_T = _cv.resize(
                 im,
                 dsize=None,
@@ -157,7 +162,7 @@ class ImageReader:
 
         h, w = im.shape[:2]
         # Checking the nonzero count of boarder pixel.
-        while_pixel = _np.count_nonzero(im[(0, h - 1), :]) + _np.count_nonzero(
+        while_pixel = np.count_nonzero(im[(0, h - 1), :]) + np.count_nonzero(
             im[1 : h - 1, (0, w - 1)]
         )
         side_length = (h + w) * 2 - 4
@@ -171,19 +176,19 @@ class ImageReader:
         )
 
 
-def trim_imagestack(imagestack: _NP_T) -> _T.Tuple[_NP_T, _Offset]:
+def trim_imagestack(imagestack: _NP_T) -> _T.Tuple[_NP_T, Offset]:
     """trim imagestack to minimum size."""
     assert (
         imagestack.ndim == 3
     ), "Only accept 3D-image stack in (time, width, height) order"
 
-    thresh = _np.bitwise_or.reduce(imagestack > 0, axis=0)
+    thresh = np.bitwise_or.reduce(imagestack > 0, axis=0)
     max_h, max_w = thresh.shape
 
-    (ys, xs) = _np.nonzero(thresh)
+    (ys, xs) = np.nonzero(thresh)
     if ys.size == 0:
         eprint("[Warning] the imagestack have no signal")
-        return imagestack, _Offset()
+        return imagestack, Offset()
 
     # padding the border with 5 pixel width if possible
     x1 = max(xs.min() - 5, 0)
@@ -192,7 +197,7 @@ def trim_imagestack(imagestack: _NP_T) -> _T.Tuple[_NP_T, _Offset]:
     y2 = min(ys.max() + 5, max_h)
     imagestack = imagestack[:, y1:y2, x1:x2]
     # because we knew the size of trimmed image
-    return imagestack, _Offset(x1, y1)
+    return imagestack, Offset(x1, y1)
 
 
 def get_width(
@@ -203,9 +208,9 @@ def get_width(
     im_filled = _ndi.binary_fill_holes(im)
     x = splines[0, :].reshape((-1, 1, 1))
     y = splines[1, :].reshape((-1, 1, 1))
-    y_3d = _np.arange(im_filled.shape[0]).reshape([1, -1, 1])
-    x_3d = _np.arange(im_filled.shape[1]).reshape([1, 1, -1])
-    segment_distance = _np.sqrt(_np.power(x - x_3d, 2) + _np.power(y - y_3d, 2))
+    y_3d = np.arange(im_filled.shape[0]).reshape([1, -1, 1])
+    x_3d = np.arange(im_filled.shape[1]).reshape([1, 1, -1])
+    segment_distance = np.sqrt(np.power(x - x_3d, 2) + np.power(y - y_3d, 2))
     max_dist = im_filled.shape[0] + im_filled.shape[1]
     new_segment_distance = (segment_distance / max_dist + im_filled) * max_dist
     wid = new_segment_distance.min(axis=(1, 2)).max()
@@ -216,24 +221,23 @@ def get_width_by_distance(im: _NP_T, splines: _NP_T) -> float:
     im_filled = _ndi.binary_fill_holes(im)
     x = splines[0].astype(int)
     y = splines[1].astype(int)
-    ret = im_filled[y, x].max()
-    dist = _cv.distanceTransform((im_filled != ret).astype("u1"), _cv.DIST_L2, 3)
+    dist = _cv.distanceTransform(im_filled.astype("u1"), _cv.DIST_L2, 3)
     wid = dist[y, x]
-    return wid.max()
+    return wid
 
 
 def flip_check(x: _NP_T, y: _NP_T):
     """Check if plots of head and tail is flipping."""
-    gap_headtail = _np.mean(
-        _np.power(_np.diff(x, n=1, axis=0), 2) + _np.power(_np.diff(y, n=1, axis=0), 2),
+    gap_headtail = np.mean(
+        np.power(np.diff(x, n=1, axis=0), 2) + np.power(np.diff(y, n=1, axis=0), 2),
         axis=1,
     )
-    gap_headtail_ex = _np.mean(
-        _np.power(x[1:, :] - x[:-1, ::-1], 2) + _np.power(y[1:, :] - y[:-1, ::-1], 2),
+    gap_headtail_ex = np.mean(
+        np.power(x[1:, :] - x[:-1, ::-1], 2) + np.power(y[1:, :] - y[:-1, ::-1], 2),
         axis=1,
     )
     ex_t = gap_headtail > gap_headtail_ex
-    ex_r = _np.bitwise_xor.accumulate(ex_t)
+    ex_r = np.bitwise_xor.accumulate(ex_t)
     x[1:, :][ex_r] = x[1:, ::-1][ex_r]
     y[1:, :][ex_r] = y[1:, ::-1][ex_r]
     return x, y
@@ -242,7 +246,7 @@ def flip_check(x: _NP_T, y: _NP_T):
 def read_imagestack(
     filenames: _T.List[_PATH_T],
     reader: ImageReader,
-) -> _T.Tuple[_NP_T, _Offset]:
+) -> _T.Tuple[_NP_T, Offset]:
     assert len(filenames), "Input is empty"
     T = len(filenames)
 
@@ -251,7 +255,7 @@ def read_imagestack(
     _, f0 = next(items)
     im = reader.imread(f0)
 
-    imagestack = _np.zeros((T, im.shape[0], im.shape[1]), dtype="uint8")
+    imagestack = np.zeros((T, im.shape[0], im.shape[1]), dtype="uint8")
     imagestack[0, :, :] = im
 
     for t, f in items:
@@ -260,19 +264,23 @@ def read_imagestack(
     return (imagestack > 0).astype("f8"), offset
 
 
-def get_skeleton(im: _NP_T, n_seg: int = 100) -> _OPTIONAL_NP:
+def get_skeleton(
+    im: _NP_T, n_seg: int = 100, *, fill_hole: bool = True
+) -> _OPTIONAL_NP:
     """skeletonize image and get splined plots"""
 
     # skeletonize image
-    im_filled = _ndi.binary_fill_holes(im)
+    im_filled = im.copy()
+    if fill_hole:
+        im_filled = _ndi.binary_fill_holes(im_filled)
     im_skeleton = _morphology.skeletonize(im_filled)
 
     if im_skeleton.sum() == 0:
         return None
 
-    pts = _np.argwhere(im_skeleton == 1)
+    pts = np.argwhere(im_skeleton)
 
-    splines = _np.ones((2, n_seg + 1)) * pts[0][1]
+    splines = np.ones((2, n_seg + 1)) * pts[0][1]
     splines[0, :] = splines[0, :] * pts[0][1]
     splines[1, :] = splines[1, :] * pts[0][1]
 
@@ -284,36 +292,36 @@ def get_skeleton(im: _NP_T, n_seg: int = 100) -> _OPTIONAL_NP:
 
     adj_mtx[adj_mtx >= 1.5] = 0  # delete distance between isolated points
     csr = _csr_matrix(adj_mtx)
-    adj_sum = _np.sum(adj_mtx, axis=0)
+    adj_sum = np.sum(adj_mtx, axis=0)
 
     # get tips of longest path
-    d1 = _csgraph.shortest_path(csr, indices=_np.argmax(adj_sum < 1.5))
-    while _np.sum(d1 == _np.inf) > (d1.shape[0] >> 1):
-        adj_sum[_np.argmax(adj_sum < 1.5)] = 2
-        d1 = _csgraph.shortest_path(csr, indices=_np.argmax(adj_sum < 1.5))
-    d1[d1 == _np.inf] = 0
+    d1 = _csgraph.shortest_path(csr, indices=np.argmax(adj_sum < 1.5))
+    while np.sum(d1 == np.inf) > (d1.shape[0] >> 1):
+        adj_sum[np.argmax(adj_sum < 1.5)] = 2
+        d1 = _csgraph.shortest_path(csr, indices=np.argmax(adj_sum < 1.5))
+    d1[d1 == np.inf] = 0
     d2, p = _csgraph.shortest_path(
         csr,
-        indices=_np.argmax(d1),
+        indices=np.argmax(d1),
         return_predecessors=True,
     )
-    d2[d2 == _np.inf] = 0
+    d2[d2 == np.inf] = 0
 
     # get longest path
     plots = []
     arclen = []
-    point = _np.argmax(d2)  # This is the start point(the end point is _np.argmax(d1))
-    while point != _np.argmax(d1) and point >= 0:
+    point = np.argmax(d2)  # This is the start point(the end point is np.argmax(d1))
+    while point != np.argmax(d1) and point >= 0:
         plots.append(pts[point])
         arclen.append(d2[point])
         point = p[point]
     plots.append(pts[point])
     arclen.append(d2[point])
-    plots = _np.array(plots)
-    arclen = _np.array(arclen)[::-1]
+    plots = np.array(plots)
+    arclen = np.array(arclen)[::-1]
 
     # interpolation
-    div_linespace = _np.linspace(0, _np.max(arclen), n_seg + 1)
+    div_linespace = np.linspace(0, np.max(arclen), n_seg + 1)
     f_x = _interp1d(arclen, plots[:, 1], kind="linear")
     f_y = _interp1d(arclen, plots[:, 0], kind="linear")
     splines[0] = f_x(div_linespace).round().astype(int)
@@ -329,8 +337,8 @@ def calc_all_skeleton_and_width(
     """read images and get skeletonized plots"""
     assert imagestack.ndim == 3, "Input is empty"
     T = imagestack.shape[0]
-    txy = _np.zeros((T, 2, n_segs + 1))
-    pre_width = _np.zeros(T)
+    txy = np.zeros((T, 2, n_segs + 1))
+    pre_width = np.zeros((T, n_segs + 1))
 
     # first item does not require the flipping check
     items = iter(
@@ -343,8 +351,8 @@ def calc_all_skeleton_and_width(
     for t, im in items:
         xy1 = get_skeleton(im, n_segs)
         xy0 = txy[t - 1, :, :]
-        gap_headtail = _np.power(xy1 - xy0, 2).sum()
-        gap_headtail_rev = _np.power(xy1[:, ::-1] - xy0, 2).sum()
+        gap_headtail = np.power(xy1 - xy0, 2).sum()
+        gap_headtail_rev = np.power(xy1[:, ::-1] - xy0, 2).sum()
 
         # Revert the orientation if the flipping is smaller than original
         if gap_headtail > gap_headtail_rev:
@@ -354,38 +362,38 @@ def calc_all_skeleton_and_width(
 
         pre_width[t] = get_width_by_distance(imagestack[t], txy[t])
 
-    delta = _np.diff(txy, n=1, axis=2).sum(axis=1)
-    unit_per_seg = _np.sqrt(_np.median(delta))
+    delta = np.power(np.diff(txy, n=1, axis=2), 2).sum(axis=1)
+    unit_per_seg = np.sqrt(np.median(delta))
     return txy, pre_width, unit_per_seg
 
 
 def calc_theta_from_xy(txy: _NP_T) -> _NP_T:
-    assert txy.ndim == 3, "txy is not a three dimension _np.ndarray (T, xy, n_pts)"
+    assert txy.ndim == 3, "txy is not a three dimension np.ndarray (T, xy, n_pts)"
     T, _, n_pts = txy.shape
     n_segs = n_pts - 1
-    dxy = _np.diff(txy, n=1, axis=2)
-    theta = _np.arctan2(dxy[:, 1], dxy[:, 0])
+    dxy = np.diff(txy, n=1, axis=2)
+    theta = np.arctan2(dxy[:, 1], dxy[:, 0])
     # Arrange theta if the gap is larget than pi
     # Adjust the middle theta between time point
-    pi = _np.pi
+    pi = np.pi
     mid = n_segs // 2
-    t_gap = _np.diff(theta[:, mid], n=1)
-    t_adjust = _np.sign(t_gap) * 2 * pi
-    t_adjust[_np.abs(t_gap) < pi] = 0
+    t_gap = np.diff(theta[:, mid], n=1)
+    t_adjust = np.sign(t_gap) * 2 * pi
+    t_adjust[np.abs(t_gap) < pi] = 0
     theta[1:, :] -= t_adjust.cumsum().reshape(-1, 1)
 
     # adjust right hand side of theta within same time points
-    r_gap = _np.diff(theta[:, mid:], n=1, axis=1)
-    r_adjust = _np.sign(r_gap) * 2 * pi
-    r_adjust[_np.abs(r_gap) < pi] = 0
+    r_gap = np.diff(theta[:, mid:], n=1, axis=1)
+    r_adjust = np.sign(r_gap) * 2 * pi
+    r_adjust[np.abs(r_gap) < pi] = 0
     theta[:, mid + 1 :] -= r_adjust.cumsum(axis=1)
 
     # adjust left hand side
-    l_gap = _np.diff(theta[:, : mid + 1], n=1, axis=1)
-    l_adjust = _np.sign(l_gap) * (-2) * pi
-    l_adjust[_np.abs(l_gap) < pi] = 0
-    l_adjust_rev = _np.flip(l_adjust, axis=1)
-    theta[:, :mid] += _np.flip(_np.cumsum(l_adjust_rev, axis=1), axis=1)
+    l_gap = np.diff(theta[:, : mid + 1], n=1, axis=1)
+    l_adjust = np.sign(l_gap) * (-2) * pi
+    l_adjust[np.abs(l_gap) < pi] = 0
+    l_adjust_rev = np.flip(l_adjust, axis=1)
+    theta[:, :mid] += np.flip(np.cumsum(l_adjust_rev, axis=1), axis=1)
 
     return theta
 
@@ -407,21 +415,22 @@ def estimate_batchsize(
         allocated_mem = memory_allocated(device)
         free_mem = (tot_mem - allocated_mem) / MiB
         batchsize = int(s_m * free_mem // (im_width * im_height * n_segs))
-    except:
+    except (ImportError, RuntimeError) as e:
+        print(e)
         batchsize = time_span
 
     return batchsize
 
 
 def calc_init_center(read_image: _NP_T) -> _NP_T:
-    assert read_image.ndim == 3, "read_image is not 3-d _np.ndarray (T, Y, X)"
+    assert read_image.ndim == 3, "read_image is not 3-d np.ndarray (T, Y, X)"
     mask = read_image >= read_image.max(axis=(1, 2))[:, None, None]
-    ts, ys, xs = _np.where(mask)
+    ts, ys, xs = np.where(mask)
     # calculate split points, and omit end slice
-    ts_count = _np.bincount(ts).cumsum()[:-1]
-    cy = [y.mean() if y.size else -1 for y in _np.split(ys, ts_count)]
-    cx = [x.mean() if x.size else -1 for x in _np.split(xs, ts_count)]
-    return _np.array([cx, cy]).T
+    ts_count = np.bincount(ts).cumsum()[:-1]
+    cy = [y.mean() if y.size else -1 for y in np.split(ys, ts_count)]
+    cx = [x.mean() if x.size else -1 for x in np.split(xs, ts_count)]
+    return np.array([cx, cy]).T
 
 
 def _find_theta_gen(first_theta: _NP_T, pretheta: _NP_T, step: int) -> int:
@@ -439,10 +448,10 @@ def _find_theta_gen(first_theta: _NP_T, pretheta: _NP_T, step: int) -> int:
 
     import itertools as its
 
-    steps = its.count(step=step * _np.pi * 2)
-    pre_mse = _np.inf
+    steps = its.count(step=step * np.pi * 2)
+    pre_mse = np.inf
     for delta in steps:
-        mse = _np.sum((first_theta - pretheta + delta) ** 2)
+        mse = np.sum((first_theta - pretheta + delta) ** 2)
         if pre_mse < mse:
             break
         # yield mse count
@@ -466,21 +475,47 @@ def find_theta(first_theta: _NP_T, pretheta: _NP_T, step: int = 1) -> int:
 
 
 def find_theta_candidate(theta) -> _T.Tuple[_NP_T, _NP_T]:
-    PI = _np.pi
+    PI = np.pi
     first, last = theta[(0, -1), :]
     i_normal = find_theta(first, last) - find_theta(first, last, -1)
     last_rev = last[::-1] + PI
     i_reverse = find_theta(first, last_rev) - find_theta(first, last_rev, -1)
 
-    theta_pair = _np.array((last + i_normal * 2 * PI, last_rev + i_reverse * 2 * PI))
+    theta_pair = np.array((last + i_normal * 2 * PI, last_rev + i_reverse * 2 * PI))
 
-    theta_cands = theta_pair[:, None, :] + _np.array((2 * PI, -2 * PI))[None, :, None]
+    theta_cands = theta_pair[:, None, :] + np.array((2 * PI, -2 * PI))[None, :, None]
 
     first_3d = first[None, None, :]
     # theta_losses = [[normal_p, normal_m],[reverse_p,reverse_m]]
-    theta_losses = _np.sum((theta_cands - first_3d) ** 2, axis=2)
+    theta_losses = np.sum((theta_cands - first_3d) ** 2, axis=2)
     # return the index of minimum loss.
     cand_idx = theta_losses.argmin(axis=1)
 
     theta_subpair = theta_cands[(0, 1), cand_idx, :]
     return theta_pair, theta_subpair
+
+
+# def make_worm_numpy(skel, pre_width, im_width, im_height):
+
+#     assert skel.ndim == 2, "Dimension must be (2, n_pts)"
+#     _, n_pts = skel.shape
+
+#     cent_mid_3d = ((skel[:, :-1] + skel[:, 1:]) / 2.0).reshape(2, n_pts - 1, 1)
+
+#     worm_wid = torch.zeros(plot_n - 1).to(device)
+#     for i in range(plot_n - 1):
+#         worm_wid[i] = worm_width(
+#             i, plot_n, params["alpha"], params["gamma"], params["delta"]
+#         )
+
+#     cent_mid_x_3d = cent_mid_x_3d.reshape([-1, plot_n - 1, 1, 1]).to(torch.float32)
+#     cent_mid_y_3d = cent_mid_y_3d.reshape([-1, plot_n - 1, 1, 1]).to(torch.float32)
+#     worm_wid_3d = worm_wid.reshape([1, plot_n - 1, 1, 1])
+#     y_3d = torch.arange(image_shape[1]).reshape([1, 1, -1, 1]).to(device)
+#     x_3d = torch.arange(image_shape[2]).reshape([1, 1, 1, -1]).to(device)
+#     segment_distance_3d = torch.sqrt(
+#         (cent_mid_x_3d - x_3d) ** 2 + (cent_mid_y_3d - y_3d) ** 2
+#     )
+#     image_3d = pixel_value(segment_distance_3d, worm_wid_3d)
+#     image, _ = torch.max(image_3d, dim=1)
+#     return image

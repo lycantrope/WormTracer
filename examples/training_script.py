@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import wormtracer as wt
-from wormtracer.dataset import TrainingBlocks, get_use_points
+from wormtracer.dataset import get_use_points
 from wormtracer.loss import find_outliner
 from wormtracer.train import train3
 from wormtracer.preprocess import (
@@ -28,7 +28,7 @@ from pathlib import Path
 from wormtracer.utils import calc_avg_shape_params
 
 #  %%
-home = Path(r"C:\Users\iiiss\Desktop\kuan\pile_data")
+home = Path(r".")
 
 n_segs = 100
 ext = "jpg"
@@ -49,20 +49,23 @@ params = wt.parameter.HyperParameters(
 # %%
 filenames = sorted(home.glob("*.{}".format(ext)), key=lambda x: x.stem)
 
-# %% 
+# %%
 import cv2 as cv
 
-def binary_function_builder(filenames, size:int = 50):
+
+def binary_function_builder(filenames, size: int = 50):
     cands = np.random.choice(filenames, size)
-    imgs = np.array([cv.imread(str(p), flags= cv.IMREAD_GRAYSCALE) for p in cands])
-    background = np.median(imgs, axis = 0).astype(np.uint8)
-    kernel =cv.getStructuringElement(cv.MORPH_ELLIPSE, (3,3))
-    def threshold(im:np.ndarray)->np.ndarray:
+    imgs = np.array([cv.imread(str(p), flags=cv.IMREAD_GRAYSCALE) for p in cands])
+    background = np.median(imgs, axis=0).astype(np.uint8)
+    kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
+
+    def threshold(im: np.ndarray) -> np.ndarray:
         im = (im <= background).astype(np.uint8) * 255
         # _, im = cv.threshold(im, 0, 255, cv.THRESH_OTSU+cv.THRESH_BINARY)
 
-        im = cv.morphologyEx(im, cv.MORPH_OPEN, kernel = kernel, iterations = 2)
+        im = cv.morphologyEx(im, cv.MORPH_OPEN, kernel=kernel, iterations=2)
         return im
+
     return threshold
 
 
@@ -84,7 +87,7 @@ imagestack_all = imagestack
 imagestack = imagestack[:, 100:600, 65:370] == 0
 imagestack = imagestack.astype("f8")
 
-
+# %%
 
 
 # %%
@@ -105,7 +108,7 @@ theta = calc_theta_from_xy(txy)
 alpha = pre_width.min()
 
 cap_span = estimate_batchsize(params.device, T, im_width, im_height, params.n_segments)
-
+cap_span = 20
 # %% screen for complex and normal block
 im_model = make_worm_batch(
     txy,
@@ -120,14 +123,12 @@ image_losses = np.mean(
     axis=(1, 2),
 )
 
-q25, q75 = np.percentile(image_losses, q = [25, 75])
+q25, q75 = np.percentile(image_losses, q=[25, 75])
 min_idx = np.argmin(image_losses)
-image_loss_max = get_image_loss_max(
-    imagestack[min_idx], txy[min_idx], pre_width
-)
+image_loss_max = get_image_loss_max(imagestack[min_idx], txy[min_idx], pre_width)
 
 # %%
-fig, ax = plt.subplots(1,1)
+fig, ax = plt.subplots(1, 1)
 ax.plot(image_losses)
 ax.axhline(image_loss_max, 0.0, 1.0)
 plt.show()
@@ -137,12 +138,12 @@ training_blocks = get_use_points(image_losses, image_loss_max)
 
 # %%
 for xy, im, im_m in zip(txy, imagestack, im_model):
-    fig, ax = plt.subplots(1,2)
-    cax = ax[0].imshow(im, cmap ="grey")
-    ax[1].imshow((im_m *255), cmap ="gray")
+    fig, ax = plt.subplots(1, 2)
+    cax = ax[0].imshow(im, cmap="grey")
+    ax[1].imshow((im_m * 255), cmap="gray")
     ax[0].plot(xy[0], xy[1], color="red")
     plt.show()
-    
+
 
 # %%
 # main loop 1
@@ -375,3 +376,15 @@ for idx, is_complex, start, end in training_blocks.batch_iter(cap_span):
     txy[start:end, :, :] = (
         txy_model + ct_model.reshape(T, 2, 1) - np.array(all_offset).reshape(1, 2, 1)
     )
+# %%
+
+
+fig, _ = plt.subplots(4, 4)
+
+
+for i, ax in enumerate(fig.get_axes()):
+    ax.imshow(imagestack[i + 50])
+
+fig.tight_layout()
+
+# %%

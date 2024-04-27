@@ -1,10 +1,15 @@
-import numpy as _np
+from __future__ import annotations
+
+import typing as _T
+
+import numpy as np
 import torch as _torch
 import torch.nn as _nn
 from torch.nn.parameter import Parameter as _Parameter
 
-from wormtracer.types import _NP_T, _T
 from wormtracer.parameter import ShapeParameters as _ShapeParams
+
+_NP_T: _T.TypeAlias = np.ndarray
 
 
 class WormShapeLayer(_nn.Module):
@@ -115,7 +120,7 @@ class WormImageLayer(_nn.Module):
         cent_mid_x_3d = cent_mid_3d[:, 0]
         cent_mid_y_3d = cent_mid_3d[:, 1]
         # worm_wid_3d: [1, n_pts-1, 1, 1]
-        worm_wid_3d = shape.reshape(1, -1, 1, 1)
+        worm_wid_3d = shape.reshape(T, -1, 1, 1)
 
         # segment_distance_3d: [T, n_segs, im_height, im_width]
         # worm_wid_3d: [1, n_segs, 1, 1]
@@ -164,18 +169,19 @@ def make_worm_batch(
     from numpy import split
 
     T = txy.shape[0]
-    imagestack = _np.zeros((T, height, width))
-    cut = _np.arange(0, T, step=batchsize)[1:]
+    imagestack = np.zeros((T, height, width))
+    cut = np.arange(0, T, step=batchsize)[1:]
     chunks = zip(
         split(imagestack, cut),
         split(txy, cut),
+        split(pre_width, cut),
     )
     with _torch.no_grad():
         image_layer = WormImageLayer(width=width, height=height).to(device)
-        for dst, t in chunks:
+        for dst, t, w in chunks:
             im = image_layer(
                 skel=_torch.from_numpy(t.copy()).to(device),
-                shape=_torch.from_numpy(pre_width).to(device),
+                shape=_torch.from_numpy(w.copy()).to(device),
             )
             dst[:, :, :] = im.detach().cpu().numpy()
 
@@ -191,7 +197,7 @@ def get_image_loss_max(
     height, width = im_ref.shape
     image_layer = WormImageLayer(width=width, height=height)
 
-    skel_bad = _np.ones_like(skel) * skel[:, 0].reshape(2, 1)
+    skel_bad = np.ones_like(skel) * skel[:, 0].reshape(2, 1)
 
     with _torch.no_grad():
         im_bad = (
@@ -203,5 +209,5 @@ def get_image_loss_max(
             .detach()
             .numpy()
         )
-    image_loss_max = _np.mean((im_ref - im_bad) ** 2)
+    image_loss_max = np.mean((im_ref - im_bad) ** 2)
     return image_loss_max

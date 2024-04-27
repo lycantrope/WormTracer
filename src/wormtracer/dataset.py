@@ -1,8 +1,14 @@
+import typing as _T
 from itertools import count as _Counter
+from pathlib import Path
+
+import numpy as np
+from attrs import define as _define
+from attrs import field as _field
 from torch.utils import data as _data
-import attrs as _attrs
-import numpy as _np
-from wormtracer.types import _PATH_T, _T, _Path, _NP_T
+
+_NP_T: _T.TypeAlias = np.ndarray
+_PATH_T: _T.TypeAlias = _T.Union[str, Path]
 
 
 class Block(_T.NamedTuple):
@@ -11,16 +17,23 @@ class Block(_T.NamedTuple):
     start: int
     end: int
 
+    @property
+    def size(self) -> int:
+        return self.end - self.start + 1
 
-@_attrs.define(frozen=True)
+    def __repr__(self) -> str:
+        return f"Block(index={self.index:d}, is_complex={self.is_complex:}, start={self.start:d}, end={self.end:d}, size={self.size:d})"
+
+
+@_define(frozen=True)
 class TrainingBlocks:
-    blocks: _NP_T = _attrs.field(kw_only=True, repr=False)
-    complex_block: _NP_T = _attrs.field(kw_only=True)
-    rigid: float = _attrs.field(kw_only=True)
-    relaxed: float = _attrs.field(kw_only=True)
+    blocks: _NP_T = _field(kw_only=True, repr=False)
+    complex_block: _NP_T = _field(kw_only=True)
+    rigid: float = _field(kw_only=True)
+    relaxed: float = _field(kw_only=True)
 
     @classmethod
-    def from_loss(
+    def from_losses(
         cls,
         *,
         losses: _NP_T,
@@ -29,13 +42,13 @@ class TrainingBlocks:
     ) -> "TrainingBlocks":
         assert rigid > relaxed, "rigid margin must be greater than relaxed margin"
         complex_area = losses > relaxed
-        distinct_from_prev = _np.zeros_like(complex_area).astype(bool)
+        distinct_from_prev = np.zeros_like(complex_area).astype(bool)
         distinct_from_prev[1:] = complex_area[:-1] ^ complex_area[1:]
         # labeling all blocks in 0-index
         blocks = distinct_from_prev.astype(int).cumsum()
         # filter the block that fulfilled rigid criteria
-        complex_block_count = _np.bincount(blocks[losses > rigid])
-        complex_block = _np.where(complex_block_count > 0)[0]
+        complex_block_count = np.bincount(blocks[losses > rigid])
+        complex_block = np.where(complex_block_count > 0)[0]
 
         return cls(
             blocks=blocks,
@@ -44,9 +57,29 @@ class TrainingBlocks:
             rigid=rigid,
         )
 
+    @classmethod
+    def from_complex_area(
+        cls,
+        *,
+        complex_area: _NP_T,
+    ):
+
+        distinct_from_prev = np.zeros_like(complex_area).astype(bool)
+        distinct_from_prev[1:] = complex_area[:-1] ^ complex_area[1:]
+        blocks = distinct_from_prev.astype(int).cumsum()
+        # filter the block that fulfilled rigid criteria
+        complex_block_count = np.bincount(blocks[complex_area])
+        complex_block = np.where(complex_block_count > 0)[0]
+
+        return cls(
+            blocks=blocks,
+            complex_block=complex_block,
+            relaxed=np.nan,
+            rigid=np.nan,
+        )
+
     def batch_iter(self, batchsize: _T.Optional[int] = None) -> _T.Iterator[Block]:
         """Return an iterator that yields Block(idx, is_complex, start, end) with a batchsize
-
 
         Args:
             batchsize (int | None): Defaults to None, if batchsize is set, the blocks will be splitted in batchsize
@@ -57,11 +90,11 @@ class TrainingBlocks:
         Yields:
             Iterator[_T.Iterator[Block]]: _description_
         """
-        block_sizes = _np.bincount(self.blocks)
+        block_sizes = np.bincount(self.blocks)
         # it will return the index of first occurence.
-        label, onset = _np.unique(self.blocks, return_index=True)
+        label, onset = np.unique(self.blocks, return_index=True)
         offset = onset + block_sizes - 1
-        mask = _np.isin(label, self.complex_block)
+        mask = np.isin(label, self.complex_block)
         counter = _Counter()
         for m, start, end in zip(mask, onset, offset):
             if batchsize is None:
@@ -80,19 +113,19 @@ class TrainingBlocks:
         Returns:
             margins: The ndarray of blocks margins with dimestion of (N, 2)
         """
-        block_sizes = _np.bincount(self.blocks)
+        block_sizes = np.bincount(self.blocks)
         # it will return the index of first occurence.
-        label, onset = _np.unique(self._blocks, return_index=True)
+        label, onset = np.unique(self.blocks, return_index=True)
         offset = onset + block_sizes - 1
-        margins = _np.array([onset, offset]).T
+        margins = np.array([onset, offset]).T
 
-        mask = _np.isin(label, self.complex_block)
+        mask = np.isin(label, self.complex_block)
         if not use_complex_block:
             mask = ~mask
         return margins[mask]
 
     def get_block_mask(self, get_complex: bool = True) -> _NP_T:
-        mask = _np.isin(self.blocks, self.complex_block)
+        mask = np.isin(self.blocks, self.complex_block)
         if not get_complex:
             mask = ~mask
         return mask
@@ -106,14 +139,14 @@ class TrainingBlocks:
     #     assert x.shape == y.shape, "shapes of x and y were different"
     #     assert x.shape[:1] == self.blocks.shape[:1], "shapes of x and y were different"
 
-    #     mask = _np.isin(self.blocks, self.complex_block)
+    #     mask = np.isin(self.blocks, self.complex_block)
     #     if not use_complex_block:
     #         mask = ~mask
 
-    #     return _np.sqrt(
-    #         _np.median(
-    #             _np.power(_np.diff(x[mask], n=1, axis=1), 2)
-    #             + _np.power(_np.diff(y[mask], n=1, axis=1), 2)
+    #     return np.sqrt(
+    #         np.median(
+    #             np.power(np.diff(x[mask], n=1, axis=1), 2)
+    #             + np.power(np.diff(y[mask], n=1, axis=1), 2)
     #         )
     #     )
 
@@ -126,16 +159,16 @@ def get_use_points(
     Judge frames complex or not and get span for training.
     """
     # the criteria to filter complex area
-    rigid = 0.4 * image_loss_max + 0.6 * _np.min(image_losses)
-    relaxed = 0.2 * image_loss_max + 0.8 * _np.min(image_losses)
+    rigid = 0.4 * image_loss_max + 0.6 * np.min(image_losses)
+    relaxed = 0.2 * image_loss_max + 0.8 * np.min(image_losses)
 
-    return TrainingBlocks.from_loss(losses = image_losses, relaxed= relaxed, rigid= rigid)
+    return TrainingBlocks.from_losses(losses=image_losses, relaxed=relaxed, rigid=rigid)
 
 
 class ImageStack(_data.Dataset):
     def __init__(self, data_folder: _PATH_T, ext: str = "png"):
         super().__init__()
-        self.homepath = _Path(data_folder)
+        self.homepath = Path(data_folder)
         # sort data in lexicographic order
         self.images = sorted(data_folder.glob("*.{}".format(ext)), key=lambda x: x.stem)
 

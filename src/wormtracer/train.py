@@ -1,12 +1,14 @@
-import numpy as _np
-import torch as _torch
-import torch.nn as _nn
+import typing as _T
+
 import attrs as _attrs
+import numpy as np
+import torch
 
 import wormtracer.loss as _loss
-from wormtracer.types import *
-from wormtracer.parameter import HyperParameters as _HyperParams
 from wormtracer.model import WormModel as _Model
+from wormtracer.parameter import HyperParameters as _HyperParams
+
+_NP_T: _T.TypeAlias = np.ndarray
 
 
 @_attrs.define
@@ -22,7 +24,7 @@ class EarlyStopping:
     patience: int = _attrs.field(default=30)
     delta: float = _attrs.field(default=0)
     counter: int = _attrs.field(init=False, default=0)
-    best_loss: float = _attrs.field(init=False, default=_np.inf)
+    best_loss: float = _attrs.field(init=False, default=np.inf)
 
     def __call__(self, loss) -> bool:
         if loss <= self.best_loss + self.delta:
@@ -36,12 +38,12 @@ class EarlyStopping:
 
     def reset(self):
         self.counter = 0
-        self.best_loss = _np.inf
+        self.best_loss = np.inf
 
 
 def train3(
     model: _Model,
-    real_image: _np.ndarray,
+    real_image: np.ndarray,
     optimizer,
     params: _HyperParams,
     is_complex=True,
@@ -59,7 +61,7 @@ def train3(
 
     early_stopping = EarlyStopping()
 
-    real_image = _torch.from_numpy(real_image)
+    real_image = torch.from_numpy(real_image)
 
     annealing_fn = None
     if is_complex:
@@ -67,7 +69,7 @@ def train3(
 
     im_loss_fn = _loss.ImageLoss()
     smo_loss_fn = _loss.SmoothnessLoss(
-        smoothness_loss_weight = smoothness_loss_weight,
+        smoothness_loss_weight=smoothness_loss_weight,
         body_axis_weight=_loss.body_axis_function(
             body_ratio=params.body_ratio,
             n_segments=params.n_segments,
@@ -134,7 +136,7 @@ def train3(
             break
         optimizer.step()
 
-    with _torch.no_grad():
+    with torch.no_grad():
         model_image = model()
         skel_layer = model.skel_layer
         txy = skel_layer().detach().cpu().numpy()

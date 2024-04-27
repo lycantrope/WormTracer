@@ -1,9 +1,15 @@
 import json as _json
 import sys as _sys
-import numpy as _np
+import typing as _T
+from pathlib import Path
+
+import numpy as np
 
 from wormtracer.parameter import ShapeParameters as _ShapeParams
-from wormtracer.types import _PATH_LIST_T, _PATH_T, _Path, _T
+
+_PATH_T: _T.TypeAlias = _T.Union[str, Path]
+_PATH_LIST_T: _T.TypeAlias = _T.List[Path]
+
 
 __all__ = [
     "eprint",
@@ -60,7 +66,7 @@ def rmtree(root: _PATH_T) -> None:
 
     """
 
-    root = _Path(root)
+    root = Path(root)
     if not root.is_dir():
         root.unlink(True)
         return
@@ -70,13 +76,13 @@ def rmtree(root: _PATH_T) -> None:
 
 def glob(data_folder: _PATH_T, ext: str = "png") -> _PATH_LIST_T:
     # sort data in lexicographic order
-    return sorted(_Path(data_folder).glob("*.{}".format(ext)), key=lambda x: x.stem)
+    return sorted(Path(data_folder).glob("*.{}".format(ext)), key=lambda x: x.stem)
 
 
 def calc_avg_shape_params(
-    history: _T.List[_T.Tuple[int, _ShapeParams]]
+    history: _T.List[_T.Tuple[int, _ShapeParams]],
 ) -> _ShapeParams:
-    data = _np.array([(t, p.alpha, p.delta, p.gamma) for (t, p) in history]).T
+    data = np.array([(t, p.alpha, p.delta, p.gamma) for (t, p) in history]).T
     data[1] *= data[0]
     data[2] *= data[0]
     data[3] *= data[0]

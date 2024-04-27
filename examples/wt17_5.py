@@ -10,12 +10,10 @@ Original file is located at
 import numpy as np
 import cv2
 import torch
-import glob
 import os
 from pathlib import Path
 import datetime
 import json
-import sys
 
 ### input information and params ###
 """
@@ -163,8 +161,8 @@ show_image(real_image, display_option['num_t'], title='real image')
 show_image(model_image, display_option['num_t'], title='model image')
 print('use_points \n',use_points)
 
-losses_all = []; 
-shape_params = [];
+losses_all = [] 
+shape_params = []
 unitLength = prepare_for_train(pre_width, simple_area, x, y, params)
 if display_option['SaveProgress']:
   rmtree(dataset_path, 'progress_image')
