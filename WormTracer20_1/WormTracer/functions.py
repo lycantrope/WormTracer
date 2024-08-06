@@ -1,11 +1,18 @@
+from __future__ import annotations
+
 import collections
 import glob
+import math
 import os
 import shutil
 from math import pi
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import cv2
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -16,7 +23,13 @@ from scipy.interpolate import interp1d
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import shortest_path
 from scipy.spatial import distance_matrix
+from scipy.special import expit as np_sigmoid
 from skimage import morphology
+
+if TYPE_CHECKING:
+    from typing import Tuple, Union
+
+    from numpy.typing import NDArray
 
 
 def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
@@ -38,11 +51,12 @@ def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
         )
         axes[i // 5, i % 5].axis([0, image.shape[2], 0, image.shape[1]])
         axes[i // 5, i % 5].set_title(title + " t = {}".format(t_sparse[i]))
-        if type(x) == np.ndarray:
+        if isinstance(x, np.ndarray):
             axes[i // 5, i % 5].scatter(x[t_sparse[i]], y[t_sparse[i]], c="r", s=30)
-        if type(x2) == np.ndarray:
+        if isinstance(x2, np.ndarray):
             axes[i // 5, i % 5].scatter(x2[t_sparse[i]], y2[t_sparse[i]], c="y", s=30)
     # plt.show()
+    plt.close(fig)
 
 
 ### read, preprocess images and get information ###
@@ -76,8 +90,8 @@ def set_output_path(dataset_path, output_directory):
     return dataset_name, output_path, output_name
 
 
-def get_filenames(dataset_path):
-    extensions_available = [
+def get_filenames(dataset_path: Union[str, bytes, os.PathLike]):
+    extensions_available = {
         ".bmp",
         ".dib",
         ".pbm",
@@ -92,32 +106,31 @@ def get_filenames(dataset_path):
         ".jpeg",
         ".jpg",
         ".jpe",
-    ]
-    if dataset_path.endswith(".tif") or dataset_path.endswith(".tiff"):
-        return [dataset_path]
-    else:
-        filenames_all = sorted(glob.glob(os.path.join(dataset_path, "*")))
-        counter_dic = collections.Counter(
-            [os.path.splitext(path_i)[1] for path_i in filenames_all]
+    }
+    dataset_path = Path(os.fspath(dataset_path))
+    if dataset_path.is_file() and dataset_path.suffix in extensions_available:
+        return [os.fspath(dataset_path)]
+
+    ext_files_map = collections.defaultdict(list)
+    for name in dataset_path.glob("*.*"):
+        if name.suffix not in extensions_available:
+            continue
+        ext_files_map[name.suffix].append(os.fspath(name))
+
+    if not ext_files_map:
+        print(
+            "No extensions were found for openCV available. Please check if image files with the following extensions exist in the specified path"
         )
-        extension_list = sorted(counter_dic.items(), key=lambda x: x[1], reverse=True)
-        extensions = []
-        for extension_tuple in extension_list:
-            if extension_tuple[0] in extensions_available:
-                extensions.append(extension_tuple[0])
-        if len(extensions) == 0:
-            print(
-                "No extensions were found for openCV available. Please check if image files with the following extensions exist in the specified path"
-            )
-            print(extensions_available)
-        elif len(extensions) > 1:
-            print("We found several extensions available in openCV.")
-            print(
-                f"In this case, we loaded a {extensions[0]} file, but if you want to load a file with a different extension, delete the unrelated file."
-            )
-            return sorted(glob.glob(os.path.join(dataset_path, "*" + extensions[0])))
-        else:
-            return sorted(glob.glob(os.path.join(dataset_path, "*" + extensions[0])))
+        print(extensions_available)
+
+    ext, files = max(ext_files_map.items(), key=lambda x: len(x[1]))
+
+    if len(ext_files_map) > 1:
+        print("We found several extensions available in openCV.")
+        print(
+            f"In this case, we loaded a {ext} file, but if you want to load a file with a different extension, delete the unrelated file."
+        )
+    return sorted(files)
 
 
 def get_property(filenames, rescale):
@@ -144,90 +157,90 @@ def get_property(filenames, rescale):
 
 
 def read_serial_images(filenames, Tscaled_ind):
-    ims = []
-    for ind in Tscaled_ind:
-        im = cv2.imread(filenames[ind], cv2.IMREAD_GRAYSCALE)
-        ims.append(im)
-    return ims
+    return [cv2.imread(filenames[ind], cv2.IMREAD_GRAYSCALE) for ind in Tscaled_ind]
 
 
-def read_image_and_xy(
-    imshape, filenames, rescale, plot_n, Worm_is_black, multi_flag, Tscaled_ind
-):
+def read_image(
+    filenames,
+    rescale,
+    Worm_is_black,
+    multi_flag,
+    Tscaled_ind,
+) -> Tuple[NDArray, float, float]:
     """read images and get skeletonized plots"""
     if multi_flag:
         _, ims = cv2.imreadmulti(filenames[0], flags=0)  # multipage tiff file
         ims = [ims[ind] for ind in Tscaled_ind]
     else:
         ims = read_serial_images(filenames, Tscaled_ind)  # serial-numbered image files
-    real_image = np.asarray(ims).astype("uint8")
-    T = real_image.shape[0]
+
+    def preprocess(im):
+        im = im.astype("uint8")
+        if Worm_is_black:
+            im = cv2.bitwise_not(im)
+        _, labelImages, stuts, _ = cv2.connectedComponentsWithStats(im, connectivity=4)
+        im[labelImages != stuts[1:, 4].argmax() + 1] = 0
+        if not math.isclose(rescale, 1.0, rel_tol=1e-3):
+            im = cv2.resize(
+                im,
+                dsize=None,
+                fy=rescale,
+                fx=rescale,
+                interpolation=cv2.INTER_NEAREST,
+            )
+
+        return im
+
+    ims = [preprocess(im) for im in ims]
+    imagestack = np.asarray(ims)
+    imagestack, y_st, x_st = cut_image(imagestack)
+    return imagestack, y_st, x_st
+
+
+def calc_xy_and_prewidth(
+    imagestack: NDArray,
+    plot_n: int,
+    x_st: float,
+    y_st: float,
+) -> Tuple[NDArray, NDArray, NDArray, float]:
+    """read images and get skeletonized plots"""
+    T = imagestack.shape[0]
+    assert T != 0, "imagestack is empty"
+    # Intitial output date
     x = np.zeros((T, plot_n))
     y = np.zeros((T, plot_n))
     pre_width = np.zeros(T)
-    if Worm_is_black:
-        real_image = 255 - real_image
-    real_image_resize = []
-    for t in range(T):
-        bar = (
-            "get_skeleton progress:["
-            + "X" * int(100 * t / T)
-            + " " * (100 - int(100 * t / T))
-            + "]"
+
+    x[0, :], y[0, :] = get_skeleton(imagestack[0], plot_n)
+    pre_width[0] = get_width(imagestack[0], x[0], y[0])
+    print("")
+    for t in range(1, T):
+        bar = "\rget_skeleton and width:[{:<100}] {}/{}".format(
+            "▉" * round(t * 100 / T + 1), t + 1, T
         )
-        print("\r{} {}/{}".format(bar, int(t + 1), int(T)), end="")
-        im = real_image[t]
-        _, labelImages, stuts, _ = cv2.connectedComponentsWithStats(im, connectivity=4)
-        im[labelImages != stuts[1:, 4].argmax() + 1] = 0
-        if rescale != 1:
-            im = cv2.resize(
-                im, dsize=None, fy=rescale, fx=rescale, interpolation=cv2.INTER_NEAREST
-            )
-        x[t, :], y[t, :] = get_skeleton(im, plot_n)
-        # real_image[t,:,:] = im     ### (192,256) to (480,640)
-        real_image_resize.append(im)
-    real_image = np.asarray(real_image_resize).astype("uint8")
-    real_image, y_st, x_st = cut_image(real_image)
-    x, y = flip_check(x, y)
-    unitLength = np.median(
-        np.sqrt(((x[:, :-1] - x[:, 1:]) ** 2 + (y[:, :-1] - y[:, 1:]) ** 2))
+        print(bar, end="")
+        im = imagestack[t]
+        x1, y1 = get_skeleton(im, plot_n)
+
+        x0, y0 = x[t - 1, :], y[t - 1, :]
+
+        gap_headtail = ((x1 - x0) ** 2 + (y1 - y0) ** 2).sum()
+        gap_headtail_rev = ((x1 - x0[::-1]) ** 2 + (y1 - y0[::-1]) ** 2).sum()
+
+        x[t, :], y[t, :] = x1, y1
+        if gap_headtail > gap_headtail_rev:
+            x[t, :] = x1[::-1]
+            y[t, :] = y1[::-1]
+
+        pre_width[t] = get_width(im, x[t], y[t])
+
+    print("")
+    unitLength = np.sqrt(
+        np.median(((x[:, :-1] - x[:, 1:]) ** 2 + (y[:, :-1] - y[:, 1:]) ** 2))
     )
-    for t in range(T):
-        bar = (
-            "get_width progress:["
-            + "X" * int(100 * t / T)
-            + " " * (100 - int(100 * t / T))
-            + "]"
-        )
-        print("\r{} {}/{}".format(bar, int(t + 1), int(T)), end="")
-        pre_width[t] = get_width(real_image[t], x[t] - x_st, y[t] - y_st)
-    return real_image, x, y, y_st, x_st, unitLength, pre_width
-
-
-def read_image(imshape, filenames, rescale, Worm_is_black, multi_flag, Tscaled_ind):
-    if multi_flag:
-        _, ims = cv2.imreadmulti(filenames[0], flags=0)  # multipage tiff file
-        ims = [ims[ind] for ind in Tscaled_ind]
-    else:
-        ims = read_serial_images(filenames, Tscaled_ind)  # serial-numbered image files
-
-    real_image = np.asarray(ims).astype("uint8")
-    if Worm_is_black:
-        real_image = 255 - real_image
-    T = real_image.shape[0]
-    real_image_resize = []
-    for t in range(T):
-        im = real_image[t]
-        _, labelImages, stuts, _ = cv2.connectedComponentsWithStats(im, connectivity=8)
-        im[labelImages != stuts[1:, 4].argmax() + 1] = 0
-        if rescale != 1:
-            im = cv2.resize(
-                im, dsize=None, fy=rescale, fx=rescale, interpolation=cv2.INTER_NEAREST
-            )
-        real_image_resize.append(im)
-    real_image = np.asarray(real_image_resize).astype("uint8")
-    real_image, y_st, x_st = cut_image(real_image)
-    return real_image, y_st, x_st
+    x += x_st
+    y += y_st
+    return x, y, pre_width, unitLength
 
 
 def get_skeleton(im, plot_n):
@@ -241,51 +254,51 @@ def get_skeleton(im, plot_n):
     if len(point_list) == 1:
         x_splined = np.ones(plot_n) * point_list[0][1]
         y_splined = np.ones(plot_n) * point_list[0][0]
+        return x_splined, y_splined
 
-    else:
-        # make distance matrix
-        cube_len = len(point_list)
-        adj_mtx = distance_matrix(
-            point_list, point_list, threshold=cube_len * cube_len * 2 + 10
-        )
-        adj_mtx[adj_mtx > 1.5] = 0  # delete distance between isolated points
-        csr = csr_matrix(adj_mtx)
-        adj_sum = np.sum(adj_mtx, axis=0)
+    # make distance matrix
+    cube_len = len(point_list)
+    adj_mtx = distance_matrix(
+        point_list, point_list, threshold=cube_len * cube_len * 2 + 10
+    )
+    adj_mtx[adj_mtx > 1.5] = 0  # delete distance between isolated points
+    csr = csr_matrix(adj_mtx)
+    adj_sum = np.sum(adj_mtx, axis=0)
 
-        # get tips of longest path
+    # get tips of longest path
+    d1 = shortest_path(csr, indices=np.argmax(adj_sum < 1.5))
+    while np.sum(d1 == np.inf) > d1.shape[0] // 2:
+        adj_sum[np.argmax(adj_sum < 1.5)] = 2
         d1 = shortest_path(csr, indices=np.argmax(adj_sum < 1.5))
-        while np.sum(d1 == np.inf) > d1.shape[0] // 2:
-            adj_sum[np.argmax(adj_sum < 1.5)] = 2
-            d1 = shortest_path(csr, indices=np.argmax(adj_sum < 1.5))
-        d1[d1 == np.inf] = 0
-        d2, p = shortest_path(csr, indices=np.argmax(d1), return_predecessors=True)
-        d2[d2 == np.inf] = 0
+    d1[d1 == np.inf] = 0
+    d2, p = shortest_path(csr, indices=np.argmax(d1), return_predecessors=True)
+    d2[d2 == np.inf] = 0
 
-        # get longest path
-        plots = []
-        arclen = []
-        point = np.argmax(d2)  # This is the start point(the end point is np.argmax(d1))
-        while point != np.argmax(d1) and point >= 0:
-            plots.append(point_list[point])
-            arclen.append(d2[point])
-            point = p[point]
+    # get longest path
+    plots = []
+    arclen = []
+    point = np.argmax(d2)  # This is the start point(the end point is np.argmax(d1))
+    while point != np.argmax(d1) and point >= 0:
         plots.append(point_list[point])
         arclen.append(d2[point])
-        plots = np.array(plots)
-        arclen = np.array(arclen)[::-1]
+        point = p[point]
+    plots.append(point_list[point])
+    arclen.append(d2[point])
+    plots = np.array(plots)
+    arclen = np.array(arclen)[::-1]
 
-        # interpolation
-        div_linespace = np.linspace(0, np.max(arclen), plot_n)
-        f_x = interp1d(arclen, plots[:, 1], kind="linear")
-        f_y = interp1d(arclen, plots[:, 0], kind="linear")
-        x_splined = f_x(div_linespace)
-        y_splined = f_y(div_linespace)
+    # interpolation
+    div_linespace = np.linspace(0, np.max(arclen), plot_n)
+    f_x = interp1d(arclen, plots[:, 1], kind="linear")
+    f_y = interp1d(arclen, plots[:, 0], kind="linear")
+    x_splined = f_x(div_linespace)
+    y_splined = f_y(div_linespace)
 
     return x_splined, y_splined
 
 
 def get_width(im, x, y):
-    """Get width of the object by measure distance of centerline and objeect's surface."""
+    """Get width of the object by measure distance of centerline to the object's surface."""
     im_filled = ndi.binary_fill_holes(im)
     x = x.reshape([-1, 1, 1])
     y = y.reshape([-1, 1, 1])
@@ -293,7 +306,7 @@ def get_width(im, x, y):
     x_3d = np.arange(im_filled.shape[1]).reshape([1, 1, -1])
     segment_distance = np.sqrt((x - x_3d) ** 2 + (y - y_3d) ** 2)
     max_dist = im_filled.shape[0] + im_filled.shape[1]
-    new_segment_distance = (segment_distance / max_dist + im_filled) * max_dist
+    new_segment_distance = segment_distance + im_filled * max_dist
     wid = new_segment_distance.min(axis=(1, 2)).max()
     return wid
 
@@ -317,51 +330,52 @@ def flip_check(x, y):
 
 def cut_image(image):
     """Cut images to minimum size."""
-    projection_image = np.max(image, axis=0)
-    y_st = 0
-    y_end = 1
-    x_st = 0
-    x_end = 1
-    while np.sum(projection_image[:6, :]) == 0:
-        projection_image = projection_image[1:, :]
-        y_st += 1
-    while np.sum(projection_image[-6:, :]) == 0:
-        projection_image = projection_image[:-1, :]
-        y_end += 1
-    while np.sum(projection_image[:, :6]) == 0:
-        projection_image = projection_image[:, 1:]
-        x_st += 1
-    while np.sum(projection_image[:, -6:]) == 0:
-        projection_image = projection_image[:, :-1]
-        x_end += 1
-    image = image[:, y_st:-y_end, x_st:-x_end]
-    return image, y_st, x_st
+    thresh = np.bitwise_or.reduce(image > 0, axis=0)
+
+    (ys, xs) = np.nonzero(thresh)
+    if ys.size == 0:
+        print("[Warning] the imagestack have no signal")
+        return image, 0, 0
+
+    max_h, max_w = thresh.shape
+
+    x1 = max(xs.min() - 5, 0)
+    x2 = min(xs.max() + 5, max_w)
+    y1 = max(ys.min() - 5, 0)
+    y2 = min(ys.max() + 5, max_h)
+
+    return image[:, y1:y2, x1:x2], y1, x1
 
 
-def make_theta_from_xy(x, y):
-    """Change xy plots to theta."""
-    plot_n = x.shape[1]
-    theta = np.zeros((x.shape[0], plot_n - 1), dtype=float)
-    for i in range(plot_n - 1):
-        theta[:, i] = np.arctan2(y[:, i + 1] - y[:, i], x[:, i + 1] - x[:, i])
-    # arrange theta
-    for t in range(theta.shape[0] - 1):
-        gap = theta[t + 1, plot_n // 2] - theta[t, plot_n // 2]
-        theta[t + 1, plot_n // 2] = theta[t + 1, plot_n // 2] - np.sign(
-            gap
-        ) * 2 * pi * ((abs(gap) + pi) // (2 * pi))
-    for i in range(plot_n // 2, plot_n - 2):
-        for t in range(theta.shape[0]):
-            gap = theta[t, i + 1] - theta[t, i]
-            theta[t, i + 1] = theta[t, i + 1] - np.sign(gap) * 2 * pi * (
-                (abs(gap) + pi) // (2 * pi)
-            )
-    for i in range(plot_n // 2, 0, -1):
-        for t in range(theta.shape[0]):
-            gap = theta[t, i - 1] - theta[t, i]
-            theta[t, i - 1] = theta[t, i - 1] - np.sign(gap) * 2 * pi * (
-                (abs(gap) + pi) // (2 * pi)
-            )
+def make_theta_from_xy(x: NDArray, y: NDArray) -> NDArray:
+    assert x.ndim == 2, "x should be 2D ndarray"
+    T, plot_n = x.shape
+    n_segs = plot_n - 1
+    dx = x[:, 1:] - x[:, :-1]
+    dy = y[:, 1:] - y[:, :-1]
+    theta = np.arctan2(dy, dx)
+    # Arrange theta if the gap is larget than pi
+    # Adjust the middle theta between time point
+    pi = np.pi
+    mid = n_segs // 2
+    t_gap = theta[1:, mid] - theta[:-1, mid]
+    t_adjust = np.sign(t_gap) * 2 * pi
+    t_adjust[np.abs(t_gap) < pi] = 0
+    theta[1:, :] -= t_adjust.cumsum().reshape(-1, 1)
+
+    gap = theta[:, 1:] - theta[:, :-1]
+    # adjust right hand side of theta within same time points
+    r_gap = gap[:, mid:]
+    r_adjust = np.sign(r_gap) * 2 * pi
+    r_adjust[np.abs(r_gap) < pi] = 0
+    theta[:, mid + 1 :] -= r_adjust.cumsum(axis=1)
+
+    # adjust left hand side
+    l_gap = gap[:, :mid]
+    l_adjust = np.sign(l_gap * -1) * 2 * pi
+    l_adjust[np.abs(l_gap) < pi] = 0
+    l_adjust_rev = np.flip(l_adjust, axis=1)
+    theta[:, :mid] -= np.flip(np.cumsum(l_adjust_rev, axis=1), axis=1)
     return theta
 
 
@@ -394,37 +408,103 @@ def calc_cap_span(image_info, plot_n, s_m=8000):
     return cap_span
 
 
-def make_image(x, y, x_st, y_st, params, image_info, cap_span):
+def pixel_value_from_dist_max_np(
+    max_dist: NDArray,
+    contrast: float = 1.2,
+    sharpness: float = 2.0,
+) -> NDArray:
+    """Get pixel value when distance from midline is given."""
+    return 255 * (contrast * (np_sigmoid(max_dist * sharpness) - 0.5) + 0.5)
+
+
+def worm_width_all_np(
+    *,
+    plot_n: int,
+    alpha: float,
+    gamma: float,
+    delta: float,
+) -> NDArray:
+    """Get all worm widths when segment number is given."""
+
+    worm_x = np.linspace(-1.0, 1.0, plot_n - 1)
+
+    delta_sigmoid = np_sigmoid(delta)
+    gamma_e = 0.5 + np.exp(gamma)
+    worm_x_abs = np.abs(worm_x)
+    width = alpha * np.sqrt(
+        1
+        + 1e-5
+        - worm_x_abs ** (2 * gamma_e)
+        * (
+            1
+            + (2 * gamma_e) * delta_sigmoid
+            - (2 * gamma_e) * delta_sigmoid * worm_x_abs
+        )
+    )
+    return width
+
+
+def make_distance_matrix_np(radius: int) -> NDArray:
+    diameter = radius * 2 + 1
+    delta = (np.arange(diameter) - radius) ** 2
+    distance_matrix = np.sqrt(delta[None, :] + delta[:, None])
+
+    # let distance_kernel become circular
+    distance_matrix[distance_matrix > radius] = np.inf
+    return distance_matrix
+
+
+def make_single_image(
+    x: NDArray,
+    y: NDArray,
+    width: int,
+    height: int,
+    pixel_matrix: NDArray,
+) -> NDArray:
+    cent_x = ((x[:-1] + x[1:]) / 2).astype(np.int32)
+    cent_y = ((y[:-1] + y[1:]) / 2).astype(np.int32)
+
+    diameter = pixel_matrix.shape[1]
+    radius = diameter // 2
+    pad_image = np.full(
+        (height + radius * 2, width + radius * 2),
+        fill_value=-25.5,
+    )
+    for i, j, pix in zip(cent_x, cent_y, pixel_matrix):
+        pad_image[j : j + diameter, i : i + diameter] = np.maximum(
+            pad_image[j : j + diameter, i : i + diameter],
+            pix,
+        )
+    return pad_image[radius:-radius, radius:-radius]
+
+
+def make_image(x, y, x_st, y_st, params, image_info):
     """Create model image by dividing them to avoid CUDA memory error."""
-    if not torch.is_tensor(x):
-        x = torch.tensor(x)
-        y = torch.tensor(y)
-    x = x - x_st
-    y = y - y_st
     T = x.shape[0]
-    params["gamma"] = torch.tensor(0.0)
-    params["delta"] = torch.tensor(0.0)
+    worm_wid = worm_width_all_np(
+        plot_n=params["plot_n"],
+        alpha=params["alpha"],
+        gamma=params["gamma"],
+        delta=params["delta"],
+    )
+    max_radius = int(np.ceil(worm_wid.max())) + 2
+    distance_matrix = make_distance_matrix_np(max_radius)
+
+    distance_matrix_3d = worm_wid[:, None, None] - distance_matrix[None, :, :]
+    pixel_matrix = pixel_value_from_dist_max_np(distance_matrix_3d)
     im_height = image_info["image_shape"][1]
     im_width = image_info["image_shape"][2]
     image = np.zeros((T, im_height, im_width))
-    if "mps" in image_info["device"]:
-        x = x.to(torch.float32)
-        y = y.to(torch.float32)
-    x = x.to(image_info["device"])
-    y = y.to(image_info["device"])
-    for i in range(T // cap_span + 1):
-        image[cap_span * i : cap_span * (i + 1), :, :] = (
-            make_worm(
-                x[cap_span * i : cap_span * (i + 1)],
-                y[cap_span * i : cap_span * (i + 1)],
-                image_info,
-                params,
-            )
-            .clone()
-            .detach()
-            .cpu()
-            .numpy()
+
+    for i in range(T):
+        image[i, :, :] = make_single_image(
+            x[i] - x_st,
+            y[i] - y_st,
+            width=im_width,
+            height=im_height,
+            pixel_matrix=pixel_matrix,
         )
+
     return image
 
 
@@ -436,9 +516,9 @@ def get_image_loss_max(
     im = real_image[small_loss_frame].reshape(
         -1, real_image.shape[1], real_image.shape[2]
     )
-    x0 = torch.ones(params["plot_n"]) * x[small_loss_frame, 0].reshape(1, -1)
-    y0 = torch.ones(params["plot_n"]) * y[small_loss_frame, 0].reshape(1, -1)
-    im0 = make_image(x0, y0, x_st, y_st, params, image_info, cap_span)
+    x0 = np.ones(params["plot_n"]) * x[small_loss_frame, 0].reshape(1, -1)
+    y0 = np.ones(params["plot_n"]) * y[small_loss_frame, 0].reshape(1, -1)
+    im0 = make_image(x0, y0, x_st, y_st, params, image_info)
     image_loss_max = np.mean((im - im0) ** 2)
     return image_loss_max
 
@@ -458,10 +538,10 @@ def get_use_points(
     try:
         if nont_ini[0] > nont_end[0]:
             nont_end = nont_end[1:]
-            print("Warning! The initial frame of images is difficult to skeltnize.")
+            print("Warning! The initial frame of images is difficult to skeletonize.")
             print("Biginning of Results will be incorrect.")
         if nont_ini[-1] > nont_end[-1]:
-            print("Warning! The end frame of images is difficult to skeltnize.")
+            print("Warning! The end frame of images is difficult to skeletonize.")
             print("End of Results will be incorrect.")
             nont_ini = nont_ini[:-1]
 
@@ -536,7 +616,7 @@ def get_use_points(
                 )
 
     except IndexError:
-        print("All frames seem to be simple; easy to skeltnize.")
+        print("All frames seem to be simple; easy to skeletonize.")
         use_points = np.linspace(0, T - 1, (T - 1) // (cap_span + 1) + 2, dtype=int)
         nont_flag = [0] * (use_points.shape[0])
 
@@ -757,6 +837,10 @@ def pixel_value_from_dist_max(
     return 255 * (contrast * (torch.sigmoid(max_dist * sharpness) - 0.5) + 0.5)
 
 
+PIXEL_MINIMUM = 255 * -0.1
+PIXEL_MAXIMUM = 255 * 1.1
+
+
 def make_worm(
     x: torch.Tensor,
     y: torch.Tensor,
@@ -827,7 +911,13 @@ def make_model_image(cent_x, cent_y, theta, unitLength, image_info, params):
 
 class Model(torch.nn.Module):
     def __init__(
-        self, init_cx, init_cy, init_theta, init_unitLength, image_info, params
+        self,
+        init_cx,
+        init_cy,
+        init_theta,
+        init_unitLength,
+        image_info,
+        params,
     ):
         super().__init__()
         self.cx = nn.parameter.Parameter(init_cx)

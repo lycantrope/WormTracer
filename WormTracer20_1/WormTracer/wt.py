@@ -183,18 +183,23 @@ def run(
     )
     Tscaled_ind = Tscaled_ind[:: params["Tscale"]]
 
-    # read images and get information
-    # getting xy plots by thinning in function ; read_image_and_xy()
-    real_image, x, y, y_st, x_st, unitLength, pre_width = read_image_and_xy(
-        imshape,
+    # read images and get information: read_image
+    real_image, y_st, x_st = read_image(
         filenames_all,
         params["rescale"],
-        params["plot_n"],
         Worm_is_black,
         multi_flag,
         Tscaled_ind,
     )
+    # getting xy plots by thinning in function ; calc_xy_and_prewidth()
+    x, y, pre_width, unitLength = calc_xy_and_prewidth(
+        real_image,
+        params["plot_n"],
+        x_st,
+        y_st,
+    )
     theta = make_theta_from_xy(x, y)
+
     print(
         "\rframe = ",
         len(Tscaled_ind),
@@ -213,9 +218,11 @@ def run(
 
     # make worm model image from plots
     params["alpha"] = pre_width.min()
+    params["gamma"] = 0.0
+    params["delta"] = 0.0
     image_info = {"image_shape": real_image.shape, "device": device}
     cap_span = calc_cap_span(image_info, params["plot_n"], s_m=8000)
-    model_image = make_image(x, y, x_st, y_st, params, image_info, cap_span)
+    model_image = make_image(x, y, x_st, y_st, params, image_info)
 
     # get points for trace blocks
     image_losses = np.mean((model_image - real_image) ** 2, axis=(1, 2))
@@ -256,7 +263,6 @@ def run(
 
         # read and preprocess images
         real_image, y_st, x_st = read_image(
-            imshape,
             filenames_all,
             params["rescale"],
             Worm_is_black,
@@ -355,7 +361,6 @@ def run(
         # read and preprocess images
         # real_image, y_st, x_st = read_image(imshape, filenames_, params['rescale'], Worm_is_black)
         real_image, y_st, x_st = read_image(
-            imshape,
             filenames_all,
             params["rescale"],
             Worm_is_black,
@@ -376,9 +381,11 @@ def run(
         init_data = [init_cx, init_cy, unitLength]
 
         # make model instance and training
-        model = Model(
-            init_cx, init_cy, init_theta, init_unitLength, image_info, params
-        ).to(device)
+        model = (
+            Model(init_cx, init_cy, init_theta, init_unitLength, image_info, params)
+            .to(torch.float32)
+            .to(device)
+        )
         optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
         params["id"] = 0
         losses_all[i] = train3(
@@ -405,9 +412,11 @@ def run(
         init_theta = torch.from_numpy(np.linspace(theta_[0, :], theta_cand[1], T))
 
         # make model instance and training
-        model = Model(
-            init_cx, init_cy, init_theta, init_unitLength, image_info, params
-        ).to(device)
+        model = (
+            Model(init_cx, init_cy, init_theta, init_unitLength, image_info, params)
+            .to(torch.float32)
+            .to(device)
+        )
         optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
         params["id"] = 1
         losses = train3(
@@ -473,7 +482,6 @@ def run(
             # read and preprocess images
             # real_image, y_st, x_st = read_image(imshape, filenames_, params['rescale'], Worm_is_black)
             real_image, y_st, x_st = read_image(
-                imshape,
                 filenames_all,
                 params["rescale"],
                 Worm_is_black,
@@ -494,9 +502,11 @@ def run(
 
             # make model instance and training
             update = 0
-            model = Model(
-                init_cx, init_cy, init_theta, init_unitLength, image_info, params
-            ).to(device)
+            model = (
+                Model(init_cx, init_cy, init_theta, init_unitLength, image_info, params)
+                .to(torch.float32)
+                .to(device)
+            )
             optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
             params["id"] = 2
             losses = train3(
@@ -535,9 +545,11 @@ def run(
             init_theta = torch.from_numpy(np.linspace(theta_[0, :], theta_cand[1], T))
 
             # make model instance and training
-            model = Model(
-                init_cx, init_cy, init_theta, init_unitLength, image_info, params
-            ).to(device)
+            model = (
+                Model(init_cx, init_cy, init_theta, init_unitLength, image_info, params)
+                .to(torch.float32)
+                .to(device)
+            )
             optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
             params["id"] = 3
             losses = train3(
@@ -676,7 +688,6 @@ def run(
     # save full of real_image and centerline as png images
     # real_image, y_st, x_st = read_image(imshape, filenames_full, params['rescale'], Worm_is_black)
     real_image, y_st, x_st = read_image(
-        imshape,
         filenames_all,
         params["rescale"],
         Worm_is_black,
