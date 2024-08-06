@@ -1,0 +1,15 @@
+Metadata-Version: 2.1
+Name: WormTracer
+Version: 19.3
+Summary: WormTracer package
+Author: Koyo Kuze et al
+License: MIT
+License-File: LICENSE.txt
+Requires-Dist: torch
+Requires-Dist: numpy
+Requires-Dist: opencv-python
+Requires-Dist: matplotlib
+Requires-Dist: Pillow
+Requires-Dist: scikit-image
+Requires-Dist: scipy
+Requires-Dist: pyyaml
