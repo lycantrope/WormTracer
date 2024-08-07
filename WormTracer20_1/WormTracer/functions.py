@@ -216,7 +216,7 @@ def calc_xy_and_prewidth(
     print("")
     for t in range(1, T):
         bar = "\rget_skeleton and width:[{:<100}] {}/{}".format(
-            "▉" * round(t * 100 / T + 1), t + 1, T
+            "▉" * round((t + 1) * 100 / T), t + 1, T
         )
         print(bar, end="")
         im = imagestack[t]
@@ -339,10 +339,8 @@ def cut_image(image):
 
     max_h, max_w = thresh.shape
 
-    x1 = max(xs.min() - 5, 0)
-    x2 = min(xs.max() + 5, max_w)
-    y1 = max(ys.min() - 5, 0)
-    y2 = min(ys.max() + 5, max_h)
+    x1, x2 = np.clip((xs.min() - 5, xs.max() + 5), 0, max_w).tolist()
+    y1, y2 = np.clip((ys.min() - 5, ys.max() + 5), 0, max_h).tolist()
 
     return image[:, y1:y2, x1:x2], y1, x1
 
@@ -698,22 +696,17 @@ def make_progress_image(image, num_t=20):
     """Make one large image with images laid out on it."""
     if torch.is_tensor(image):
         image = image.clone().detach().cpu().numpy()
-    T = image.shape[0]
+    T, H, W = image.shape
     t_sparse = np.linspace(0, T - 1, min(num_t, T), dtype=int)
-    progress_image = np.zeros((1, 5 * image.shape[2]))
-    for i in range((t_sparse.shape[0] + 4) // 5 * 5):
-        try:
-            new_image = image[t_sparse[i]]
-        except IndexError:
-            new_image = np.zeros((image.shape[1], image.shape[2]))
-        if i % 5 > 0:
-            image_tmp = np.hstack((image_tmp, new_image))
-        if i % 5 == 0:
-            if i > 0:
-                progress_image = np.vstack((progress_image, image_tmp[::-1, :]))
-            image_tmp = new_image
-    progress_image = np.vstack((progress_image, image_tmp[::-1, :]))
-    return progress_image[1:, :]
+    sparse_image = image[t_sparse]
+    n_chunk = (t_sparse.size + 1) // 5
+
+    progress_image = np.zeros((((t_sparse.size + 1) // 5) * H, 5 * W))
+    for y, chunk in enumerate(np.array_split(sparse_image, n_chunk)):
+        row_image = np.hstack(chunk)
+        width = row_image.shape[1]
+        progress_image[y * H : (y + 1) * H, :width] = row_image
+    return progress_image
 
 
 def save_progress(image, output_path, output_name, params, txt="real"):
@@ -734,7 +727,7 @@ def remove_progress(output_pathh, filename):
         os.remove(f)
 
 
-def getCenter(binimg):
+def get_center(binimg):
     """Calculate center of images."""
     if torch.is_tensor(binimg):
         binimg = binimg.clone().detach().cpu().numpy()
@@ -750,7 +743,7 @@ def set_init_xy(real_image):
     init_cx = torch.zeros(T)
     init_cy = torch.zeros(T)
     for t in range(T):
-        init_cx[t], init_cy[t] = getCenter(real_image[t, :, :])
+        init_cx[t], init_cy[t] = get_center(real_image[t, :, :])
     return init_cx, init_cy
 
 
@@ -768,7 +761,7 @@ def find_theta(theta, pretheta, plus=1):
     return len(mse_list)
 
 
-def make_thetaCand(theta):
+def make_theta_cand(theta):
     i_normal = find_theta(theta, theta[-1, :]) - find_theta(theta, theta[-1, :], -1)
     pretheta = theta[-1, :][::-1] + pi
     i_reverse = find_theta(theta, pretheta) - find_theta(theta, pretheta, -1)
@@ -880,7 +873,6 @@ def make_worm(
 def make_model_image(cent_x, cent_y, theta, unitLength, image_info, params):
     T = image_info["image_shape"][0]
     device = image_info["device"]
-    plot_n = params["plot_n"]
     x = torch.cat(
         (
             torch.zeros((T, 1)).to(device),
@@ -985,7 +977,7 @@ def train3(
     center_loss_weight = params["center_loss_weight"]
     show_progress_freq = params["show_progress_freq"]
     save_progress_freq = params["save_progress_freq"]
-    use_area = params["use_area"]
+    # use_area = params["use_area"]
     init_cx = init_data[0].to(device)
     init_cy = init_data[1].to(device)
     unitL = init_data[2]
@@ -1166,7 +1158,7 @@ def get_shape_params(shape_params, params):
     )
 
 
-def loss_compair(loss_pair):
+def loss_compare(loss_pair):
     im_select = int(max(loss_pair[0][0]) > max(loss_pair[1][0]))
     con_select = int(max(loss_pair[0][1]) > max(loss_pair[1][1]))
     smo_select = int(max(loss_pair[0][2]) > max(loss_pair[1][2]))
@@ -1185,7 +1177,7 @@ def loss_compair(loss_pair):
 
 
 def show_loss_plot(losses, title=""):
-    T = losses[0].shape[0]
+    # T = losses[0].shape[0]
     plt.plot(losses[0], label="im")
     plt.plot(losses[1], label="con")
     plt.plot(losses[2], label="smo")
@@ -1299,22 +1291,23 @@ def clear_dir(output_path, foldername):
 def cancel_reduction(x, y, n_input_images, start_T, end_T, Tscaled_ind, plot_n):
     if end_T == 0:
         end_T = n_input_images - 1
+
     if len(Tscaled_ind) == end_T - start_T + 1:
         return x, y
-    else:
-        x_splined = np.zeros((end_T - start_T + 1, plot_n))
-        y_splined = np.zeros((end_T - start_T + 1, plot_n))
 
-        # interpolation
-        div_linespace = np.arange(end_T - start_T + 1)
-        Tscaled_dif_ind = [ind - start_T for ind in Tscaled_ind]
-        for i in range(plot_n):
-            f_x = interp1d(
-                Tscaled_dif_ind, x[:, i], kind="linear", fill_value="extrapolate"
-            )
-            f_y = interp1d(
-                Tscaled_dif_ind, y[:, i], kind="linear", fill_value="extrapolate"
-            )
-            x_splined[:, i] = f_x(div_linespace)
-            y_splined[:, i] = f_y(div_linespace)
-        return x_splined, y_splined
+    x_splined = np.zeros((end_T - start_T + 1, plot_n))
+    y_splined = np.zeros((end_T - start_T + 1, plot_n))
+
+    # interpolation
+    div_linespace = np.arange(end_T - start_T + 1)
+    Tscaled_dif_ind = [ind - start_T for ind in Tscaled_ind]
+    for i in range(plot_n):
+        f_x = interp1d(
+            Tscaled_dif_ind, x[:, i], kind="linear", fill_value="extrapolate"
+        )
+        f_y = interp1d(
+            Tscaled_dif_ind, y[:, i], kind="linear", fill_value="extrapolate"
+        )
+        x_splined[:, i] = f_x(div_linespace)
+        y_splined[:, i] = f_y(div_linespace)
+    return x_splined, y_splined

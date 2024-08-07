@@ -15,7 +15,36 @@ import yaml
 from matplotlib import animation, rc
 from PIL import Image
 
-from .functions import *
+from .functions import (
+    Model,
+    calc_cap_span,
+    calc_xy_and_prewidth,
+    cancel_reduction,
+    clear_dir,
+    find_losslarge_area,
+    flip_check,
+    get_filenames,
+    get_image_loss_max,
+    get_property,
+    get_shape_params,
+    get_use_points,
+    judge_head_amplitude,
+    judge_head_frequency,
+    loss_compare,
+    make_image,
+    make_plot,
+    make_theta_cand,
+    make_theta_from_xy,
+    prepare_for_train,
+    read_image,
+    remove_progress,
+    save_progress,
+    set_init_xy,
+    set_output_path,
+    show_image,
+    show_loss_plot,
+    train3,
+)
 
 ### input information and params ###
 """
@@ -274,7 +303,7 @@ def run(
         image_info["image_shape"] = real_image.shape
 
         # set init value
-        theta_cand, _ = make_thetaCand(theta_)
+        theta_cand, _ = make_theta_cand(theta_)
         theta_[-1, :] = theta_cand[0]
         init_cx, init_cy = set_init_xy(real_image)
         init_theta = torch.tensor(theta_)
@@ -372,7 +401,7 @@ def run(
         image_info["image_shape"] = real_image.shape
 
         # make flipping theta candidate
-        theta_cand, _ = make_thetaCand(theta_)
+        theta_cand, _ = make_theta_cand(theta_)
 
         # set init value
         init_cx, init_cy = set_init_xy(real_image)
@@ -431,7 +460,7 @@ def run(
         )
 
         # get trace information if loss is smaller
-        select_ind = loss_compair([losses_all[i], losses])
+        select_ind = loss_compare([losses_all[i], losses])
         if select_ind:
             theta_model = model.theta.detach().cpu().numpy()
             unitL_model = model.unitLength.detach().cpu().numpy().reshape(-1, 1)
@@ -492,7 +521,7 @@ def run(
             image_info["image_shape"] = real_image.shape
 
             # make flipping candidate
-            _, theta_cand = make_thetaCand(theta_)
+            _, theta_cand = make_theta_cand(theta_)
 
             # set init value
             init_cx, init_cy = set_init_xy(real_image)
@@ -521,7 +550,7 @@ def run(
             )
 
             # get trace information if loss is smaller
-            if loss_compair([losses_all[i], losses]):
+            if loss_compare([losses_all[i], losses]):
                 print("update")
                 update = 2
                 theta_model = model.theta.detach().cpu().numpy()
@@ -564,7 +593,7 @@ def run(
             )
 
             # get trace information if loss is smaller
-            if loss_compair([losses_all[i], losses]):
+            if loss_compare([losses_all[i], losses]):
                 print("update")
                 update = 3
                 theta_model = model.theta.detach().cpu().numpy()
