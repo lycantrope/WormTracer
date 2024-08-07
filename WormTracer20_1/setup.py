@@ -7,6 +7,7 @@ setup(
     author='Koyo Kuze et al',
     packages=find_packages(),
     license='MIT',
+    entry_points={ 'console_scripts': ['wormtracer = WormTracer.__main__:main' ] },
     install_requires=[
     "torch",
     "numpy",

@@ -185,6 +185,9 @@ def run(
         print("Running using CPU. GPU is recommended")
         logs.append("Running using CPU. GPU is recommended\n\n")
 
+    # read data property(image size, frame number)
+    filenames_all = get_filenames(dataset_path)
+
     # set output_path
     if "output_directory" not in locals() and "output_directory" not in globals():
         output_directory = ""
@@ -197,9 +200,6 @@ def run(
     # basic informatin to save
     params["dataset_path"] = dataset_path
     params["output_path"] = output_path
-
-    # read data property(image size, frame number)
-    filenames_all = get_filenames(dataset_path)
 
     imshape, Worm_is_black, multi_flag, n_input_images = get_property(
         filenames_all, params["rescale"]

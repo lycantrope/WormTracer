@@ -118,10 +118,10 @@ def get_filenames(dataset_path: Union[str, bytes, os.PathLike]):
         ext_files_map[name.suffix].append(os.fspath(name))
 
     if not ext_files_map:
-        print(
-            "No extensions were found for openCV available. Please check if image files with the following extensions exist in the specified path"
-        )
+        msg = "No extensions were found for openCV available. Please check if image files with the following extensions exist in the specified path"
+        print(msg)
         print(extensions_available)
+        raise FileNotFoundError(dataset_path)
 
     ext, files = max(ext_files_map.items(), key=lambda x: len(x[1]))
 
@@ -424,7 +424,7 @@ def worm_width_all_np(
 ) -> NDArray:
     """Get all worm widths when segment number is given."""
 
-    worm_x = np.linspace(-1.0, 1.0, plot_n - 1)
+    worm_x = np.linspace(-1.0, 1.0, plot_n)
 
     delta_sigmoid = np_sigmoid(delta)
     gamma_e = 0.5 + np.exp(gamma)
@@ -459,13 +459,13 @@ def make_single_image(
     height: int,
     pixel_matrix: NDArray,
 ) -> NDArray:
-    cent_x = ((x[:-1] + x[1:]) / 2).astype(np.int32)
-    cent_y = ((y[:-1] + y[1:]) / 2).astype(np.int32)
+    cent_x = x.astype(np.int32)
+    cent_y = y.astype(np.int32)
 
     diameter = pixel_matrix.shape[1]
     radius = diameter // 2
     pad_image = np.full(
-        (height + radius * 2, width + radius * 2),
+        (height + diameter, width + diameter),
         fill_value=-25.5,
     )
     for i, j, pix in zip(cent_x, cent_y, pixel_matrix):
@@ -473,7 +473,7 @@ def make_single_image(
             pad_image[j : j + diameter, i : i + diameter],
             pix,
         )
-    return pad_image[radius:-radius, radius:-radius]
+    return pad_image[radius : radius + height, radius : radius + width]
 
 
 def make_image(x, y, x_st, y_st, params, image_info):
@@ -845,24 +845,23 @@ def make_worm(
     T = x.shape[0]
     device = image_info["device"]
     plot_n = params["plot_n"]
-    worm_x = torch.linspace(-1.0, 1.0, plot_n - 1).to(device)
+    worm_x = torch.linspace(-1.0, 1.0, plot_n).to(device)
     worm_wid = worm_width_all(worm_x, params["alpha"], params["gamma"], params["delta"])
     # midpoints of segments, length plot size
-    cent_mid_x_3d = (x[:, :-1] + x[:, 1:]) / 2
+    cent_mid_x_3d = x
     # midpoints of segments, length plot size
-    cent_mid_y_3d = (y[:, :-1] + y[:, 1:]) / 2
-
+    cent_mid_y_3d = y
     x_3d = torch.arange(W).reshape([1, 1, W]).to(device)
-    cent_mid_x_3d = cent_mid_x_3d.reshape([T, plot_n - 1, 1]).to(torch.float32)
+    cent_mid_x_3d = cent_mid_x_3d.reshape([T, plot_n, 1]).to(torch.float32)
     delta_x = (cent_mid_x_3d - x_3d) ** 2
 
     y_3d = torch.arange(H).reshape([1, 1, H]).to(device)
-    cent_mid_y_3d = cent_mid_y_3d.reshape([T, plot_n - 1, 1]).to(torch.float32)
+    cent_mid_y_3d = cent_mid_y_3d.reshape([T, plot_n, 1]).to(torch.float32)
     delta_y = (cent_mid_y_3d - y_3d) ** 2
 
-    worm_wid_3d = worm_wid.reshape([1, plot_n - 1, 1, 1])
+    worm_wid_3d = worm_wid.reshape([1, plot_n, 1, 1])
     segment_distance_3d = torch.sqrt(
-        delta_x.reshape(T, plot_n - 1, 1, W) + delta_y.reshape(T, plot_n - 1, H, 1)
+        delta_x.reshape(T, plot_n, 1, W) + delta_y.reshape(T, plot_n, H, 1)
     )
 
     delta_max = (worm_wid_3d - segment_distance_3d).max(dim=1)
