@@ -454,6 +454,16 @@ def make_distance_matrix_np(radius: int) -> NDArray:
     return distance_matrix
 
 
+def make_distance_matrix(radius: int) -> NDArray:
+    diameter = radius * 2 + 1
+    delta = (torch.arange(diameter) - radius) ** 2
+    distance_matrix = torch.sqrt(delta[None, :] + delta[:, None])
+
+    # let distance_kernel become circular
+    distance_matrix[distance_matrix > radius] = torch.inf
+    return distance_matrix
+
+
 def make_single_image(
     x: NDArray,
     y: NDArray,
@@ -806,12 +816,14 @@ def annealing_function(epoch, T, speed=0.2, start=0, slope=1):
 
 
 def worm_width_all(
-    worm_x: torch.Tensor,
+    plot_n: torch.Tensor,
     alpha: torch.Tensor,
     gamma: torch.Tensor,
     delta: torch.Tensor,
 ) -> torch.Tensor:
     """Get all worm widths when segment number is given."""
+    device = alpha.device
+    worm_x = torch.linspace(-1.0, 1.0, plot_n - 1).to(device)
     delta_sigmoid = torch.sigmoid(delta)
     gamma_e = 0.5 + torch.exp(gamma)
     worm_x_abs = torch.abs(worm_x)
@@ -841,40 +853,91 @@ PIXEL_MINIMUM = 255 * -0.1
 PIXEL_MAXIMUM = 255 * 1.1
 
 
+def make_single_worm(
+    x: torch.Tensor,
+    y: torch.Tensor,
+    width: int,
+    height: int,
+    pixel_matrix: torch.Tensor,
+) -> torch.Tensor:
+    cent_x = ((x[:-1] + x[1:]) / 2).long()
+    cent_y = ((y[:-1] + y[1:]) / 2).long()
+    n_pts, diameter = pixel_matrix.shape[:2]
+    radius = diameter // 2
+    pad_image = torch.full(
+        (n_pts, height + diameter, width + diameter),
+        fill_value=-25.5,
+        device=x.device,
+    )
+    idx_x, idx_y, idx_z = torch.meshgrid(
+        torch.arange(diameter, device=x.device),
+        torch.arange(diameter, device=x.device),
+        torch.arange(n_pts, device=x.device),
+        indexing="ij",
+    )
+
+    all_idx_x = idx_x + cent_x.unsqueeze(0).unsqueeze(0)
+    all_idx_y = idx_y + cent_y.unsqueeze(0).unsqueeze(0)
+
+    pad_image_max, _ = pad_image.index_put(
+        (idx_z.flatten(), all_idx_y.flatten(), all_idx_x.flatten()),
+        pixel_matrix.flatten(),
+        accumulate=True,
+    ).max(dim=0)
+
+    return pad_image_max[radius : radius + height, radius : radius + width]
+
+
 def make_worm(
     x: torch.Tensor,
     y: torch.Tensor,
-    image_info: dict,
-    params: dict,
+    width: int,
+    height: int,
+    pixel_matrix: torch.Tensor,
 ) -> torch.Tensor:
-    image_shape = image_info["image_shape"]
-    _, H, W = image_shape
-    T = x.shape[0]
-    device = image_info["device"]
-    plot_n = params["plot_n"]
-    worm_x = torch.linspace(-1.0, 1.0, plot_n - 1).to(device)
-    worm_wid = worm_width_all(worm_x, params["alpha"], params["gamma"], params["delta"])
-    # midpoints of segments, length plot size
-    cent_mid_x_3d = (x[:, :-1] + x[:, 1:]) / 2
-    # midpoints of segments, length plot size
-    cent_mid_y_3d = (y[:, :-1] + y[:, 1:]) / 2
+    batchsize = x.shape[0]
+    n_pts, diameter = pixel_matrix.shape[:2]
+    radius = diameter // 2
 
-    x_3d = torch.arange(W).reshape([1, 1, W]).to(device)
-    cent_mid_x_3d = cent_mid_x_3d.reshape([T, plot_n - 1, 1]).to(torch.float32)
-    delta_x = (cent_mid_x_3d - x_3d) ** 2
+    cent_x = ((x[:, :-1] + x[:, 1:]) / 2).long()
+    cent_y = ((y[:, :-1] + y[:, 1:]) / 2).long()
 
-    y_3d = torch.arange(H).reshape([1, 1, H]).to(device)
-    cent_mid_y_3d = cent_mid_y_3d.reshape([T, plot_n - 1, 1]).to(torch.float32)
-    delta_y = (cent_mid_y_3d - y_3d) ** 2
-
-    worm_wid_3d = worm_wid.reshape([1, plot_n - 1, 1, 1])
-    segment_distance_3d = torch.sqrt(
-        delta_x.reshape(T, plot_n - 1, 1, W) + delta_y.reshape(T, plot_n - 1, H, 1)
+    pad_image = torch.full(
+        (batchsize, n_pts, height + diameter, width + diameter),
+        fill_value=-25.5,
+        device=x.device,
+    )
+    idx_x, idx_y, idx_z, idx_t = torch.meshgrid(
+        torch.arange(diameter, device=x.device),
+        torch.arange(diameter, device=x.device),
+        torch.arange(n_pts, device=x.device),
+        torch.arange(batchsize, device=x.device),
+        indexing="ij",
     )
 
-    delta_max = (worm_wid_3d - segment_distance_3d).max(dim=1)
-    image = pixel_value_from_dist_max(delta_max.values)
-    return image
+    all_idx_x = idx_x + cent_x.unsqueeze(0).unsqueeze(0)
+    all_idx_y = idx_y + cent_y.unsqueeze(0).unsqueeze(0)
+
+    pad_image_max, _ = pad_image.index_put_(
+        (idx_z.flatten(), all_idx_y.flatten(), all_idx_x.flatten()),
+        pixel_matrix.flatten(),
+    ).max(dim=0)
+
+    return pad_image_max[radius : radius + height, radius : radius + width]
+
+    return torch.stack(
+        [
+            make_single_worm(
+                x,
+                y,
+                height=height,
+                width=width,
+                pixel_matrix=pixel_matrix,
+            )
+            for x, y in zip(torch.unbind(x, dim=0), torch.unbind(y, dim=0))
+        ],
+        dim=0,
+    )
 
 
 def make_model_image(cent_x, cent_y, theta, unitLength, image_info, params):
@@ -934,10 +997,51 @@ class Model(torch.nn.Module):
         self.params = params
 
     def forward(self):
-        model_image = make_model_image(
-            self.cx, self.cy, self.theta, self.unitLength, self.image_info, self.params
+        device = self.alpha.device
+        T, im_height, im_width = self.image_info["image_shape"]
+        plot_n = self.params["plot_n"]
+        worm_wid = worm_width_all(
+            plot_n,
+            self.alpha,
+            self.gamma,
+            self.delta,
         )
-        return model_image
+        worm_wid_max = worm_wid.max().long().item() + 3
+        distance_matrix = make_distance_matrix(worm_wid_max).to(device)
+
+        distance_matrix_3d = worm_wid.unsqueeze(-1).unsqueeze(
+            -1
+        ) - distance_matrix.unsqueeze(0)
+        pixel_matrix = pixel_value_from_dist_max(distance_matrix_3d)
+
+        x = torch.cat(
+            (
+                torch.zeros((T, 1)).to(device),
+                torch.cumsum(
+                    self.unitLength.reshape((T, 1)).to(device) * torch.cos(self.theta),
+                    dim=1,
+                ),
+            ),
+            dim=1,
+        )
+        x = (
+            x - torch.mean(x, dim=1).reshape((T, 1)) + self.cx.reshape((T, 1))
+        )  # length plot size +1
+        y = torch.cat(
+            (
+                torch.zeros((T, 1)).to(device),
+                torch.cumsum(
+                    self.unitLength.reshape((T, 1)).to(device) * torch.sin(self.theta),
+                    dim=1,
+                ),
+            ),
+            dim=1,
+        )
+        y = (
+            y - torch.mean(y, dim=1).reshape((T, 1)) + self.cy.reshape((T, 1))
+        )  # length plot size +1
+        image = make_worm(x, y, im_width, im_height, pixel_matrix)
+        return image
 
 
 class EarlyStopping:
