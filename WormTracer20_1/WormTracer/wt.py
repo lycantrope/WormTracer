@@ -1,13 +1,12 @@
 ### WormTracer main package wt.py ###
 
 import datetime
-import glob
 import io
 import json
+import logging
 import os
-import sys
-from pathlib import Path
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -128,40 +127,51 @@ If True, saves input images with estimated centerline as a multipage tiff full_l
 
 """
 
+logger = logging.getLogger(__name__)
+
 
 def run(
     parameter_file, dataset_path, output_directory="", **kwargs
 ):  # execute the whole WormTracer process, kwargs are optional parameter=value pairs
+    matplotlib.use("Agg")
+
+    # set output_path
+    # output_path is created in output_directory
+    dataset_name, output_path, output_name = set_output_path(
+        dataset_path, output_directory
+    )
+
+    # setup logger
+    logging.basicConfig(
+        filename=os.path.join(output_path, f"{output_name}.log"),
+        format="%(message)s",
+        level=logging.INFO,
+        encoding="utf-8",
+    )
+
     with open(parameter_file, "r") as yml:
         params = yaml.safe_load(yml)
-    if len(kwargs) > 0:
-        params.update(kwargs)
+
+    params.update(kwargs)
 
     # log
     time_now = datetime.datetime.now()
-    logs = [f"Code executed at {time_now}\n"]
-    logs.append(f"Params : {params}\n")
+    logger.info(f"Code executed at {time_now}\nParams : {params}\n")
 
     #### make use of GPU ####
     if torch.cuda.is_available():
         device = "cuda"
         print("Running using GPU.")
-        logs.append("Running using GPU.\n\n")
+        logger.info("Running using GPU.\n")
     elif torch.backends.mps.is_available():
         device = "mps"
         print("Running using GPU.")
-        logs.append("Running using GPU.\n\n")
+        logger.info("Running using GPU.\n")
     else:
         device = "cpu"
         print("Running using CPU. GPU is recommended")
-        logs.append("Running using CPU. GPU is recommended\n\n")
+        logger.info("Running using CPU. GPU is recommended\n")
 
-    # set output_path
-    if "output_directory" not in locals() and "output_directory" not in globals():
-        output_directory = ""
-    dataset_name, output_path, output_name = set_output_path(
-        dataset_path, output_directory
-    )  # output_path is created in output_directory
     print("dataset_path =", dataset_path)
     print("output_path =", output_path)
 
@@ -211,9 +221,9 @@ def run(
 
     # log
     time_now = datetime.datetime.now()
-    logs.append(f"Reading images finished at {time_now}\n")
-    logs.append(
-        f"frame = {len(Tscaled_ind)} shape = {real_image.shape} unitLength = {unitLength}\n\n"
+    logger.info(f"Reading images finished at {time_now}")
+    logger.info(
+        f"frame = {len(Tscaled_ind)} shape = {real_image.shape} unitLength = {unitLength}\n"
     )
 
     # make worm model image from plots
@@ -239,15 +249,15 @@ def run(
 
     # log 3
     time_now = datetime.datetime.now()
-    logs.append(f"Determining time blocks finished at {time_now}\n")
-    logs.append(f"use_points : {use_points}\n\n")
+    logger.info(f"Determining time blocks finished at {time_now}")
+    logger.info(f"use_points : {use_points}\n")
 
     losses_all = []
     shape_params = []
     unitLength = prepare_for_train(pre_width, simple_area, x, y, params)
     if params["SaveProgress"]:
         clear_dir(output_path, output_name + "_progress_image")
-    logs.append("STEP1 : optimization for simple posture blocks\n\n")
+    logger.info("STEP1 : optimization for simple posture blocks\n")
 
     # main loop 1
     for i in range(len(use_points) - 1):
@@ -270,11 +280,12 @@ def run(
             Tscaled_ind[use_area[0] : use_area[1] + 1],
         )
         show_image(real_image, params["num_t"], title="real image")
+
         save_progress(real_image, output_path, output_name, params, txt="real")
         image_info["image_shape"] = real_image.shape
 
         # set init value
-        theta_cand, _ = make_thetaCand(theta_)
+        theta_cand, _ = make_theta_cand(theta_)
         theta_[-1, :] = theta_cand[0]
         init_cx, init_cy = set_init_xy(real_image)
         init_theta = torch.tensor(theta_)
@@ -333,19 +344,20 @@ def run(
         y[use_area[0] : use_area[1] + 1, :] = y_model + y_st
 
         # log
-        logs.append(str(use_area) + "\n")
-        logs.append(f"image loss : {np.mean(losses[0])}\n")
-        logs.append(f"continuity loss : {np.mean(losses[1])}\n")
-        logs.append(f"smoothing loss : {np.mean(losses[2])}\n")
-        logs.append(f"length loss : {np.mean(losses[3])}\n")
-        logs.append(f"center loss : {np.mean(losses[4])}\n\n")
+        logger.info(f"""{str(use_area)}
+image loss : {np.mean(losses[0])}
+continuity loss : {np.mean(losses[1])}
+smoothing loss : {np.mean(losses[2])}
+length loss : {np.mean(losses[3])}
+center loss : {np.mean(losses[4])}
+""")
     time_now = datetime.datetime.now()
-    logs.append(f"STEP1 finished at {time_now}\n\n")
+    logger.info(f"STEP1 finished at {time_now}\n")
 
     params["init_alpha"], params["init_gamma"], params["init_delta"] = get_shape_params(
         shape_params, params
     )
-    logs.append("STEP2 : optimization for complex posture blocks\n\n")
+    logger.info("STEP2 : optimization for complex posture blocks\n")
 
     # main loop 2
     for i in range(len(use_points) - 1):
@@ -372,7 +384,7 @@ def run(
         image_info["image_shape"] = real_image.shape
 
         # make flipping theta candidate
-        theta_cand, _ = make_thetaCand(theta_)
+        theta_cand, _ = make_theta_cand(theta_)
 
         # set init value
         init_cx, init_cy = set_init_xy(real_image)
@@ -431,7 +443,7 @@ def run(
         )
 
         # get trace information if loss is smaller
-        select_ind = loss_compair([losses_all[i], losses])
+        select_ind = loss_compare([losses_all[i], losses])
         if select_ind:
             theta_model = model.theta.detach().cpu().numpy()
             unitL_model = model.unitLength.detach().cpu().numpy().reshape(-1, 1)
@@ -454,20 +466,22 @@ def run(
         y[use_area[0] : use_area[1] + 1, :] = y_model + y_st
 
         # log
-        logs.append(str(use_area) + "\n")
-        logs.append(f"image loss : {np.mean(losses[0])}\n")
-        logs.append(f"continuity loss : {np.mean(losses[1])}\n")
-        logs.append(f"smoothing loss : {np.mean(losses[2])}\n")
-        logs.append(f"length loss : {np.mean(losses[3])}\n")
-        logs.append(f"center loss : {np.mean(losses[4])}\n\n")
+        logger.info(f"""{str(use_area)}
+image loss : {np.mean(losses[0])}
+continuity loss : {np.mean(losses[1])}
+smoothing loss : {np.mean(losses[2])}
+length loss : {np.mean(losses[3])}
+center loss : {np.mean(losses[4])}
+
+""")
 
     time_now = datetime.datetime.now()
-    logs.append(f"STEP2 finished at {time_now}\n\n")
+    logger.info(f"STEP2 finished at {time_now}\n")
 
     # revise areas which have too large loss
     losslarge_area = find_losslarge_area(losses_all)
-    logs.append(
-        "STEP3 :　re-optimization for unsuccessful blocks with complex postures\n\n"
+    logger.info(
+        "STEP3 :　re-optimization for unsuccessful blocks with complex postures\n"
     )
 
     for i in range(len(use_points) - 1):
@@ -492,7 +506,7 @@ def run(
             image_info["image_shape"] = real_image.shape
 
             # make flipping candidate
-            _, theta_cand = make_thetaCand(theta_)
+            _, theta_cand = make_theta_cand(theta_)
 
             # set init value
             init_cx, init_cy = set_init_xy(real_image)
@@ -521,7 +535,7 @@ def run(
             )
 
             # get trace information if loss is smaller
-            if loss_compair([losses_all[i], losses]):
+            if loss_compare([losses_all[i], losses]):
                 print("update")
                 update = 2
                 theta_model = model.theta.detach().cpu().numpy()
@@ -564,7 +578,7 @@ def run(
             )
 
             # get trace information if loss is smaller
-            if loss_compair([losses_all[i], losses]):
+            if loss_compare([losses_all[i], losses]):
                 print("update")
                 update = 3
                 theta_model = model.theta.detach().cpu().numpy()
@@ -594,21 +608,25 @@ def run(
                 y[use_area[0] : use_area[1] + 1, :] = y_model + y_st
 
                 # log
-                logs.append(str(use_area) + " updated\n")
-                logs.append(f"image loss : {np.mean(losses_all[i][0])}\n")
-                logs.append(f"continuity loss : {np.mean(losses_all[i][1])}\n")
-                logs.append(f"smoothing loss : {np.mean(losses_all[i][2])}\n")
-                logs.append(f"length loss : {np.mean(losses_all[i][3])}\n")
-                logs.append(f"center loss : {np.mean(losses_all[i][4])}\n\n")
+                logger.info(f"""{str(use_area)} updated
+image loss : {np.mean(losses_all[i][0])}
+continuity loss : {np.mean(losses_all[i][1])}
+smoothing loss : {np.mean(losses_all[i][2])}
+length loss : {np.mean(losses_all[i][3])}
+center loss : {np.mean(losses_all[i][4])}
+
+""")
 
     time_now = datetime.datetime.now()
-    logs.append(f"STEP3 finished at {time_now}\n\n")
+    logger.info(f"STEP3 finished at {time_now}\n")
 
     # save params and plots
     params_for_save = params.copy()
     for key, value in params_for_save.items():
         if torch.is_tensor(value):
             params_for_save[key] = params_for_save[key].item()
+        if isinstance(value, (Path, PurePath)):
+            params_for_save[key] = os.fspath(value)
     del params_for_save["use_area"]
 
     # check flipping
@@ -676,14 +694,7 @@ def run(
         y_rev / params["rescale"],
         delimiter=",",
     )
-    logs.append("Params and plots are successfully saved.\n\n")
-
-    # save log
-    # if not os.path.isdir(os.path.join(output_path, 'logs')):
-    #  os.mkdir(os.path.join(output_path, 'logs'))
-    with open(os.path.join(output_path, f"{output_name}_log.txt"), mode="w") as f:
-        for log in logs:
-            f.write(log)
+    logger.info("Params and plots are successfully saved.\n")
 
     # save full of real_image and centerline as png images
     # real_image, y_st, x_st = read_image(imshape, filenames_full, params['rescale'], Worm_is_black)
