@@ -6,13 +6,10 @@ import math
 import os
 import shutil
 from math import pi
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import TYPE_CHECKING
 
 import cv2
-import matplotlib
-
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -63,31 +60,21 @@ def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
 
 
 def set_output_path(dataset_path, output_directory):
-    if (
-        output_directory == ""
-    ):  # if output_path is not set, set it to the parent directry of dataset_path
-        output_directory = str(Path(dataset_path).parent)
-    if not os.path.isdir(
-        output_directory
-    ):  # if a directory output_path does not exist, make it.
-        os.mkdir(output_directory)
-    dataset_path_split = dataset_path.split(os.sep)
-    if dataset_path_split[-1] == "":
-        dataset_path_split.pop()
-    dataset_name = dataset_path_split[-1]
-    if dataset_name.endswith(".tif") or dataset_name.endswith("tiff"):
-        dataset_name = dataset_name[: dataset_name.rfind(".")]
-    output_ind = 1
-    while os.path.exists(
-        os.path.join(output_directory, dataset_name + "_output_" + str(output_ind))
-    ):
-        output_ind += 1
-    output_path = os.path.join(
-        output_directory, dataset_name + "_output_" + str(output_ind)
-    )
-    os.mkdir(output_path)
-    output_name = dataset_name + "_output_" + str(output_ind)
-    return dataset_name, output_path, output_name
+    output_directory = Path(output_directory or Path(dataset_path).parent)
+    Path(output_directory).mkdir(exist_ok=True)
+
+    # for compatiblity of py3.6 using PurePath to get stem
+    dataset_prefix = Path(dataset_path).stem
+
+    for i in range(int(1e32)):
+        output_path = output_directory.joinpath(
+            "{}_output_{:d}".format(dataset_prefix, i + 1)
+        )
+        if not output_path.is_dir():
+            break
+
+    Path(output_path).mkdir()
+    return dataset_prefix, output_path, Path(output_path).stem
 
 
 def get_filenames(dataset_path: Union[str, bytes, os.PathLike]):
@@ -136,11 +123,15 @@ def get_filenames(dataset_path: Union[str, bytes, os.PathLike]):
 def get_property(filenames, rescale):
     _, ims = cv2.imreadmulti(filenames[0])
     im = ims[0]
-    if np.any((0 < np.asarray(im)) * (np.asarray(im) < 255)):
+    if np.any((0 < np.asarray(im)) & (np.asarray(im) < 255)):
         print("Warning! : Input images seem not to be binary.")
-    if rescale != 1:
+    if not math.isclose(rescale, 1.0, rel_tol=1e4):
         im = cv2.resize(
-            im, dsize=None, fy=rescale, fx=rescale, interpolation=cv2.INTER_NEAREST
+            im,
+            dsize=None,
+            fy=rescale,
+            fx=rescale,
+            interpolation=cv2.INTER_NEAREST,
         )
     white_pixel = (
         np.sum(im[0, :-1]) // 255
@@ -148,11 +139,10 @@ def get_property(filenames, rescale):
         + np.sum(im[1:, 0]) // 255
         + np.sum(im[:-1, -1]) // 255
     )
-    Worm_is_black = (
-        True if white_pixel / 2 / (im.shape[0] + im.shape[1]) > 0.5 else False
-    )
-    n_input_images = len(ims) if len(ims) > 1 else len(filenames)
-    multi_flag = 1 if len(ims) > 1 else 0
+    # if sum of white pixel is larger than height + width
+    Worm_is_black = white_pixel > sum(im.shape[:2])
+    multi_flag = len(ims) > 1
+    n_input_images = len(ims) if multi_flag else len(filenames)
     return im.shape, Worm_is_black, multi_flag, n_input_images
 
 
@@ -205,8 +195,9 @@ def calc_xy_and_prewidth(
 ) -> Tuple[NDArray, NDArray, NDArray, float]:
     """read images and get skeletonized plots"""
     T = imagestack.shape[0]
-    assert T != 0, "imagestack is empty"
-    # Intitial output date
+    assert T > 0, "Input is empty"
+
+    # Intitial output data
     x = np.zeros((T, plot_n))
     y = np.zeros((T, plot_n))
     pre_width = np.zeros(T)
@@ -243,7 +234,7 @@ def calc_xy_and_prewidth(
     return x, y, pre_width, unitLength
 
 
-def get_skeleton(im, plot_n):
+def get_skeleton(im: NDArray, plot_n: int):
     """skeletonize image and get splined plots"""
 
     # skeletonize image
@@ -385,15 +376,12 @@ def make_theta_from_xy(x: NDArray, y: NDArray) -> NDArray:
 def calc_cap_span(image_info, plot_n, s_m=8000):
     """Calculate maximum span of trainig in terms of CUDA memory."""
     device = image_info["device"]
+    GiB = 1e20
     try:
         free_memory = (
-            (
-                torch.cuda.get_device_properties(device).total_memory
-                - torch.cuda.memory_allocated(device)
-            )
-            / 1024
-            / 1024
-        )
+            torch.cuda.get_device_properties(device).total_memory
+            - torch.cuda.memory_allocated(device)
+        ) / GiB
         cap_span = int(
             s_m
             * free_memory
@@ -692,8 +680,8 @@ def prepare_for_train(pre_width, simple_area, x, y, params):
     params["init_alpha"] = torch.tensor(pre_width[simple_area].mean())
     params["init_gamma"] = torch.tensor(0.0)
     params["init_delta"] = torch.tensor(0.0)
-    unitLength = np.median(
-        np.sqrt(
+    unitLength = np.sqrt(
+        np.median(
             (
                 (x[simple_area, :-1] - x[simple_area, 1:]) ** 2
                 + (y[simple_area, :-1] - y[simple_area, 1:]) ** 2
@@ -708,25 +696,19 @@ def make_progress_image(image, num_t=20):
     """Make one large image with images laid out on it."""
     if torch.is_tensor(image):
         image = image.clone().detach().cpu().numpy()
-    T = image.shape[0]
+    assert image.ndim == 3, "image must be (batch, height, width)"
+    T, H, W = image.shape
     t_sparse = np.linspace(0, T - 1, min(num_t, T), dtype=int)
-    progress_image = np.zeros((1, 5 * image.shape[2]))
-    for i in range((t_sparse.shape[0] + 4) // 5 * 5):
-        try:
-            new_image = image[t_sparse[i]]
-        except IndexError:
-            new_image = np.zeros((image.shape[1], image.shape[2]))
-        if i % 5 > 0:
-            image_tmp = np.hstack((image_tmp, new_image))
-        if i % 5 == 0:
-            if i > 0:
-                progress_image = np.vstack((progress_image, image_tmp[::-1, :]))
-            image_tmp = new_image
-    progress_image = np.vstack((progress_image, image_tmp[::-1, :]))
-    return progress_image[1:, :]
+    subset = image[t_sparse]
+    n_chunk = (subset.shape[0] + 1) // 5
+    progress_image = np.zeros((H * n_chunk, W * 5))
+    for i, chunk in enumerate(np.array_split(subset, n_chunk, axis=0)):
+        merge = np.hstack(chunk)
+        progress_image[i * H : (i + 1) * H, : merge.shape[1]] = merge
+    return progress_image
 
 
-def save_progress(image, output_path, output_name, params, txt="real"):
+def save_progress(image, output_path, output_name: str, params, txt="real"):
     if params["SaveProgress"]:
         use_area = params["use_area"]
         progress_image = make_progress_image(image, params["save_progress_num"])
@@ -744,7 +726,7 @@ def remove_progress(output_pathh, filename):
         os.remove(f)
 
 
-def getCenter(binimg):
+def get_center(binimg):
     """Calculate center of images."""
     if torch.is_tensor(binimg):
         binimg = binimg.clone().detach().cpu().numpy()
@@ -760,7 +742,7 @@ def set_init_xy(real_image):
     init_cx = torch.zeros(T)
     init_cy = torch.zeros(T)
     for t in range(T):
-        init_cx[t], init_cy[t] = getCenter(real_image[t, :, :])
+        init_cx[t], init_cy[t] = get_center(real_image[t, :, :])
     return init_cx, init_cy
 
 
@@ -778,7 +760,7 @@ def find_theta(theta, pretheta, plus=1):
     return len(mse_list)
 
 
-def make_thetaCand(theta):
+def make_theta_cand(theta):
     i_normal = find_theta(theta, theta[-1, :]) - find_theta(theta, theta[-1, :], -1)
     pretheta = theta[-1, :][::-1] + pi
     i_reverse = find_theta(theta, pretheta) - find_theta(theta, pretheta, -1)
@@ -893,57 +875,79 @@ def make_worm(
     y: torch.Tensor,
     width: int,
     height: int,
-    pixel_matrix: torch.Tensor,
+    worm_wid: torch.Tensor,
 ) -> torch.Tensor:
-    batchsize = x.shape[0]
-    n_pts, diameter = pixel_matrix.shape[:2]
-    radius = diameter // 2
+    # batchsize = x.shape[0]
+    # n_pts, diameter = pixel_matrix.shape[:2]
+    # radius = diameter // 2
 
-    cent_x = ((x[:, :-1] + x[:, 1:]) / 2).long()
-    cent_y = ((y[:, :-1] + y[:, 1:]) / 2).long()
+    # cent_x = ((x[:, :-1] + x[:, 1:]) / 2).long()
+    # cent_y = ((y[:, :-1] + y[:, 1:]) / 2).long()
 
-    pad_image = torch.full(
-        (batchsize, n_pts, height + diameter, width + diameter),
-        fill_value=-25.5,
-        device=x.device,
+    # pad_image = torch.full(
+    #     (batchsize, n_pts, height + diameter, width + diameter),
+    #     fill_value=-25.5,
+    #     device=x.device,
+    # )
+    # idx_x, idx_y, idx_z, idx_t = torch.meshgrid(
+    #     torch.arange(diameter, device=x.device),
+    #     torch.arange(diameter, device=x.device),
+    #     torch.arange(n_pts, device=x.device),
+    #     torch.arange(batchsize, device=x.device),
+    #     indexing="ij",
+    # )
+
+    # all_idx_x = idx_x + cent_x.unsqueeze(0).unsqueeze(0)
+    # all_idx_y = idx_y + cent_y.unsqueeze(0).unsqueeze(0)
+
+    # pad_image_max, _ = pad_image.index_put_(
+    #     (idx_t.flatten(), idx_z.flatten(), all_idx_y.flatten(), all_idx_x.flatten()),
+    #     pixel_matrix.flatten(),
+    # ).max(dim=1)
+
+    # return pad_image_max[:, radius : radius + height, radius : radius + width]
+
+    # return torch.stack(
+    #     [
+    #         make_single_worm(
+    #             x,
+    #             y,
+    #             height=height,
+    #             width=width,
+    #             pixel_matrix=pixel_matrix,
+    #         )
+    #         for x, y in zip(torch.unbind(x, dim=0), torch.unbind(y, dim=0))
+    #     ],
+    #     dim=0,
+    # )
+    H, W = height, width
+    T, plot_n = x.shape
+    device = x.device
+    # midpoints of segments, length plot size
+    cent_mid_x_3d = (x[:, :-1] + x[:, 1:]) / 2
+    # midpoints of segments, length plot size
+    cent_mid_y_3d = (y[:, :-1] + y[:, 1:]) / 2
+
+    x_3d = torch.arange(W).reshape([1, 1, W]).to(device)
+    cent_mid_x_3d = cent_mid_x_3d.reshape([T, plot_n - 1, 1]).to(torch.float32)
+    delta_x = (cent_mid_x_3d - x_3d) ** 2
+
+    y_3d = torch.arange(H).reshape([1, 1, H]).to(device)
+    cent_mid_y_3d = cent_mid_y_3d.reshape([T, plot_n - 1, 1]).to(torch.float32)
+    delta_y = (cent_mid_y_3d - y_3d) ** 2
+
+    worm_wid_3d = worm_wid.reshape([1, plot_n - 1, 1, 1])
+    segment_distance_3d = torch.sqrt(
+        delta_x.reshape(T, plot_n - 1, 1, W) + delta_y.reshape(T, plot_n - 1, H, 1)
     )
-    idx_x, idx_y, idx_z, idx_t = torch.meshgrid(
-        torch.arange(diameter, device=x.device),
-        torch.arange(diameter, device=x.device),
-        torch.arange(n_pts, device=x.device),
-        torch.arange(batchsize, device=x.device),
-        indexing="ij",
-    )
-
-    all_idx_x = idx_x + cent_x.unsqueeze(0).unsqueeze(0)
-    all_idx_y = idx_y + cent_y.unsqueeze(0).unsqueeze(0)
-
-    pad_image_max, _ = pad_image.index_put_(
-        (idx_z.flatten(), all_idx_y.flatten(), all_idx_x.flatten()),
-        pixel_matrix.flatten(),
-    ).max(dim=0)
-
-    return pad_image_max[radius : radius + height, radius : radius + width]
-
-    return torch.stack(
-        [
-            make_single_worm(
-                x,
-                y,
-                height=height,
-                width=width,
-                pixel_matrix=pixel_matrix,
-            )
-            for x, y in zip(torch.unbind(x, dim=0), torch.unbind(y, dim=0))
-        ],
-        dim=0,
-    )
+    delta_max = (worm_wid_3d - segment_distance_3d).max(dim=1)
+    image = pixel_value_from_dist_max(delta_max.values)
+    return image
 
 
 def make_model_image(cent_x, cent_y, theta, unitLength, image_info, params):
     T = image_info["image_shape"][0]
     device = image_info["device"]
-    plot_n = params["plot_n"]
     x = torch.cat(
         (
             torch.zeros((T, 1)).to(device),
@@ -1006,13 +1010,13 @@ class Model(torch.nn.Module):
             self.gamma,
             self.delta,
         )
-        worm_wid_max = worm_wid.max().long().item() + 3
-        distance_matrix = make_distance_matrix(worm_wid_max).to(device)
+        # worm_wid_max = worm_wid.max().long().item() + 15
+        # distance_matrix = make_distance_matrix(worm_wid_max).to(device)
 
-        distance_matrix_3d = worm_wid.unsqueeze(-1).unsqueeze(
-            -1
-        ) - distance_matrix.unsqueeze(0)
-        pixel_matrix = pixel_value_from_dist_max(distance_matrix_3d)
+        # distance_matrix_3d = worm_wid.unsqueeze(-1).unsqueeze(
+        #     -1
+        # ) - distance_matrix.unsqueeze(0)
+        # pixel_matrix = pixel_value_from_dist_max(distance_matrix_3d)
 
         x = torch.cat(
             (
@@ -1040,7 +1044,7 @@ class Model(torch.nn.Module):
         y = (
             y - torch.mean(y, dim=1).reshape((T, 1)) + self.cy.reshape((T, 1))
         )  # length plot size +1
-        image = make_worm(x, y, im_width, im_height, pixel_matrix)
+        image = make_worm(x, y, im_width, im_height, worm_wid)
         return image
 
 
@@ -1087,9 +1091,7 @@ def train3(
     smoothness_loss_weight = params["smoothness_loss_weight"]
     length_loss_weight = params["length_loss_weight"]
     center_loss_weight = params["center_loss_weight"]
-    show_progress_freq = params["show_progress_freq"]
     save_progress_freq = params["save_progress_freq"]
-    use_area = params["use_area"]
     init_cx = init_data[0].to(device)
     init_cy = init_data[1].to(device)
     unitL = init_data[2]
@@ -1141,41 +1143,46 @@ def train3(
         loss.backward()
         if torch.min(annealing_weight) > 0.99:
             early_stopping(loss.item(), model)
-            if early_stopping.early_stop:
-                if params["ShowProgress"]:
-                    print(
-                        "Early stopping at epoch +{}.".format(e - int(T / (2 * speed)))
-                    )
-                break
         del loss
+        if early_stopping.early_stop:
+            if params["ShowProgress"]:
+                print("Early stopping at epoch +{}.".format(e - int(T / (2 * speed))))
+            break
         optimizer.step()
 
-        if params["ShowProgress"]:  # Show Progress
-            if e % show_progress_freq == 0:
-                print(
-                    "{:.2f} {:.2f} {:.2f} {:.2f} {:.2f}".format(
-                        image_loss.item(),
-                        continuity_loss.item(),
-                        smoothness_loss.item(),
-                        length_loss.item(),
-                        center_loss.item(),
-                    )
-                )
-                show_image(model_image, params["num_t"], title=f"epoch {e}")
-        if e % save_progress_freq == 0:  # Save Progress
-            save_progress(
-                model_image,
-                output_path,
-                output_name,
-                params,
-                txt="id{}_{}".format(params["id"], e),
+        if e % save_progress_freq > 0:
+            continue
+
+        # Save Progres
+        save_progress(
+            model_image,
+            output_path,
+            output_name,
+            params,
+            txt="id{}_{}".format(params["id"], e),
+        )
+        if not params["ShowProgress"]:
+            continue
+
+        # Show Progress
+        print(
+            "{:.2f} {:.2f} {:.2f} {:.2f} {:.2f}".format(
+                image_loss.item(),
+                continuity_loss.item(),
+                smoothness_loss.item(),
+                length_loss.item(),
+                center_loss.item(),
             )
+        )
+        show_image(model_image, params["num_t"], title=f"epoch {e}")
 
     model.alpha.requires_grad = True
     model.gamma.requires_grad = True
     model.delta.requires_grad = True
     body_axis_weight = body_axis_function(
-        params["body_ratio"], params["plot_n"], base=0.3
+        params["body_ratio"],
+        params["plot_n"],
+        base=0.3,
     ).to(device)
     early_stopping = EarlyStopping()
 
@@ -1199,14 +1206,14 @@ def train3(
         loss = image_loss + continuity_loss + smoothness_loss + length_loss
         loss.backward()
         early_stopping(loss.item(), model)
+        del loss
         if early_stopping.early_stop:
             if params["ShowProgress"]:
                 print("Minor adjustment done.")
             break
-        del loss
         optimizer.step()
 
-    if params["ShowProgress"]:  # Show Progress
+    if not params["ShowProgress"]:  # Show Progress
         print(
             "{:.2f} {:.2f} {:.2f} {:.2f}".format(
                 image_loss.item(),
@@ -1216,6 +1223,7 @@ def train3(
             )
         )
         show_image(model_image, params["num_t"], title="final")
+
     save_progress(
         model_image,
         output_path,
@@ -1270,7 +1278,7 @@ def get_shape_params(shape_params, params):
     )
 
 
-def loss_compair(loss_pair):
+def loss_compare(loss_pair):
     im_select = int(max(loss_pair[0][0]) > max(loss_pair[1][0]))
     con_select = int(max(loss_pair[0][1]) > max(loss_pair[1][1]))
     smo_select = int(max(loss_pair[0][2]) > max(loss_pair[1][2]))
@@ -1290,15 +1298,17 @@ def loss_compair(loss_pair):
 
 def show_loss_plot(losses, title=""):
     T = losses[0].shape[0]
-    plt.plot(losses[0], label="im")
-    plt.plot(losses[1], label="con")
-    plt.plot(losses[2], label="smo")
-    plt.plot(losses[3], label="len")
-    plt.plot(losses[4], label="cen")
-    plt.title(title, fontsize=20)
-    plt.xlabel("frames", fontsize=20)
-    plt.ylabel("loss", fontsize=20)
-    plt.legend()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(losses[0], label="im")
+    ax.plot(losses[1], label="con")
+    ax.plot(losses[2], label="smo")
+    ax.plot(losses[3], label="len")
+    ax.plot(losses[4], label="cen")
+    ax.set_title(title, fontsize=20)
+    ax.set_xlabel("frames", fontsize=20)
+    ax.set_xlabel("loss", fontsize=20)
+    ax.legend()
     # plt.show()
 
 
@@ -1320,39 +1330,45 @@ def find_losslarge_area(losses_all):
 
 def judge_head_amplitude(x, y):
     """Judge which tip is head based on variance of body curve rate."""
-    theta = np.zeros((x.shape[0], x.shape[1] - 1), dtype=float)
-    for i in range(x.shape[1] - 1):
-        theta[:, i] = np.arctan2(y[:, i + 1] - y[:, i], x[:, i + 1] - x[:, i])
+    dx = x[:, 1:] - x[:, :-1]
+    dy = y[:, 1:] - y[:, :-1]
+    theta = np.arctan2(dy, dx)
+
     curve_rate_var = ((theta[:, 1:] - theta[:, :-1] + np.pi) % (2 * np.pi) - np.pi).var(
         axis=0
     )
-    plt.figure()
-    plt.plot(curve_rate_var)
-    plt.xlabel("body segment", fontsize=20)
-    plt.ylabel("curve rate var", fontsize=20)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(curve_rate_var)
+    ax.set_xlabel("body segment", fontsize=20)
+    ax.set_ylabel("curve rate var", fontsize=20)
     # plt.show()
     idx15per = int(np.round(x.shape[1] * 0.15))
     idx20per = int(np.round(x.shape[1] * 0.20))
     curve_mean1 = curve_rate_var[idx15per : idx20per + 1].mean()
     curve_mean2 = curve_rate_var[-idx20per - 1 : -idx15per].mean()
-    if curve_mean1 >= curve_mean2:  # right direction already
-        x, y, x_rev, y_rev = x, y, x[:, ::-1], y[:, ::-1]
-    else:  # reversed
-        x, y, x_rev, y_rev = x[:, ::-1], y[:, ::-1], x, y
+
+    x_rev, y_rev = x[:, ::-1], y[:, ::-1]
+    # Reversed
+    if curve_mean1 < curve_mean2:
+        x, x_rev = x_rev, x
+        y, y_rev = y_rev, y
+
     return x, y, x_rev, y_rev
 
 
 def judge_head_frequency(x, y):
     """Judge which tip is head based on frequency of body curve rate."""
 
-    theta = np.zeros((x.shape[0], x.shape[1] - 1), dtype=float)
-    for i in range(x.shape[1] - 1):
-        theta[:, i] = np.arctan2(y[:, i + 1] - y[:, i], x[:, i + 1] - x[:, i])
+    dx = x[:, 1:] - x[:, :-1]
+    dy = y[:, 1:] - y[:, :-1]
+    theta = np.arctan2(dy, dx)
+
     curve_rate = (theta[:, 1:] - theta[:, :-1] + np.pi) % (2 * np.pi) - np.pi
     T = curve_rate.shape[0]
 
     # fast fourier transform
-    spa = abs(np.fft.fft(curve_rate, axis=0))
+    spa = np.abs(np.fft.fft(curve_rate, axis=0))
 
     # the latter half of fourier power spectrum is the same as the first half
     T2 = int(np.ceil((T - 1) / 2))
@@ -1380,17 +1396,18 @@ def judge_head_frequency(x, y):
     # show power spectrum plot
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    plt.imshow(spat)
+    ax.imshow(spat)
     ax.set_aspect(0.1)
-    plt.xlabel("body segment", fontsize=20)
-    plt.ylabel("peak curve freq", fontsize=20)
-    plt.title(f"Correlation = {cor:.3g}")
+    ax.set_xlabel("body segment", fontsize=20)
+    ax.set_ylabel("peak curve freq", fontsize=20)
+    ax.set_title(f"Correlation = {cor:.3g}")
     # plt.show()
 
-    if cor <= 0:  # right direction already
-        x, y, x_rev, y_rev = x, y, x[:, ::-1], y[:, ::-1]
-    else:  # reversed
-        x, y, x_rev, y_rev = x[:, ::-1], y[:, ::-1], x, y
+    x_rev, y_rev = x[:, ::-1], y[:, ::-1]
+    # Reversed
+    if cor > 0:
+        x, x_rev = x_rev, x
+        y, y_rev = y_rev, y
     return x, y, x_rev, y_rev
 
 
@@ -1405,20 +1422,20 @@ def cancel_reduction(x, y, n_input_images, start_T, end_T, Tscaled_ind, plot_n):
         end_T = n_input_images - 1
     if len(Tscaled_ind) == end_T - start_T + 1:
         return x, y
-    else:
-        x_splined = np.zeros((end_T - start_T + 1, plot_n))
-        y_splined = np.zeros((end_T - start_T + 1, plot_n))
 
-        # interpolation
-        div_linespace = np.arange(end_T - start_T + 1)
-        Tscaled_dif_ind = [ind - start_T for ind in Tscaled_ind]
-        for i in range(plot_n):
-            f_x = interp1d(
-                Tscaled_dif_ind, x[:, i], kind="linear", fill_value="extrapolate"
-            )
-            f_y = interp1d(
-                Tscaled_dif_ind, y[:, i], kind="linear", fill_value="extrapolate"
-            )
-            x_splined[:, i] = f_x(div_linespace)
-            y_splined[:, i] = f_y(div_linespace)
-        return x_splined, y_splined
+    x_splined = np.zeros((end_T - start_T + 1, plot_n))
+    y_splined = np.zeros((end_T - start_T + 1, plot_n))
+
+    # interpolation
+    div_linespace = np.arange(end_T - start_T + 1)
+    Tscaled_dif_ind = [ind - start_T for ind in Tscaled_ind]
+    for i in range(plot_n):
+        f_x = interp1d(
+            Tscaled_dif_ind, x[:, i], kind="linear", fill_value="extrapolate"
+        )
+        f_y = interp1d(
+            Tscaled_dif_ind, y[:, i], kind="linear", fill_value="extrapolate"
+        )
+        x_splined[:, i] = f_x(div_linespace)
+        y_splined[:, i] = f_y(div_linespace)
+    return x_splined, y_splined
