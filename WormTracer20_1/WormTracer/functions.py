@@ -1483,7 +1483,7 @@ def straigthen_multi(
     yt_vec = dxya[:, :, 0]
 
     # Calculate normalized tangential vectors to the centerlines
-    vec_norm = np.sqrt(xt_vec**2 + yt_vec**2)  # (T, width)
+    vec_norm = np.sqrt((dxya**2).sum(axis=-1))
     xt_norm = xt_vec / vec_norm
     yt_norm = yt_vec / vec_norm
 
@@ -1501,10 +1501,11 @@ def straigthen_multi(
     # Let gx and gy normalize within [-1., 1.]
     gx = 2 * gx / W - 1.0
     gy = 2 * gy / H - 1.0
+    gxy = np.stack((gx, gy), axis=-1).reshape((-1, height, width, 2))
 
     # Create a 2D grid for interpolation
     src_t = torch.from_numpy(src).reshape((N, -1, H, W)).float()
-    grid = torch.from_numpy(np.stack((gx, gy), axis=-1)).float()
+    grid = torch.from_numpy(gxy).float()
     straigthen_dst = F.grid_sample(src_t, grid, align_corners=True)
     straigthen_dst = torch.clamp(straigthen_dst, src.min(), src.max()).detach().numpy()
 
@@ -1563,7 +1564,7 @@ def straigthen(
     yt_vec = dxya[:, 0]
 
     # Calculate normalized tangential vectors to the centerlines
-    vec_norm = np.sqrt(xt_vec**2 + yt_vec**2)  # (T, width)
+    vec_norm = np.sqrt((dxya**2).sum(axis=-1))
     xt_norm = xt_vec / vec_norm
     yt_norm = yt_vec / vec_norm
 
@@ -1581,12 +1582,11 @@ def straigthen(
     # Let gx and gy normalize within [-1., 1.]
     gx = 2 * gx / W - 1.0
     gy = 2 * gy / H - 1.0
+    gxy = np.stack((gx, gy), axis=-1).reshape((-1, height, width, 2))
 
     # Create a 2D grid for interpolation
     src_t = torch.from_numpy(src).reshape((1, -1, H, W)).float()
-    grid = torch.from_numpy(
-        np.stack((gx, gy), axis=-1).reshape((1, height, width, 2))
-    ).float()
+    grid = torch.from_numpy(gxy).float()
     straigthen_dst = F.grid_sample(src_t, grid, align_corners=True)
     straigthen_dst = torch.clamp(straigthen_dst, src.min(), src.max()).detach().numpy()
 
