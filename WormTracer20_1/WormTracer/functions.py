@@ -1498,24 +1498,17 @@ def straigthen_multi(
     gx = xt_norm[:, None, :] * y_grid[None, :, None] + src_x[:, None, :]
     gy = yt_norm[:, None, :] * y_grid[None, :, None] + src_y[:, None, :]
 
-    # Create a 2D grid for interpolation
-    straigthen_dst = np.zeros((N, height, width))
-    for i in range(N):
-        y1, y2 = np.clip((gy[i].min() - 1, gy[i].max() + 1), 0, H).astype(int)
-        x1, x2 = np.clip((gx[i].min() - 1, gx[i].max() + 1), 0, W).astype(int)
-        yi, xi = np.meshgrid(np.arange(y1, y2), np.arange(x1, x2), indexing="ij")
-        # Create a regular grid interpolator
-        interp = LinearNDInterpolator(
-            (yi.flatten(), xi.flatten()),
-            src[i, y1:y2, x1:x2].flatten(),
-            fill_value=0,
-        )
-        # Interpolate pixel values using the regular grid interpolator
-        straigthen_dst[i] = interp((gy[i].flatten(), gx[i].flatten())).reshape(
-            height, width
-        )
+    # Let gx and gy normalize within [-1., 1.]
+    gx = 2 * gx / W - 1.0
+    gy = 2 * gy / H - 1.0
 
-    return straigthen_dst
+    # Create a 2D grid for interpolation
+    src_t = torch.from_numpy(src).reshape((N, -1, H, W)).float()
+    grid = torch.from_numpy(np.stack((gx, gy), axis=-1)).float()
+    straigthen_dst = F.grid_sample(src_t, grid, align_corners=True)
+    straigthen_dst = torch.clamp(straigthen_dst, src.min(), src.max()).detach().numpy()
+
+    return straigthen_dst.reshape(N, height, width)
 
 
 def straigthen(
@@ -1585,17 +1578,16 @@ def straigthen(
     gx = xt_norm[None, :] * y_grid[:, None] + src_x[None, :]
     gy = yt_norm[None, :] * y_grid[:, None] + src_y[None, :]
 
-    y1, y2 = np.clip((gy.min() - 1, gy.max() + 1), 0, H).astype(int)
-    x1, x2 = np.clip((gx.min() - 1, gx.max() + 1), 0, W).astype(int)
+    # Let gx and gy normalize within [-1., 1.]
+    gx = 2 * gx / W - 1.0
+    gy = 2 * gy / H - 1.0
+
     # Create a 2D grid for interpolation
-    yi, xi = np.meshgrid(np.arange(y1, y2), np.arange(x1, x2), indexing="ij")
-    # Create a regular grid interpolator
-    interp = LinearNDInterpolator(
-        (yi.flatten(), xi.flatten()),
-        src[y1:y2, x1:x2].flatten(),
-        fill_value=0,
-    )
-    # Interpolate pixel values using the regular grid interpolator
-    straigthen_dst = interp((gy.flatten(), gx.flatten()))
+    src_t = torch.from_numpy(src).reshape((1, -1, H, W)).float()
+    grid = torch.from_numpy(
+        np.stack((gx, gy), axis=-1).reshape((1, height, width, 2))
+    ).float()
+    straigthen_dst = F.grid_sample(src_t, grid, align_corners=True)
+    straigthen_dst = torch.clamp(straigthen_dst, src.min(), src.max()).detach().numpy()
 
     return straigthen_dst.reshape(height, width)
