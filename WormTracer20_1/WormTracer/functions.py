@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from scipy import ndimage as ndi
-from scipy.interpolate import interp1d
+from scipy.interpolate import CubicSpline, LinearNDInterpolator
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import shortest_path
 from scipy.spatial import distance_matrix
@@ -280,10 +280,8 @@ def get_skeleton(im: NDArray, plot_n: int):
 
     # interpolation
     div_linespace = np.linspace(0, np.max(arclen), plot_n)
-    f_x = interp1d(arclen, plots[:, 1], kind="linear")
-    f_y = interp1d(arclen, plots[:, 0], kind="linear")
-    x_splined = f_x(div_linespace)
-    y_splined = f_y(div_linespace)
+    x_splined = np.interp(div_linespace, arclen, plots[:, 1], kind="linear")
+    y_splined = np.interp(div_linespace, arclen, plots[:, 0], kind="linear")
 
     return x_splined, y_splined
 
@@ -1232,21 +1230,15 @@ def train3(
         txt="id{}_{}".format(params["id"], "final"),
     )
 
-    losses = [torch.mean((model_image - real_image) ** 2, axis=(1, 2))]
-    losses.append(
+    losses = [
+        torch.mean((model_image - real_image) ** 2, axis=(1, 2)),
         continuity_loss_weight
-        * torch.mean((model.theta[:-1, :] - model.theta[1:, :]) ** 2, axis=1)
-    )
-    losses.append(
+        * torch.mean((model.theta[:-1, :] - model.theta[1:, :]) ** 2, axis=1),
         smoothness_loss_weight
-        * torch.mean((model.theta[:, :-1] - model.theta[:, 1:]) ** 2, axis=1)
-    )
-    losses.append(
-        length_loss_weight * ((model.unitLength[:-1] - model.unitLength[1:]) ** 2)
-    )
-    losses.append(
-        center_loss_weight * ((model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2)
-    )
+        * torch.mean((model.theta[:, :-1] - model.theta[:, 1:]) ** 2, axis=1),
+        length_loss_weight * ((model.unitLength[:-1] - model.unitLength[1:]) ** 2),
+        center_loss_weight * ((model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2),
+    ]
     for i in range(len(losses)):
         losses[i] = losses[i].clone().detach().cpu().numpy()
     return losses
@@ -1297,7 +1289,7 @@ def loss_compare(loss_pair):
 
 
 def show_loss_plot(losses, title=""):
-    T = losses[0].shape[0]
+    _ = losses[0].shape[0]
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.plot(losses[0], label="im")
@@ -1430,12 +1422,180 @@ def cancel_reduction(x, y, n_input_images, start_T, end_T, Tscaled_ind, plot_n):
     div_linespace = np.arange(end_T - start_T + 1)
     Tscaled_dif_ind = [ind - start_T for ind in Tscaled_ind]
     for i in range(plot_n):
-        f_x = interp1d(
-            Tscaled_dif_ind, x[:, i], kind="linear", fill_value="extrapolate"
-        )
-        f_y = interp1d(
-            Tscaled_dif_ind, y[:, i], kind="linear", fill_value="extrapolate"
-        )
-        x_splined[:, i] = f_x(div_linespace)
-        y_splined[:, i] = f_y(div_linespace)
+        x_splined[:, i] = np.interp(div_linespace, Tscaled_dif_ind, x[:, i])
+        y_splined[:, i] = np.interp(div_linespace, Tscaled_dif_ind, y[:, i])
     return x_splined, y_splined
+
+
+def straigthen_multi(
+    src: NDArray,
+    x: NDArray,
+    y: NDArray,
+    width: int,
+    height: int,
+):
+    """
+    Straightens an image based on given x and y coordinates using affine transformation and interpolation.
+
+    Args:
+        src: Input image as a NumPy array [N, H, W].
+        x: x-coordinates of points to be straightened [N, x].
+        y: y-coordinates of points to be straightened [N, y].
+        width: Desired width of the straightened image.
+        height: Desired height of the straightened image.
+
+    Returns:
+        The straightened image as a NumPy array [N, height, width].
+    """
+
+    assert src.ndim == 3, "The shape of source images is not (number, height, width)"
+    assert x.shape == y.shape, "The coordinates of x and y have different shape."
+    N, H, W = src.shape
+    assert (
+        x.shape[0] == N
+    ), "The number of frames to be straightened is different from given coordinates."
+
+    dist = np.zeros_like(x)
+    dist[:, 1:] = np.sqrt((x[:, 1:] - x[:, :-1]) ** 2 + (y[:, 1:] - y[:, :-1]) ** 2)
+
+    acc_dist = np.cumsum(dist, axis=1)
+    src_xy = np.zeros((N, width, 2))
+    xy = np.stack([x, y], axis=-1)
+    out_xcoords = np.arange(width)
+
+    # Interpolate x and y coordinates (T, width) based on accumulated distances
+    for i in range(N):
+        f_xy = CubicSpline(acc_dist[i], xy[i])
+        src_xy[i] = f_xy(out_xcoords)
+
+    # Calculate vectors (T, width-1, 2) between consecutive x and y coordinates
+    dxy = np.diff(src_xy, axis=1)
+
+    # Compute average vectors for each point (including boundary points)
+    dxya = np.zeros_like(src_xy)  # (T, width)
+
+    dxya[:, 1:-1] = (dxy[:, 1:] + dxy[:, :-1]) / 2.0
+    dxya[:, 0] = dxy[:, 0]
+    dxya[:, -1] = dxy[:, -1]
+
+    # Tangential vectors to the centerlines
+    xt_vec = -dxya[:, :, 1]
+    yt_vec = dxya[:, :, 0]
+
+    # Calculate normalized tangential vectors to the centerlines
+    vec_norm = np.sqrt(xt_vec**2 + yt_vec**2)  # (T, width)
+    xt_norm = xt_vec / vec_norm
+    yt_norm = yt_vec / vec_norm
+
+    # Create a grid of y-coordinates for interpolation
+    y_grid = np.arange(height) - (height - 1) / 2  # (height,)
+
+    src_x = src_xy[:, :, 0]
+    src_y = src_xy[:, :, 1]
+
+    # Calculate new x and y coordinates based on tangential vectors and y-grid
+    # (T, 1, width) * (1, height, 1) + (T, 1, width)
+    gx = xt_norm[:, None, :] * y_grid[None, :, None] + src_x[:, None, :]
+    gy = yt_norm[:, None, :] * y_grid[None, :, None] + src_y[:, None, :]
+
+    # Create a 2D grid for interpolation
+    straigthen_dst = np.zeros((N, height, width))
+    for i in range(N):
+        y1, y2 = np.clip((gy[i].min() - 1, gy[i].max() + 1), 0, H).astype(int)
+        x1, x2 = np.clip((gx[i].min() - 1, gx[i].max() + 1), 0, W).astype(int)
+        yi, xi = np.meshgrid(np.arange(y1, y2), np.arange(x1, x2), indexing="ij")
+        # Create a regular grid interpolator
+        interp = LinearNDInterpolator(
+            (yi.flatten(), xi.flatten()),
+            src[i, y1:y2, x1:x2].flatten(),
+            fill_value=0,
+        )
+        # Interpolate pixel values using the regular grid interpolator
+        straigthen_dst[i] = interp((gy[i].flatten(), gx[i].flatten())).reshape(
+            height, width
+        )
+
+    return straigthen_dst
+
+
+def straigthen(
+    src: NDArray,
+    x: NDArray,
+    y: NDArray,
+    width: int,
+    height: int,
+):
+    """
+    Straightens an image based on given x and y coordinates using affine transformation and interpolation.
+
+    Args:
+        src: Input image as a NumPy array [H, W].
+        x: x-coordinates of points to be straightened.
+        y: y-coordinates of points to be straightened.
+        width: Desired width of the straightened image.
+        height: Desired height of the straightened image.
+
+    Returns:
+        The straightened image as a NumPy array [N, height, width].
+    """
+
+    assert src.ndim == 2, "The shape of source images is not (height, width)"
+    assert x.shape == y.shape, "The coordinates of x and y have different shape."
+    H, W = src.shape
+
+    dist = np.zeros_like(x)
+    dist[1:] = np.sqrt((x[1:] - x[:-1]) ** 2 + (y[1:] - y[:-1]) ** 2)
+
+    acc_dist = np.cumsum(dist)
+    src_xy = np.zeros((width, 2))
+    xy = np.stack([x, y], axis=-1)
+    out_xcoords = np.arange(width)
+
+    # Interpolate x and y coordinates based on accumulated distances
+    f_xy = CubicSpline(acc_dist, xy)
+    src_xy = f_xy(out_xcoords)
+
+    # Calculate vectors (width-1, 2) between consecutive x and y coordinates
+    dxy = src_xy[1:] - src_xy[:-1]
+
+    # Compute average vectors for each point (including boundary points)
+    dxya = np.zeros_like(src_xy)  # (T, width)
+
+    dxya[1:-1] = (dxy[1:] + dxy[:-1]) / 2.0
+    dxya[0] = dxy[0]
+    dxya[-1] = dxy[-1]
+
+    # Tangential vectors to the centerlines
+    xt_vec = -dxya[:, 1]
+    yt_vec = dxya[:, 0]
+
+    # Calculate normalized tangential vectors to the centerlines
+    vec_norm = np.sqrt(xt_vec**2 + yt_vec**2)  # (T, width)
+    xt_norm = xt_vec / vec_norm
+    yt_norm = yt_vec / vec_norm
+
+    # Create a grid of y-coordinates for interpolation
+    y_grid = np.arange(height) - (height - 1) / 2  # (height,)
+
+    src_x = src_xy[:, 0]
+    src_y = src_xy[:, 1]
+
+    # Calculate new x and y coordinates based on tangential vectors and y-grid
+    # (1, width) * (height, 1) + (1, width)
+    gx = xt_norm[None, :] * y_grid[:, None] + src_x[None, :]
+    gy = yt_norm[None, :] * y_grid[:, None] + src_y[None, :]
+
+    y1, y2 = np.clip((gy.min() - 1, gy.max() + 1), 0, H).astype(int)
+    x1, x2 = np.clip((gx.min() - 1, gx.max() + 1), 0, W).astype(int)
+    # Create a 2D grid for interpolation
+    yi, xi = np.meshgrid(np.arange(y1, y2), np.arange(x1, x2), indexing="ij")
+    # Create a regular grid interpolator
+    interp = LinearNDInterpolator(
+        (yi.flatten(), xi.flatten()),
+        src[y1:y2, x1:x2].flatten(),
+        fill_value=0,
+    )
+    # Interpolate pixel values using the regular grid interpolator
+    straigthen_dst = interp((gy.flatten(), gx.flatten()))
+
+    return straigthen_dst.reshape(height, width)
