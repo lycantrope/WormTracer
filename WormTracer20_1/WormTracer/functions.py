@@ -1471,12 +1471,15 @@ def straigthen_multi(
     # Calculate vectors (T, width-1, 2) between consecutive x and y coordinates
     dxy = np.diff(src_xy, axis=1)
 
-    # Compute average vectors for each point (including boundary points)
-    dxya = np.zeros_like(src_xy)  # (T, width)
+    # Padding to each end with same values (T, width+1, 2)
+    dxy = np.pad(
+        dxy,
+        pad_width=((0, 0), (1, 1), (0, 0)),
+        mode="edge",
+    )
 
-    dxya[:, 1:-1] = (dxy[:, 1:] + dxy[:, :-1]) / 2.0
-    dxya[:, 0] = dxy[:, 0]
-    dxya[:, -1] = dxy[:, -1]
+    # Compute average vectors for each point (including boundary points)
+    dxya = (dxy[:, 1:] + dxy[:, :-1]) / 2.0  # (T, width)
 
     # Tangential vectors to the centerlines
     xt_vec = -dxya[:, :, 1]
@@ -1506,10 +1509,17 @@ def straigthen_multi(
     # Create a 2D grid for interpolation
     src_t = torch.from_numpy(src).reshape((N, -1, H, W)).float()
     grid = torch.from_numpy(gxy).float()
-    straigthen_dst = F.grid_sample(src_t, grid, align_corners=True)
-    straigthen_dst = torch.clamp(straigthen_dst, src.min(), src.max()).detach().numpy()
 
-    return straigthen_dst.reshape(N, height, width)
+    straigthen_dst = F.grid_sample(src_t, grid, align_corners=True)
+    straigthen_dst = (
+        torch.clamp(straigthen_dst, src.min(), src.max())
+        .detach()
+        .numpy()
+        .astype(src.dtype)
+        .reshape(N, height, width)
+    )
+
+    return straigthen_dst
 
 
 def straigthen(
@@ -1552,12 +1562,15 @@ def straigthen(
     # Calculate vectors (width-1, 2) between consecutive x and y coordinates
     dxy = src_xy[1:] - src_xy[:-1]
 
-    # Compute average vectors for each point (including boundary points)
-    dxya = np.zeros_like(src_xy)  # (T, width)
+    # Padding to each end with same values (width+1, 2)
+    dxy = np.pad(
+        dxy,
+        pad_width=((1, 1), (0, 0)),
+        mode="edge",
+    )
 
-    dxya[1:-1] = (dxy[1:] + dxy[:-1]) / 2.0
-    dxya[0] = dxy[0]
-    dxya[-1] = dxy[-1]
+    # Compute average vectors for each point (including boundary points)
+    dxya = (dxy[1:] + dxy[:-1]) / 2.0  # (T, width)
 
     # Tangential vectors to the centerlines
     xt_vec = -dxya[:, 1]
@@ -1587,7 +1600,14 @@ def straigthen(
     # Create a 2D grid for interpolation
     src_t = torch.from_numpy(src).reshape((1, -1, H, W)).float()
     grid = torch.from_numpy(gxy).float()
-    straigthen_dst = F.grid_sample(src_t, grid, align_corners=True)
-    straigthen_dst = torch.clamp(straigthen_dst, src.min(), src.max()).detach().numpy()
 
-    return straigthen_dst.reshape(height, width)
+    straigthen_dst = F.grid_sample(src_t, grid, mode="bicubic", align_corners=False)
+    straigthen_dst = (
+        torch.clamp(straigthen_dst, src.min(), src.max())
+        .detach()
+        .numpy()
+        .astype(src.dtype)
+        .reshape(height, width)
+    )
+
+    return straigthen_dst
