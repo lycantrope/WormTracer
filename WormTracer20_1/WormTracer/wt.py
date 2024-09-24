@@ -696,6 +696,13 @@ center loss : {np.mean(losses_all[i][4])}
     )
     logger.info("Params and plots are successfully saved.\n")
 
+    if not (
+        params["SaveCenterlinedWormsSerial"]
+        | params["SaveCenterlinedWormsMovie"]
+        | params["SaveCenterlinedWormsMultitiff"]
+    ):
+        return
+
     # save full of real_image and centerline as png images
     # real_image, y_st, x_st = read_image(imshape, filenames_full, params['rescale'], Worm_is_black)
     real_image, y_st, x_st = read_image(
@@ -766,7 +773,7 @@ center loss : {np.mean(losses_all[i][4])}
                 print(t, end=" ")
             ax.imshow(real_image[t], cmap="gray")
             ax.plot(x[i] - x_st, y[i] - y_st, c="r", lw=3)
-            plt.title("index: " + str(t))
+            ax.set_title("index: " + str(t))
             buf = io.BytesIO()
             fig.savefig(buf, format="png")
             plt.cla()
