@@ -25,6 +25,7 @@ from scipy.sparse.csgraph import shortest_path
 from scipy.spatial import distance_matrix
 from scipy.special import expit as np_sigmoid
 from skimage import morphology
+from tifffile import TiffFile
 
 if TYPE_CHECKING:
     from typing import Tuple, Union
@@ -134,7 +135,11 @@ def get_filenames(dataset_path: Union[str, bytes, os.PathLike]):
 
 
 def get_property(filenames, rescale):
-    _, ims = cv2.imreadmulti(filenames[0])
+    if filenames[0].lower().endswith((".tif", ".tiff")):
+        with TiffFile(filenames[0]) as tif:
+            ims = [tif.asarray()]
+    else:
+        _, ims = cv2.imreadmulti(filenames[0], flags=0)  # multipage tiff file
     im = ims[0]
     if np.any((0 < np.asarray(im)) * (np.asarray(im) < 255)):
         print("Warning! : Input images seem not to be binary.")
@@ -169,7 +174,11 @@ def read_image(
 ) -> Tuple[NDArray, float, float]:
     """read images and get skeletonized plots"""
     if multi_flag:
-        _, ims = cv2.imreadmulti(filenames[0], flags=0)  # multipage tiff file
+        if filenames[0].lower().endswith((".tif", ".tiff")):
+            with TiffFile(filenames[0]) as tif:
+                ims = [tif.asarray()]
+        else:
+            _, ims = cv2.imreadmulti(filenames[0], flags=0)  # multipage tiff file
         ims = [ims[ind] for ind in Tscaled_ind]
     else:
         ims = read_serial_images(filenames, Tscaled_ind)  # serial-numbered image files
