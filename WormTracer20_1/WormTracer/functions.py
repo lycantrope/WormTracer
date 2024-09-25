@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+import tifffile
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -22,7 +23,6 @@ from scipy.sparse.csgraph import shortest_path
 from scipy.spatial import distance_matrix
 from scipy.special import expit as np_sigmoid
 from skimage import morphology
-from tifffile import TiffFile
 
 if TYPE_CHECKING:
     from typing import Tuple, Union
@@ -123,10 +123,10 @@ def get_filenames(dataset_path: Union[str, bytes, os.PathLike]):
 
 def get_property(filenames, rescale):
     if filenames[0].lower().endswith((".tif", ".tiff")):
-        with TiffFile(filenames[0]) as tif:
-            ims = [tif.asarray()]
+        ims = tifffile.memmap(filenames[0], mode="r")
     else:
         _, ims = cv2.imreadmulti(filename=filenames[0], mats=[], flags=0)
+        ims = np.asarray(ims)
     im = ims[0]
     if np.any((0 < np.asarray(im)) & (np.asarray(im) < 255)):
         print("Warning! : Input images seem not to be binary.")
@@ -146,13 +146,14 @@ def get_property(filenames, rescale):
     )
     # if sum of white pixel is larger than height + width
     Worm_is_black = white_pixel > sum(im.shape[:2])
-    multi_flag = len(ims) > 1
+    multi_flag = ims.shape[0] > 1
     n_input_images = len(ims) if multi_flag else len(filenames)
     return im.shape, Worm_is_black, multi_flag, n_input_images
 
 
 def read_serial_images(filenames, Tscaled_ind):
-    return [cv2.imread(filenames[ind], cv2.IMREAD_GRAYSCALE) for ind in Tscaled_ind]
+    for ind in Tscaled_ind:
+        yield cv2.imread(filenames[ind], cv2.IMREAD_GRAYSCALE)
 
 
 def read_image(
@@ -164,12 +165,14 @@ def read_image(
 ) -> Tuple[NDArray, float, float]:
     """read images and get skeletonized plots"""
     if multi_flag:
+        # multipage tiff file
         if filenames[0].lower().endswith((".tif", ".tiff")):
-            with TiffFile(filenames[0]) as tif:
-                ims = [tif.asarray()]
+            ims = tifffile.memmap(filenames[0], mode="r")
         else:
-            _, ims = cv2.imreadmulti(filenames[0], flags=0)  # multipage tiff file
-        ims = [ims[ind] for ind in Tscaled_ind]
+            # Unknown Data Type
+            _, ims = cv2.imreadmulti(filenames[0], flags=0)
+        # Use generator instead of read image
+        ims = (ims[ind] for ind in Tscaled_ind)
     else:
         ims = read_serial_images(filenames, Tscaled_ind)  # serial-numbered image files
 
