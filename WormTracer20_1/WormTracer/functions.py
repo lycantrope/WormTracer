@@ -300,8 +300,8 @@ def get_skeleton(im: NDArray, plot_n: int):
 
     # interpolation
     div_linespace = np.linspace(0, np.max(arclen), plot_n)
-    x_splined = np.interp(div_linespace, arclen, plots[:, 1], kind="linear")
-    y_splined = np.interp(div_linespace, arclen, plots[:, 0], kind="linear")
+    x_splined = np.interp(div_linespace, arclen, plots[:, 1])
+    y_splined = np.interp(div_linespace, arclen, plots[:, 0])
 
     return x_splined, y_splined
 
