@@ -178,9 +178,11 @@ def read_image(
             # Unknown Data Type
             _, ims = cv2.imreadmulti(filenames[0], flags=0)
         # Use generator instead of read image
-        ims = (ims[ind] for ind in Tscaled_ind)
+        ims_gen = (ims[ind] for ind in Tscaled_ind)
     else:
-        ims = read_serial_images(filenames, Tscaled_ind)  # serial-numbered image files
+        ims_gen = read_serial_images(
+            filenames, Tscaled_ind
+        )  # serial-numbered image files
 
     def preprocess(im):
         im = im.astype("uint8")
@@ -199,8 +201,8 @@ def read_image(
 
         return im
 
-    ims = [preprocess(im) for im in ims]
-    imagestack = np.asarray(ims)
+    ims_subset = [preprocess(im) for im in ims_gen]
+    imagestack = np.asarray(ims_subset)
     imagestack, y_st, x_st = cut_image(imagestack)
     return imagestack, y_st, x_st
 
