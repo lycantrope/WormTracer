@@ -123,7 +123,10 @@ def get_filenames(dataset_path: Union[str, bytes, os.PathLike]):
 
 def get_property(filenames, rescale):
     if filenames[0].lower().endswith((".tif", ".tiff")):
-        ims = tifffile.memmap(filenames[0], mode="r")
+        try:
+            ims = tifffile.memmap(filenames[0], mode="r")
+        except ValueError as e:
+            raise ValueError("The file is not a valid ImageJ Tiff: {}".format(e))
     else:
         _, ims = cv2.imreadmulti(filename=filenames[0], mats=[], flags=0)
         ims = np.asarray(ims)
@@ -167,7 +170,10 @@ def read_image(
     if multi_flag:
         # multipage tiff file
         if filenames[0].lower().endswith((".tif", ".tiff")):
-            ims = tifffile.memmap(filenames[0], mode="r")
+            try:
+                ims = tifffile.memmap(filenames[0], mode="r")
+            except ValueError as e:
+                raise ValueError("The file is not a valid ImageJ Tiff: {}".format(e))
         else:
             # Unknown Data Type
             _, ims = cv2.imreadmulti(filenames[0], flags=0)
