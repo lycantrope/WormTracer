@@ -126,7 +126,8 @@ def get_property(filenames, rescale):
         try:
             ims = tifffile.memmap(filenames[0], mode="r")
         except ValueError as e:
-            raise ValueError("The file is not a valid ImageJ Tiff: {}".format(e))
+            err_msg = "This file is not a valid ImageJ format. Please save your Tiff file using ImageJ: {}"
+            raise ValueError(err_msg.format(e))
     else:
         _, ims = cv2.imreadmulti(filename=filenames[0], mats=[], flags=0)
         ims = np.asarray(ims)
@@ -173,7 +174,8 @@ def read_image(
             try:
                 ims = tifffile.memmap(filenames[0], mode="r")
             except ValueError as e:
-                raise ValueError("The file is not a valid ImageJ Tiff: {}".format(e))
+                err_msg = "This file is not a valid ImageJ format. Please save your Tiff file using ImageJ: {}"
+                raise ValueError(err_msg.format(e))
         else:
             # Unknown Data Type
             _, ims = cv2.imreadmulti(filenames[0], flags=0)
@@ -300,8 +302,8 @@ def get_skeleton(im: NDArray, plot_n: int):
 
     # interpolation
     div_linespace = np.linspace(0, np.max(arclen), plot_n)
-    x_splined = np.interp(div_linespace, arclen, plots[:, 1], kind="linear")
-    y_splined = np.interp(div_linespace, arclen, plots[:, 0], kind="linear")
+    x_splined = np.interp(div_linespace, arclen, plots[:, 1])
+    y_splined = np.interp(div_linespace, arclen, plots[:, 0])
 
     return x_splined, y_splined
 
