@@ -25,8 +25,6 @@ from skimage import morphology
 
 from typing import Tuple, Union
 
-from numpy.typing import NDArray
-
 
 def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
     T = image.shape[0]
@@ -163,7 +161,7 @@ def read_image(
     Worm_is_black,
     multi_flag,
     Tscaled_ind,
-) -> Tuple[NDArray, float, float]:
+) -> Tuple[np.ndarray, float, float]:
     """read images and get skeletonized plots"""
     if multi_flag:
         # multipage tiff file
@@ -207,11 +205,11 @@ def read_image(
 
 
 def calc_xy_and_prewidth(
-    imagestack: NDArray,
+    imagestack: np.ndarray,
     plot_n: int,
     x_st: float,
     y_st: float,
-) -> Tuple[NDArray, NDArray, NDArray, float]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     """read images and get skeletonized plots"""
     T = imagestack.shape[0]
     assert T > 0, "Input is empty"
@@ -253,7 +251,7 @@ def calc_xy_and_prewidth(
     return x, y, pre_width, unitLength
 
 
-def get_skeleton(im: NDArray, plot_n: int):
+def get_skeleton(im: np.ndarray, plot_n: int):
     """skeletonize image and get splined plots"""
 
     # skeletonize image
@@ -353,7 +351,7 @@ def cut_image(image):
     return image[:, y1:y2, x1:x2], y1, x1
 
 
-def make_theta_from_xy(x: NDArray, y: NDArray) -> NDArray:
+def make_theta_from_xy(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     assert x.ndim == 2, "x should be 2D ndarray"
     T, plot_n = x.shape
     n_segs = plot_n - 1
@@ -412,10 +410,10 @@ def calc_cap_span(image_info, plot_n, s_m=8000):
 
 
 def pixel_value_from_dist_max_np(
-    max_dist: NDArray,
+    max_dist: np.ndarray,
     contrast: float = 1.2,
     sharpness: float = 2.0,
-) -> NDArray:
+) -> np.ndarray:
     """Get pixel value when distance from midline is given."""
     return 255 * (contrast * (np_sigmoid(max_dist * sharpness) - 0.5) + 0.5)
 
@@ -426,7 +424,7 @@ def worm_width_all_np(
     alpha: float,
     gamma: float,
     delta: float,
-) -> NDArray:
+) -> np.ndarray:
     """Get all worm widths when segment number is given."""
 
     worm_x = np.linspace(-1.0, 1.0, plot_n)
@@ -447,7 +445,7 @@ def worm_width_all_np(
     return width
 
 
-def make_distance_matrix_np(radius: int) -> NDArray:
+def make_distance_matrix_np(radius: int) -> np.ndarray:
     diameter = radius * 2 + 1
     delta = (np.arange(diameter) - radius) ** 2
     distance_matrix = np.sqrt(delta[None, :] + delta[:, None])
@@ -457,7 +455,7 @@ def make_distance_matrix_np(radius: int) -> NDArray:
     return distance_matrix
 
 
-def make_distance_matrix(radius: int) -> NDArray:
+def make_distance_matrix(radius: int) -> np.ndarray:
     diameter = radius * 2 + 1
     delta = (torch.arange(diameter) - radius) ** 2
     distance_matrix = torch.sqrt(delta[None, :] + delta[:, None])
@@ -468,12 +466,12 @@ def make_distance_matrix(radius: int) -> NDArray:
 
 
 def make_single_image(
-    x: NDArray,
-    y: NDArray,
+    x: np.ndarray,
+    y: np.ndarray,
     width: int,
     height: int,
-    pixel_matrix: NDArray,
-) -> NDArray:
+    pixel_matrix: np.ndarray,
+) -> np.ndarray:
     cent_x = x.astype(np.int32)
     cent_y = y.astype(np.int32)
 
@@ -1402,9 +1400,9 @@ def cancel_reduction(x, y, n_input_images, start_T, end_T, Tscaled_ind, plot_n):
 
 
 def straigthen_multi(
-    src: NDArray,
-    x: NDArray,
-    y: NDArray,
+    src: np.ndarray,
+    x: np.ndarray,
+    y: np.ndarray,
     width: int,
     height: int,
 ):
@@ -1497,9 +1495,9 @@ def straigthen_multi(
 
 
 def straigthen(
-    src: NDArray,
-    x: NDArray,
-    y: NDArray,
+    src: np.ndarray,
+    x: np.ndarray,
+    y: np.ndarray,
     width: int,
     height: int,
 ):

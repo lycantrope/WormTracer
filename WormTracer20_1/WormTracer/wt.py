@@ -187,7 +187,6 @@ def run(
         filename=output_path.joinpath(f"{output_name}.log"),
         format="%(message)s",
         level=logging.INFO,
-        encoding="utf-8",
     )
 
     # log
