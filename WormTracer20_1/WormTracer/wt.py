@@ -9,6 +9,7 @@ import os
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import tifffile
 import torch
 import yaml
 from matplotlib import animation, rc
@@ -765,23 +766,36 @@ center loss : {np.mean(losses_all[i][4])}
     # save full of real_image and centerline as multipage tiff
     if params["SaveCenterlinedWormsMultitiff"]:
         filename = os.path.join(output_path, output_name + ".tif")
-        stack = []
-        fig, ax = plt.subplots(figsize=(3, 3))
+
         end_T = n_input_images - 1 if params["end_T"] == 0 else params["end_T"]
-        for i, t in enumerate(range(params["start_T"], end_T + 1)):
-            if i % 100 == 0:
-                print(t, end=" ")
-            ax.imshow(real_image[t], cmap="gray")
-            ax.plot(x[i] - x_st, y[i] - y_st, c="r", lw=3)
-            ax.set_title("index: " + str(t))
-            buf = io.BytesIO()
-            fig.savefig(buf, format="png")
-            plt.cla()
-            buf.seek(0)
-            img2 = Image.open(buf).convert("RGB")
-            stack.append(img2)
-        stack[0].save(
-            filename, compression="tiff_deflate", save_all=True, append_images=stack[1:]
+        T, Y, X = read_image.shape
+
+        def image_gen():
+            pts = np.stack((x - x_st, y - y_st), axis=-1)
+            for i, (pt, im) in enumerate(zip(pts, read_image)):
+                if i % 100 == 0:
+                    print(i + 1, end=" ")
+                im_rgb = cv2.cvtColor(im, cv2.COLOR_GRAY2BGR)
+                im_lines = cv2.polylines(
+                    im_rgb,
+                    pt,
+                    isClosed=False,
+                    color=(0, 0, 255),
+                    thickness=3,
+                )
+                im_lines_5d = im_lines[None, None, :, :, :]
+                yield np.transpose(im_lines_5d, (0, 1, 4, 2, 3))
+
+        tifffile.imwrite(
+            filename,
+            data=image_gen(),
+            imagej=True,
+            shape=(T, 1, 3, Y, X),
+            metadata={
+                "axes": "TZCYX",
+                "labels": [
+                    "index: %d" % i for i in range(params["start_T"], end_T + 1)
+                ],
+            },
         )
-        plt.close(fig)
         print("\nMultipage tiff saved to " + filename)
