@@ -6,7 +6,7 @@ import math
 import os
 import shutil
 from math import pi
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import cv2
@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from scipy import ndimage as ndi
-from scipy.interpolate import CubicSpline, LinearNDInterpolator
+from scipy.interpolate import CubicSpline
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import shortest_path
 from scipy.spatial import distance_matrix
@@ -64,7 +64,6 @@ def set_output_path(dataset_path, output_directory):
     output_directory = Path(output_directory or Path(dataset_path).parent)
     Path(output_directory).mkdir(exist_ok=True)
 
-    # for compatiblity of py3.6 using PurePath to get stem
     dataset_prefix = Path(dataset_path).stem
 
     for i in range(int(1e32)):

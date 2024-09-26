@@ -1,7 +1,6 @@
 ### WormTracer main package wt.py ###
 
 import datetime
-import io
 import json
 import logging
 import os
@@ -13,9 +12,8 @@ import tifffile
 import torch
 import yaml
 from matplotlib import animation, rc
-from PIL import Image
 
-from .functions import *
+from .functions import *  # noqa: F403
 
 ### input information and params ###
 """
