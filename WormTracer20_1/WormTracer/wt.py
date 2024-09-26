@@ -4,7 +4,9 @@ import datetime
 import json
 import logging
 import os
+from pathlib import Path
 
+import cv2
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -163,24 +165,30 @@ def run(
 ):  # execute the whole WormTracer process, kwargs are optional parameter=value pairs
     matplotlib.use("Agg")
 
-    # set output_path
+    with open(parameter_file, "r") as yml:
+        params = yaml.safe_load(yml)
+
+    params.update(kwargs)
+
+    # Check filenames
+    filenames_all = get_filenames(dataset_path)
+
+    # After check dataset set_output_path
     # output_path is created in output_directory
     dataset_name, output_path, output_name = set_output_path(
         dataset_path, output_directory
     )
 
+    print("dataset_path =", dataset_path)
+    print("output_path =", output_path)
+
     # setup logger
     logging.basicConfig(
-        filename=os.path.join(output_path, f"{output_name}.log"),
+        filename=output_path.joinpath(f"{output_name}.log"),
         format="%(message)s",
         level=logging.INFO,
         encoding="utf-8",
     )
-
-    with open(parameter_file, "r") as yml:
-        params = yaml.safe_load(yml)
-
-    params.update(kwargs)
 
     # log
     time_now = datetime.datetime.now()
@@ -199,18 +207,6 @@ def run(
         device = "cpu"
         print("Running using CPU. GPU is recommended")
         logger.info("Running using CPU. GPU is recommended\n")
-
-    # read data property(image size, frame number)
-    filenames_all = get_filenames(dataset_path)
-
-    # set output_path
-    if "output_directory" not in locals() and "output_directory" not in globals():
-        output_directory = ""
-    dataset_name, output_path, output_name = set_output_path(
-        dataset_path, output_directory
-    )  # output_path is created in output_directory
-    print("dataset_path =", dataset_path)
-    print("output_path =", output_path)
 
     # basic informatin to save
     params["dataset_path"] = dataset_path
@@ -659,7 +655,7 @@ center loss : {np.mean(losses_all[i][4])}
     for key, value in params_for_save.items():
         if torch.is_tensor(value):
             params_for_save[key] = params_for_save[key].item()
-        if isinstance(value, (Path, PurePath)):
+        if isinstance(value, Path):
             params_for_save[key] = os.fspath(value)
     del params_for_save["use_area"]
 

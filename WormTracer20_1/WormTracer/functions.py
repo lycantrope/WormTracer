@@ -899,20 +899,20 @@ def make_worm(
     T, plot_n = x.shape
     device = x.device
     # midpoints of segments, length plot size
-    cent_mid_x_3d = x
+    cent_mid_x_3d = (x[:, 1:] + x[:, :-1]) / 2
     # midpoints of segments, length plot size
-    cent_mid_y_3d = y
+    cent_mid_y_3d = (y[:, 1:] + y[:, :-1]) / 2
     x_3d = torch.arange(W).reshape([1, 1, W]).to(device)
-    cent_mid_x_3d = cent_mid_x_3d.reshape([T, plot_n, 1]).to(torch.float32)
+    cent_mid_x_3d = cent_mid_x_3d.reshape([T, plot_n - 1, 1]).to(torch.float32)
     delta_x = (cent_mid_x_3d - x_3d) ** 2
 
     y_3d = torch.arange(H).reshape([1, 1, H]).to(device)
-    cent_mid_y_3d = cent_mid_y_3d.reshape([T, plot_n, 1]).to(torch.float32)
+    cent_mid_y_3d = cent_mid_y_3d.reshape([T, plot_n - 1, 1]).to(torch.float32)
     delta_y = (cent_mid_y_3d - y_3d) ** 2
 
-    worm_wid_3d = worm_wid.reshape([1, plot_n, 1, 1])
+    worm_wid_3d = worm_wid.reshape([1, plot_n - 1, 1, 1])
     segment_distance_3d = torch.sqrt(
-        delta_x.reshape(T, plot_n, 1, W) + delta_y.reshape(T, plot_n, H, 1)
+        delta_x.reshape(T, plot_n - 1, 1, W) + delta_y.reshape(T, plot_n - 1, H, 1)
     )
     delta_max = (worm_wid_3d - segment_distance_3d).max(dim=1)
     image = pixel_value_from_dist_max(delta_max.values)
