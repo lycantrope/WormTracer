@@ -9,6 +9,7 @@ import os
 import shutil
 import torch.nn as nn
 import torch.nn.functional as F
+import tifffile
 from scipy import ndimage as ndi
 from skimage import morphology
 from scipy.spatial import distance_matrix
@@ -84,17 +85,37 @@ def get_filenames(dataset_path):
 
 
 def get_property(filenames, rescale):
-  _, ims = cv2.imreadmulti(filenames[0])
-  im = ims[0]
-  if np.any((0<np.asarray(im))*(np.asarray(im)<255)):
-    print('Warning! : Input images seem not to be binary.')
-  if rescale != 1:
-    im = cv2.resize(im, dsize=None, fy=rescale, fx=rescale, interpolation=cv2.INTER_NEAREST)
-  white_pixel = np.sum(im[0,:-1])//255 + np.sum(im[-1,1:])//255 + np.sum(im[1:,0])//255 + np.sum(im[:-1,-1])//255
-  Worm_is_black = True if white_pixel/2/(im.shape[0]+im.shape[1])>0.5 else False
-  n_input_images = len(ims) if len(ims) > 1 else len(filenames)
-  multi_flag = 1 if len(ims) > 1 else 0
-  return im.shape, Worm_is_black, multi_flag, n_input_images
+    if filenames[0].lower().endswith((".tif", ".tiff")):
+        try:
+            ims = tifffile.memmap(filenames[0], mode="r")
+        except ValueError as e:
+            err_msg = "This file is not a valid ImageJ format. Please save your Tiff file using ImageJ: {}"
+            raise ValueError(err_msg.format(e))
+    else:
+        _, ims = cv2.imreadmulti(filename=filenames[0], mats=[], flags=0)
+        ims = np.asarray(ims)
+    im = ims[0]
+    if np.any((0 < np.asarray(im)) & (np.asarray(im) < 255)):
+        print("Warning! : Input images seem not to be binary.")
+    if not math.isclose(rescale, 1.0, rel_tol=1e4):
+        im = cv2.resize(
+            im,
+            dsize=None,
+            fy=rescale,
+            fx=rescale,
+            interpolation=cv2.INTER_NEAREST,
+        )
+    white_pixel = (
+        np.sum(im[0, :-1]) // 255
+        + np.sum(im[-1, 1:]) // 255
+        + np.sum(im[1:, 0]) // 255
+        + np.sum(im[:-1, -1]) // 255
+    )
+    # if sum of white pixel is larger than height + width
+    Worm_is_black = white_pixel > sum(im.shape[:2])
+    multi_flag = ims.shape[0] > 1
+    n_input_images = len(ims) if multi_flag else len(filenames)
+    return im.shape, Worm_is_black, multi_flag, n_input_images
 
 
 def read_serial_images(filenames, Tscaled_ind):
@@ -108,7 +129,15 @@ def read_serial_images(filenames, Tscaled_ind):
 def read_image_and_xy(imshape, filenames, rescale, plot_n, Worm_is_black, multi_flag, Tscaled_ind):
   """read images and get skeletonized plots"""
   if multi_flag:
-    _, ims = cv2.imreadmulti(filenames[0], flags=0) # multipage tiff file
+    if filenames[0].lower().endswith((".tif", ".tiff")):
+      try:
+        ims = tifffile.memmap(filenames[0], mode="r")
+      except ValueError as e:
+        err_msg = "This file is not a valid ImageJ format. Please save your Tiff file using ImageJ: {}"
+        raise ValueError(err_msg.format(e))
+    else:
+        # Unknown Data Type
+        _, ims = cv2.imreadmulti(filenames[0], flags=0)
     ims = [ims[ind] for ind in Tscaled_ind] 
   else:
     ims = read_serial_images(filenames, Tscaled_ind) # serial-numbered image files
