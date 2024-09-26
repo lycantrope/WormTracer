@@ -200,7 +200,6 @@ def run(
         print("Running using CPU. GPU is recommended")
         logger.info("Running using CPU. GPU is recommended\n")
 
-<<<<<<< HEAD
     # read data property(image size, frame number)
     filenames_all = get_filenames(dataset_path)
 
@@ -210,8 +209,6 @@ def run(
     dataset_name, output_path, output_name = set_output_path(
         dataset_path, output_directory
     )  # output_path is created in output_directory
-=======
->>>>>>> dev
     print("dataset_path =", dataset_path)
     print("output_path =", output_path)
 
