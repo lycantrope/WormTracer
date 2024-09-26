@@ -10,16 +10,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import cv2
-import matplotlib
-
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+import tifffile
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from scipy import ndimage as ndi
-from scipy.interpolate import interp1d
+from scipy.interpolate import CubicSpline
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import shortest_path
 from scipy.spatial import distance_matrix
@@ -64,31 +62,20 @@ def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
 
 
 def set_output_path(dataset_path, output_directory):
-    if (
-        output_directory == ""
-    ):  # if output_path is not set, set it to the parent directry of dataset_path
-        output_directory = str(Path(dataset_path).parent)
-    if not os.path.isdir(
-        output_directory
-    ):  # if a directory output_path does not exist, make it.
-        os.mkdir(output_directory)
-    dataset_path_split = dataset_path.split(os.sep)
-    if dataset_path_split[-1] == "":
-        dataset_path_split.pop()
-    dataset_name = dataset_path_split[-1]
-    if dataset_name.endswith(".tif") or dataset_name.endswith("tiff"):
-        dataset_name = dataset_name[: dataset_name.rfind(".")]
-    output_ind = 1
-    while os.path.exists(
-        os.path.join(output_directory, dataset_name + "_output_" + str(output_ind))
-    ):
-        output_ind += 1
-    output_path = os.path.join(
-        output_directory, dataset_name + "_output_" + str(output_ind)
-    )
-    os.mkdir(output_path)
-    output_name = dataset_name + "_output_" + str(output_ind)
-    return dataset_name, output_path, output_name
+    output_directory = Path(output_directory or Path(dataset_path).parent)
+    Path(output_directory).mkdir(exist_ok=True)
+
+    dataset_prefix = Path(dataset_path).stem
+
+    for i in range(int(1e32)):
+        output_path = output_directory.joinpath(
+            "{}_output_{:d}".format(dataset_prefix, i + 1)
+        )
+        if not output_path.is_dir():
+            break
+
+    Path(output_path).mkdir()
+    return dataset_prefix, output_path, Path(output_path).stem
 
 
 def get_filenames(dataset_path: Union[str, bytes, os.PathLike]):
@@ -136,16 +123,24 @@ def get_filenames(dataset_path: Union[str, bytes, os.PathLike]):
 
 def get_property(filenames, rescale):
     if filenames[0].lower().endswith((".tif", ".tiff")):
-        with TiffFile(filenames[0]) as tif:
-            ims = [tif.asarray()]
+        try:
+            ims = tifffile.memmap(filenames[0], mode="r")
+        except ValueError as e:
+            err_msg = "This file is not a valid ImageJ format. Please save your Tiff file using ImageJ: {}"
+            raise ValueError(err_msg.format(e))
     else:
-        _, ims = cv2.imreadmulti(filenames[0], flags=0)  # multipage tiff file
+        _, ims = cv2.imreadmulti(filename=filenames[0], mats=[], flags=0)
+        ims = np.asarray(ims)
     im = ims[0]
-    if np.any((0 < np.asarray(im)) * (np.asarray(im) < 255)):
+    if np.any((0 < np.asarray(im)) & (np.asarray(im) < 255)):
         print("Warning! : Input images seem not to be binary.")
-    if rescale != 1:
+    if not math.isclose(rescale, 1.0, rel_tol=1e4):
         im = cv2.resize(
-            im, dsize=None, fy=rescale, fx=rescale, interpolation=cv2.INTER_NEAREST
+            im,
+            dsize=None,
+            fy=rescale,
+            fx=rescale,
+            interpolation=cv2.INTER_NEAREST,
         )
     white_pixel = (
         np.sum(im[0, :-1]) // 255
@@ -153,16 +148,16 @@ def get_property(filenames, rescale):
         + np.sum(im[1:, 0]) // 255
         + np.sum(im[:-1, -1]) // 255
     )
-    Worm_is_black = (
-        True if white_pixel / 2 / (im.shape[0] + im.shape[1]) > 0.5 else False
-    )
-    n_input_images = len(ims) if len(ims) > 1 else len(filenames)
-    multi_flag = 1 if len(ims) > 1 else 0
+    # if sum of white pixel is larger than height + width
+    Worm_is_black = white_pixel > sum(im.shape[:2])
+    multi_flag = ims.shape[0] > 1
+    n_input_images = len(ims) if multi_flag else len(filenames)
     return im.shape, Worm_is_black, multi_flag, n_input_images
 
 
 def read_serial_images(filenames, Tscaled_ind):
-    return [cv2.imread(filenames[ind], cv2.IMREAD_GRAYSCALE) for ind in Tscaled_ind]
+    for ind in Tscaled_ind:
+        yield cv2.imread(filenames[ind], cv2.IMREAD_GRAYSCALE)
 
 
 def read_image(
@@ -174,14 +169,22 @@ def read_image(
 ) -> Tuple[NDArray, float, float]:
     """read images and get skeletonized plots"""
     if multi_flag:
+        # multipage tiff file
         if filenames[0].lower().endswith((".tif", ".tiff")):
-            with TiffFile(filenames[0]) as tif:
-                ims = [tif.asarray()]
+            try:
+                ims = tifffile.memmap(filenames[0], mode="r")
+            except ValueError as e:
+                err_msg = "This file is not a valid ImageJ format. Please save your Tiff file using ImageJ: {}"
+                raise ValueError(err_msg.format(e))
         else:
-            _, ims = cv2.imreadmulti(filenames[0], flags=0)  # multipage tiff file
-        ims = [ims[ind] for ind in Tscaled_ind]
+            # Unknown Data Type
+            _, ims = cv2.imreadmulti(filenames[0], flags=0)
+        # Use generator instead of read image
+        ims_gen = (ims[ind] for ind in Tscaled_ind)
     else:
-        ims = read_serial_images(filenames, Tscaled_ind)  # serial-numbered image files
+        ims_gen = read_serial_images(
+            filenames, Tscaled_ind
+        )  # serial-numbered image files
 
     def preprocess(im):
         im = im.astype("uint8")
@@ -200,8 +203,8 @@ def read_image(
 
         return im
 
-    ims = [preprocess(im) for im in ims]
-    imagestack = np.asarray(ims)
+    ims_subset = [preprocess(im) for im in ims_gen]
+    imagestack = np.asarray(ims_subset)
     imagestack, y_st, x_st = cut_image(imagestack)
     return imagestack, y_st, x_st
 
@@ -214,8 +217,9 @@ def calc_xy_and_prewidth(
 ) -> Tuple[NDArray, NDArray, NDArray, float]:
     """read images and get skeletonized plots"""
     T = imagestack.shape[0]
-    assert T != 0, "imagestack is empty"
-    # Intitial output date
+    assert T > 0, "Input is empty"
+
+    # Intitial output data
     x = np.zeros((T, plot_n))
     y = np.zeros((T, plot_n))
     pre_width = np.zeros(T)
@@ -252,7 +256,7 @@ def calc_xy_and_prewidth(
     return x, y, pre_width, unitLength
 
 
-def get_skeleton(im, plot_n):
+def get_skeleton(im: NDArray, plot_n: int):
     """skeletonize image and get splined plots"""
 
     # skeletonize image
@@ -298,10 +302,8 @@ def get_skeleton(im, plot_n):
 
     # interpolation
     div_linespace = np.linspace(0, np.max(arclen), plot_n)
-    f_x = interp1d(arclen, plots[:, 1], kind="linear")
-    f_y = interp1d(arclen, plots[:, 0], kind="linear")
-    x_splined = f_x(div_linespace)
-    y_splined = f_y(div_linespace)
+    x_splined = np.interp(div_linespace, arclen, plots[:, 1])
+    y_splined = np.interp(div_linespace, arclen, plots[:, 0])
 
     return x_splined, y_splined
 
@@ -392,15 +394,12 @@ def make_theta_from_xy(x: NDArray, y: NDArray) -> NDArray:
 def calc_cap_span(image_info, plot_n, s_m=8000):
     """Calculate maximum span of trainig in terms of CUDA memory."""
     device = image_info["device"]
+    GiB = 1e20
     try:
         free_memory = (
-            (
-                torch.cuda.get_device_properties(device).total_memory
-                - torch.cuda.memory_allocated(device)
-            )
-            / 1024
-            / 1024
-        )
+            torch.cuda.get_device_properties(device).total_memory
+            - torch.cuda.memory_allocated(device)
+        ) / GiB
         cap_span = int(
             s_m
             * free_memory
@@ -458,6 +457,16 @@ def make_distance_matrix_np(radius: int) -> NDArray:
 
     # let distance_kernel become circular
     distance_matrix[distance_matrix > radius] = np.inf
+    return distance_matrix
+
+
+def make_distance_matrix(radius: int) -> NDArray:
+    diameter = radius * 2 + 1
+    delta = (torch.arange(diameter) - radius) ** 2
+    distance_matrix = torch.sqrt(delta[None, :] + delta[:, None])
+
+    # let distance_kernel become circular
+    distance_matrix[distance_matrix > radius] = torch.inf
     return distance_matrix
 
 
@@ -689,8 +698,8 @@ def prepare_for_train(pre_width, simple_area, x, y, params):
     params["init_alpha"] = torch.tensor(pre_width[simple_area].mean())
     params["init_gamma"] = torch.tensor(0.0)
     params["init_delta"] = torch.tensor(0.0)
-    unitLength = np.median(
-        np.sqrt(
+    unitLength = np.sqrt(
+        np.median(
             (
                 (x[simple_area, :-1] - x[simple_area, 1:]) ** 2
                 + (y[simple_area, :-1] - y[simple_area, 1:]) ** 2
@@ -705,20 +714,19 @@ def make_progress_image(image, num_t=20):
     """Make one large image with images laid out on it."""
     if torch.is_tensor(image):
         image = image.clone().detach().cpu().numpy()
+    assert image.ndim == 3, "image must be (batch, height, width)"
     T, H, W = image.shape
     t_sparse = np.linspace(0, T - 1, min(num_t, T), dtype=int)
-    sparse_image = image[t_sparse]
-    n_chunk = (t_sparse.size + 1) // 5
-
-    progress_image = np.zeros((((t_sparse.size + 1) // 5) * H, 5 * W))
-    for y, chunk in enumerate(np.array_split(sparse_image, n_chunk)):
-        row_image = np.hstack(chunk)
-        width = row_image.shape[1]
-        progress_image[y * H : (y + 1) * H, :width] = row_image
+    subset = image[t_sparse]
+    n_chunk = (subset.shape[0] + 1) // 5
+    progress_image = np.zeros((H * n_chunk, W * 5))
+    for i, chunk in enumerate(np.array_split(subset, n_chunk, axis=0)):
+        merge = np.hstack(chunk)
+        progress_image[i * H : (i + 1) * H, : merge.shape[1]] = merge
     return progress_image
 
 
-def save_progress(image, output_path, output_name, params, txt="real"):
+def save_progress(image, output_path, output_name: str, params, txt="real"):
     if params["SaveProgress"]:
         use_area = params["use_area"]
         progress_image = make_progress_image(image, params["save_progress_num"])
@@ -808,12 +816,14 @@ def annealing_function(epoch, T, speed=0.2, start=0, slope=1):
 
 
 def worm_width_all(
-    worm_x: torch.Tensor,
+    plot_n: torch.Tensor,
     alpha: torch.Tensor,
     gamma: torch.Tensor,
     delta: torch.Tensor,
 ) -> torch.Tensor:
     """Get all worm widths when segment number is given."""
+    device = alpha.device
+    worm_x = torch.linspace(-1.0, 1.0, plot_n - 1).to(device)
     delta_sigmoid = torch.sigmoid(delta)
     gamma_e = 0.5 + torch.exp(gamma)
     worm_x_abs = torch.abs(worm_x)
@@ -843,19 +853,51 @@ PIXEL_MINIMUM = 255 * -0.1
 PIXEL_MAXIMUM = 255 * 1.1
 
 
+def make_single_worm(
+    x: torch.Tensor,
+    y: torch.Tensor,
+    width: int,
+    height: int,
+    pixel_matrix: torch.Tensor,
+) -> torch.Tensor:
+    cent_x = ((x[:-1] + x[1:]) / 2).long()
+    cent_y = ((y[:-1] + y[1:]) / 2).long()
+    n_pts, diameter = pixel_matrix.shape[:2]
+    radius = diameter // 2
+    pad_image = torch.full(
+        (n_pts, height + diameter, width + diameter),
+        fill_value=-25.5,
+        device=x.device,
+    )
+    idx_x, idx_y, idx_z = torch.meshgrid(
+        torch.arange(diameter, device=x.device),
+        torch.arange(diameter, device=x.device),
+        torch.arange(n_pts, device=x.device),
+        indexing="ij",
+    )
+
+    all_idx_x = idx_x + cent_x.unsqueeze(0).unsqueeze(0)
+    all_idx_y = idx_y + cent_y.unsqueeze(0).unsqueeze(0)
+
+    pad_image_max, _ = pad_image.index_put(
+        (idx_z.flatten(), all_idx_y.flatten(), all_idx_x.flatten()),
+        pixel_matrix.flatten(),
+        accumulate=True,
+    ).max(dim=0)
+
+    return pad_image_max[radius : radius + height, radius : radius + width]
+
+
 def make_worm(
     x: torch.Tensor,
     y: torch.Tensor,
-    image_info: dict,
-    params: dict,
+    width: int,
+    height: int,
+    worm_wid: torch.Tensor,
 ) -> torch.Tensor:
-    image_shape = image_info["image_shape"]
-    _, H, W = image_shape
-    T = x.shape[0]
-    device = image_info["device"]
-    plot_n = params["plot_n"]
-    worm_x = torch.linspace(-1.0, 1.0, plot_n).to(device)
-    worm_wid = worm_width_all(worm_x, params["alpha"], params["gamma"], params["delta"])
+    H, W = height, width
+    T, plot_n = x.shape
+    device = x.device
     # midpoints of segments, length plot size
     cent_mid_x_3d = x
     # midpoints of segments, length plot size
@@ -872,7 +914,6 @@ def make_worm(
     segment_distance_3d = torch.sqrt(
         delta_x.reshape(T, plot_n, 1, W) + delta_y.reshape(T, plot_n, H, 1)
     )
-
     delta_max = (worm_wid_3d - segment_distance_3d).max(dim=1)
     image = pixel_value_from_dist_max(delta_max.values)
     return image
@@ -934,10 +975,51 @@ class Model(torch.nn.Module):
         self.params = params
 
     def forward(self):
-        model_image = make_model_image(
-            self.cx, self.cy, self.theta, self.unitLength, self.image_info, self.params
+        device = self.alpha.device
+        T, im_height, im_width = self.image_info["image_shape"]
+        plot_n = self.params["plot_n"]
+        worm_wid = worm_width_all(
+            plot_n,
+            self.alpha,
+            self.gamma,
+            self.delta,
         )
-        return model_image
+        # worm_wid_max = worm_wid.max().long().item() + 15
+        # distance_matrix = make_distance_matrix(worm_wid_max).to(device)
+
+        # distance_matrix_3d = worm_wid.unsqueeze(-1).unsqueeze(
+        #     -1
+        # ) - distance_matrix.unsqueeze(0)
+        # pixel_matrix = pixel_value_from_dist_max(distance_matrix_3d)
+
+        x = torch.cat(
+            (
+                torch.zeros((T, 1)).to(device),
+                torch.cumsum(
+                    self.unitLength.reshape((T, 1)).to(device) * torch.cos(self.theta),
+                    dim=1,
+                ),
+            ),
+            dim=1,
+        )
+        x = (
+            x - torch.mean(x, dim=1).reshape((T, 1)) + self.cx.reshape((T, 1))
+        )  # length plot size +1
+        y = torch.cat(
+            (
+                torch.zeros((T, 1)).to(device),
+                torch.cumsum(
+                    self.unitLength.reshape((T, 1)).to(device) * torch.sin(self.theta),
+                    dim=1,
+                ),
+            ),
+            dim=1,
+        )
+        y = (
+            y - torch.mean(y, dim=1).reshape((T, 1)) + self.cy.reshape((T, 1))
+        )  # length plot size +1
+        image = make_worm(x, y, im_width, im_height, worm_wid)
+        return image
 
 
 class EarlyStopping:
@@ -983,9 +1065,7 @@ def train3(
     smoothness_loss_weight = params["smoothness_loss_weight"]
     length_loss_weight = params["length_loss_weight"]
     center_loss_weight = params["center_loss_weight"]
-    show_progress_freq = params["show_progress_freq"]
     save_progress_freq = params["save_progress_freq"]
-    # use_area = params["use_area"]
     init_cx = init_data[0].to(device)
     init_cy = init_data[1].to(device)
     unitL = init_data[2]
@@ -1037,41 +1117,46 @@ def train3(
         loss.backward()
         if torch.min(annealing_weight) > 0.99:
             early_stopping(loss.item(), model)
-            if early_stopping.early_stop:
-                if params["ShowProgress"]:
-                    print(
-                        "Early stopping at epoch +{}.".format(e - int(T / (2 * speed)))
-                    )
-                break
         del loss
+        if early_stopping.early_stop:
+            if params["ShowProgress"]:
+                print("Early stopping at epoch +{}.".format(e - int(T / (2 * speed))))
+            break
         optimizer.step()
 
-        if params["ShowProgress"]:  # Show Progress
-            if e % show_progress_freq == 0:
-                print(
-                    "{:.2f} {:.2f} {:.2f} {:.2f} {:.2f}".format(
-                        image_loss.item(),
-                        continuity_loss.item(),
-                        smoothness_loss.item(),
-                        length_loss.item(),
-                        center_loss.item(),
-                    )
-                )
-                show_image(model_image, params["num_t"], title=f"epoch {e}")
-        if e % save_progress_freq == 0:  # Save Progress
-            save_progress(
-                model_image,
-                output_path,
-                output_name,
-                params,
-                txt="id{}_{}".format(params["id"], e),
+        if e % save_progress_freq > 0:
+            continue
+
+        # Save Progres
+        save_progress(
+            model_image,
+            output_path,
+            output_name,
+            params,
+            txt="id{}_{}".format(params["id"], e),
+        )
+        if not params["ShowProgress"]:
+            continue
+
+        # Show Progress
+        print(
+            "{:.2f} {:.2f} {:.2f} {:.2f} {:.2f}".format(
+                image_loss.item(),
+                continuity_loss.item(),
+                smoothness_loss.item(),
+                length_loss.item(),
+                center_loss.item(),
             )
+        )
+        show_image(model_image, params["num_t"], title=f"epoch {e}")
 
     model.alpha.requires_grad = True
     model.gamma.requires_grad = True
     model.delta.requires_grad = True
     body_axis_weight = body_axis_function(
-        params["body_ratio"], params["plot_n"], base=0.3
+        params["body_ratio"],
+        params["plot_n"],
+        base=0.3,
     ).to(device)
     early_stopping = EarlyStopping()
 
@@ -1095,14 +1180,14 @@ def train3(
         loss = image_loss + continuity_loss + smoothness_loss + length_loss
         loss.backward()
         early_stopping(loss.item(), model)
+        del loss
         if early_stopping.early_stop:
             if params["ShowProgress"]:
                 print("Minor adjustment done.")
             break
-        del loss
         optimizer.step()
 
-    if params["ShowProgress"]:  # Show Progress
+    if not params["ShowProgress"]:  # Show Progress
         print(
             "{:.2f} {:.2f} {:.2f} {:.2f}".format(
                 image_loss.item(),
@@ -1112,6 +1197,7 @@ def train3(
             )
         )
         show_image(model_image, params["num_t"], title="final")
+
     save_progress(
         model_image,
         output_path,
@@ -1120,21 +1206,15 @@ def train3(
         txt="id{}_{}".format(params["id"], "final"),
     )
 
-    losses = [torch.mean((model_image - real_image) ** 2, axis=(1, 2))]
-    losses.append(
+    losses = [
+        torch.mean((model_image - real_image) ** 2, axis=(1, 2)),
         continuity_loss_weight
-        * torch.mean((model.theta[:-1, :] - model.theta[1:, :]) ** 2, axis=1)
-    )
-    losses.append(
+        * torch.mean((model.theta[:-1, :] - model.theta[1:, :]) ** 2, axis=1),
         smoothness_loss_weight
-        * torch.mean((model.theta[:, :-1] - model.theta[:, 1:]) ** 2, axis=1)
-    )
-    losses.append(
-        length_loss_weight * ((model.unitLength[:-1] - model.unitLength[1:]) ** 2)
-    )
-    losses.append(
-        center_loss_weight * ((model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2)
-    )
+        * torch.mean((model.theta[:, :-1] - model.theta[:, 1:]) ** 2, axis=1),
+        length_loss_weight * ((model.unitLength[:-1] - model.unitLength[1:]) ** 2),
+        center_loss_weight * ((model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2),
+    ]
     for i in range(len(losses)):
         losses[i] = losses[i].clone().detach().cpu().numpy()
     return losses
@@ -1185,16 +1265,18 @@ def loss_compare(loss_pair):
 
 
 def show_loss_plot(losses, title=""):
-    # T = losses[0].shape[0]
-    plt.plot(losses[0], label="im")
-    plt.plot(losses[1], label="con")
-    plt.plot(losses[2], label="smo")
-    plt.plot(losses[3], label="len")
-    plt.plot(losses[4], label="cen")
-    plt.title(title, fontsize=20)
-    plt.xlabel("frames", fontsize=20)
-    plt.ylabel("loss", fontsize=20)
-    plt.legend()
+    _ = losses[0].shape[0]
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(losses[0], label="im")
+    ax.plot(losses[1], label="con")
+    ax.plot(losses[2], label="smo")
+    ax.plot(losses[3], label="len")
+    ax.plot(losses[4], label="cen")
+    ax.set_title(title, fontsize=20)
+    ax.set_xlabel("frames", fontsize=20)
+    ax.set_xlabel("loss", fontsize=20)
+    ax.legend()
     # plt.show()
 
 
@@ -1216,39 +1298,45 @@ def find_losslarge_area(losses_all):
 
 def judge_head_amplitude(x, y):
     """Judge which tip is head based on variance of body curve rate."""
-    theta = np.zeros((x.shape[0], x.shape[1] - 1), dtype=float)
-    for i in range(x.shape[1] - 1):
-        theta[:, i] = np.arctan2(y[:, i + 1] - y[:, i], x[:, i + 1] - x[:, i])
+    dx = x[:, 1:] - x[:, :-1]
+    dy = y[:, 1:] - y[:, :-1]
+    theta = np.arctan2(dy, dx)
+
     curve_rate_var = ((theta[:, 1:] - theta[:, :-1] + np.pi) % (2 * np.pi) - np.pi).var(
         axis=0
     )
-    plt.figure()
-    plt.plot(curve_rate_var)
-    plt.xlabel("body segment", fontsize=20)
-    plt.ylabel("curve rate var", fontsize=20)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(curve_rate_var)
+    ax.set_xlabel("body segment", fontsize=20)
+    ax.set_ylabel("curve rate var", fontsize=20)
     # plt.show()
     idx15per = int(np.round(x.shape[1] * 0.15))
     idx20per = int(np.round(x.shape[1] * 0.20))
     curve_mean1 = curve_rate_var[idx15per : idx20per + 1].mean()
     curve_mean2 = curve_rate_var[-idx20per - 1 : -idx15per].mean()
-    if curve_mean1 >= curve_mean2:  # right direction already
-        x, y, x_rev, y_rev = x, y, x[:, ::-1], y[:, ::-1]
-    else:  # reversed
-        x, y, x_rev, y_rev = x[:, ::-1], y[:, ::-1], x, y
+
+    x_rev, y_rev = x[:, ::-1], y[:, ::-1]
+    # Reversed
+    if curve_mean1 < curve_mean2:
+        x, x_rev = x_rev, x
+        y, y_rev = y_rev, y
+
     return x, y, x_rev, y_rev
 
 
 def judge_head_frequency(x, y):
     """Judge which tip is head based on frequency of body curve rate."""
 
-    theta = np.zeros((x.shape[0], x.shape[1] - 1), dtype=float)
-    for i in range(x.shape[1] - 1):
-        theta[:, i] = np.arctan2(y[:, i + 1] - y[:, i], x[:, i + 1] - x[:, i])
+    dx = x[:, 1:] - x[:, :-1]
+    dy = y[:, 1:] - y[:, :-1]
+    theta = np.arctan2(dy, dx)
+
     curve_rate = (theta[:, 1:] - theta[:, :-1] + np.pi) % (2 * np.pi) - np.pi
     T = curve_rate.shape[0]
 
     # fast fourier transform
-    spa = abs(np.fft.fft(curve_rate, axis=0))
+    spa = np.abs(np.fft.fft(curve_rate, axis=0))
 
     # the latter half of fourier power spectrum is the same as the first half
     T2 = int(np.ceil((T - 1) / 2))
@@ -1276,17 +1364,18 @@ def judge_head_frequency(x, y):
     # show power spectrum plot
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    plt.imshow(spat)
+    ax.imshow(spat)
     ax.set_aspect(0.1)
-    plt.xlabel("body segment", fontsize=20)
-    plt.ylabel("peak curve freq", fontsize=20)
-    plt.title(f"Correlation = {cor:.3g}")
+    ax.set_xlabel("body segment", fontsize=20)
+    ax.set_ylabel("peak curve freq", fontsize=20)
+    ax.set_title(f"Correlation = {cor:.3g}")
     # plt.show()
 
-    if cor <= 0:  # right direction already
-        x, y, x_rev, y_rev = x, y, x[:, ::-1], y[:, ::-1]
-    else:  # reversed
-        x, y, x_rev, y_rev = x[:, ::-1], y[:, ::-1], x, y
+    x_rev, y_rev = x[:, ::-1], y[:, ::-1]
+    # Reversed
+    if cor > 0:
+        x, x_rev = x_rev, x
+        y, y_rev = y_rev, y
     return x, y, x_rev, y_rev
 
 
@@ -1310,12 +1399,192 @@ def cancel_reduction(x, y, n_input_images, start_T, end_T, Tscaled_ind, plot_n):
     div_linespace = np.arange(end_T - start_T + 1)
     Tscaled_dif_ind = [ind - start_T for ind in Tscaled_ind]
     for i in range(plot_n):
-        f_x = interp1d(
-            Tscaled_dif_ind, x[:, i], kind="linear", fill_value="extrapolate"
-        )
-        f_y = interp1d(
-            Tscaled_dif_ind, y[:, i], kind="linear", fill_value="extrapolate"
-        )
-        x_splined[:, i] = f_x(div_linespace)
-        y_splined[:, i] = f_y(div_linespace)
+        x_splined[:, i] = np.interp(div_linespace, Tscaled_dif_ind, x[:, i])
+        y_splined[:, i] = np.interp(div_linespace, Tscaled_dif_ind, y[:, i])
     return x_splined, y_splined
+
+
+def straigthen_multi(
+    src: NDArray,
+    x: NDArray,
+    y: NDArray,
+    width: int,
+    height: int,
+):
+    """
+    Straightens an image based on given x and y coordinates using affine transformation and interpolation.
+
+    Args:
+        src: Input image as a NumPy array [N, H, W].
+        x: x-coordinates of points to be straightened [N, x].
+        y: y-coordinates of points to be straightened [N, y].
+        width: Desired width of the straightened image.
+        height: Desired height of the straightened image.
+
+    Returns:
+        The straightened image as a NumPy array [N, height, width].
+    """
+
+    assert src.ndim == 3, "The shape of source images is not (number, height, width)"
+    assert x.shape == y.shape, "The coordinates of x and y have different shape."
+    N, H, W = src.shape
+    assert (
+        x.shape[0] == N
+    ), "The number of frames to be straightened is different from given coordinates."
+
+    dist = np.zeros_like(x)
+    dist[:, 1:] = np.sqrt((x[:, 1:] - x[:, :-1]) ** 2 + (y[:, 1:] - y[:, :-1]) ** 2)
+
+    acc_dist = np.cumsum(dist, axis=1)
+    src_xy = np.zeros((N, width, 2))
+    xy = np.stack([x, y], axis=-1)
+    out_xcoords = np.arange(width)
+
+    # Interpolate x and y coordinates (T, width) based on accumulated distances
+    for i in range(N):
+        f_xy = CubicSpline(acc_dist[i], xy[i])
+        src_xy[i] = f_xy(out_xcoords)
+
+    # Calculate vectors (T, width-1, 2) between consecutive x and y coordinates
+    dxy = np.diff(src_xy, axis=1)
+
+    # Padding to each end with same values (T, width+1, 2)
+    dxy = np.pad(
+        dxy,
+        pad_width=((0, 0), (1, 1), (0, 0)),
+        mode="edge",
+    )
+
+    # Compute average vectors for each point (including boundary points)
+    dxya = (dxy[:, 1:] + dxy[:, :-1]) / 2.0  # (T, width)
+
+    # Tangential vectors to the centerlines
+    xt_vec = -dxya[:, :, 1]
+    yt_vec = dxya[:, :, 0]
+
+    # Calculate normalized tangential vectors to the centerlines
+    vec_norm = np.sqrt((dxya**2).sum(axis=-1))
+    xt_norm = xt_vec / vec_norm
+    yt_norm = yt_vec / vec_norm
+
+    # Create a grid of y-coordinates for interpolation
+    y_grid = np.arange(height) - (height - 1) / 2  # (height,)
+
+    src_x = src_xy[:, :, 0]
+    src_y = src_xy[:, :, 1]
+
+    # Calculate new x and y coordinates based on tangential vectors and y-grid
+    # (T, 1, width) * (1, height, 1) + (T, 1, width)
+    gx = xt_norm[:, None, :] * y_grid[None, :, None] + src_x[:, None, :]
+    gy = yt_norm[:, None, :] * y_grid[None, :, None] + src_y[:, None, :]
+
+    # Let gx and gy normalize within [-1., 1.]
+    gx = 2 * gx / W - 1.0
+    gy = 2 * gy / H - 1.0
+    gxy = np.stack((gx, gy), axis=-1).reshape((-1, height, width, 2))
+
+    # Create a 2D grid for interpolation
+    src_t = torch.from_numpy(src).reshape((N, -1, H, W)).float()
+    grid = torch.from_numpy(gxy).float()
+
+    straigthen_dst = F.grid_sample(src_t, grid, align_corners=True)
+    straigthen_dst = (
+        torch.clamp(straigthen_dst, src.min(), src.max())
+        .detach()
+        .numpy()
+        .astype(src.dtype)
+        .reshape(N, height, width)
+    )
+
+    return straigthen_dst
+
+
+def straigthen(
+    src: NDArray,
+    x: NDArray,
+    y: NDArray,
+    width: int,
+    height: int,
+):
+    """
+    Straightens an image based on given x and y coordinates using affine transformation and interpolation.
+
+    Args:
+        src: Input image as a NumPy array [H, W].
+        x: x-coordinates of points to be straightened.
+        y: y-coordinates of points to be straightened.
+        width: Desired width of the straightened image.
+        height: Desired height of the straightened image.
+
+    Returns:
+        The straightened image as a NumPy array [N, height, width].
+    """
+
+    assert src.ndim == 2, "The shape of source images is not (height, width)"
+    assert x.shape == y.shape, "The coordinates of x and y have different shape."
+    H, W = src.shape
+
+    dist = np.zeros_like(x)
+    dist[1:] = np.sqrt((x[1:] - x[:-1]) ** 2 + (y[1:] - y[:-1]) ** 2)
+
+    acc_dist = np.cumsum(dist)
+    src_xy = np.zeros((width, 2))
+    xy = np.stack([x, y], axis=-1)
+    out_xcoords = np.arange(width)
+
+    # Interpolate x and y coordinates based on accumulated distances
+    f_xy = CubicSpline(acc_dist, xy)
+    src_xy = f_xy(out_xcoords)
+
+    # Calculate vectors (width-1, 2) between consecutive x and y coordinates
+    dxy = src_xy[1:] - src_xy[:-1]
+
+    # Padding to each end with same values (width+1, 2)
+    dxy = np.pad(
+        dxy,
+        pad_width=((1, 1), (0, 0)),
+        mode="edge",
+    )
+
+    # Compute average vectors for each point (including boundary points)
+    dxya = (dxy[1:] + dxy[:-1]) / 2.0  # (T, width)
+
+    # Tangential vectors to the centerlines
+    xt_vec = -dxya[:, 1]
+    yt_vec = dxya[:, 0]
+
+    # Calculate normalized tangential vectors to the centerlines
+    vec_norm = np.sqrt((dxya**2).sum(axis=-1))
+    xt_norm = xt_vec / vec_norm
+    yt_norm = yt_vec / vec_norm
+
+    # Create a grid of y-coordinates for interpolation
+    y_grid = np.arange(height) - (height - 1) / 2  # (height,)
+
+    src_x = src_xy[:, 0]
+    src_y = src_xy[:, 1]
+
+    # Calculate new x and y coordinates based on tangential vectors and y-grid
+    # (1, width) * (height, 1) + (1, width)
+    gx = xt_norm[None, :] * y_grid[:, None] + src_x[None, :]
+    gy = yt_norm[None, :] * y_grid[:, None] + src_y[None, :]
+
+    # Let gx and gy normalize within [-1., 1.]
+    gx = 2 * gx / W - 1.0
+    gy = 2 * gy / H - 1.0
+    gxy = np.stack((gx, gy), axis=-1).reshape((-1, height, width, 2))
+
+    # Create a 2D grid for interpolation
+    src_t = torch.from_numpy(src).reshape((1, -1, H, W)).float()
+    grid = torch.from_numpy(gxy).float()
+
+    straigthen_dst = F.grid_sample(src_t, grid, mode="bicubic", align_corners=False)
+    straigthen_dst = (
+        torch.clamp(straigthen_dst, src.min(), src.max())
+        .detach()
+        .numpy()
+        .astype(src.dtype)
+        .reshape(height, width)
+    )
+
+    return straigthen_dst

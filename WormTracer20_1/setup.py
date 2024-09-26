@@ -1,8 +1,9 @@
-from setuptools import setup, find_packages
+
+from setuptools import find_packages, setup
 
 setup(
     name='WormTracer',
-    version="20.1",
+    version="20.2",
     description="WormTracer package",
     author='Koyo Kuze et al',
     packages=find_packages(),
