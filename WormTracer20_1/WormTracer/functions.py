@@ -7,7 +7,6 @@ import os
 import shutil
 from math import pi
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import cv2
 import matplotlib.pyplot as plt
@@ -24,10 +23,9 @@ from scipy.spatial import distance_matrix
 from scipy.special import expit as np_sigmoid
 from skimage import morphology
 
-if TYPE_CHECKING:
-    from typing import Tuple, Union
+from typing import Tuple, Union
 
-    from numpy.typing import NDArray
+from numpy.typing import NDArray
 
 
 def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
