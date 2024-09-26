@@ -30,7 +30,7 @@ def get_parser():
 
 def main():
     parser = get_parser()
-    args, unkown_params = parser.parse_known_args()
+    args, unknown_params = parser.parse_known_args()
     wt.run(**vars(args))
 
 

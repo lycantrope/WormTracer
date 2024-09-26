@@ -1,4 +1,4 @@
-from __future__ import annotations
+# from __future__ import annotations
 
 import collections
 import glob
@@ -23,7 +23,6 @@ from scipy.sparse.csgraph import shortest_path
 from scipy.spatial import distance_matrix
 from scipy.special import expit as np_sigmoid
 from skimage import morphology
-from tifffile import TiffFile
 
 if TYPE_CHECKING:
     from typing import Tuple, Union
