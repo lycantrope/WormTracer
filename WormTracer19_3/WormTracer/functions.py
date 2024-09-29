@@ -174,7 +174,11 @@ def read_image_and_xy(imshape, filenames, rescale, plot_n, Worm_is_black, multi_
 
 def read_image(imshape, filenames, rescale, Worm_is_black, multi_flag, Tscaled_ind):
   if multi_flag:
-    _, ims = cv2.imreadmulti(filenames[0], flags=0) # multipage tiff file 
+    try:
+      ims = tifffile.memmap(filenames[0], mode="r")
+    except ValueError as e:
+      err_msg = "This file is not a valid ImageJ format. Please save your Tiff file using ImageJ: {}"
+      raise ValueError(err_msg.format(e))
     ims = [ims[ind] for ind in Tscaled_ind]
   else:
     ims = read_serial_images(filenames, Tscaled_ind) # serial-numbered image files

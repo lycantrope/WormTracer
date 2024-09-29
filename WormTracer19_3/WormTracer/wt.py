@@ -483,6 +483,14 @@ def run(parameter_file, dataset_path, output_directory="", **kwargs): # execute 
     for log in logs:
       f.write(log)
   
+  if not (
+    params["SaveCenterlinedWormsSerial"]
+    | params["SaveCenterlinedWormsMovie"]
+    | params["SaveCenterlinedWormsMultitiff"]
+  ):
+    return
+
+
   # save full of real_image and centerline as png images
   #real_image, y_st, x_st = read_image(imshape, filenames_full, params['rescale'], Worm_is_black)
   real_image, y_st, x_st = read_image(imshape, filenames_all, params['rescale'], Worm_is_black, multi_flag, list(range(n_input_images)))
