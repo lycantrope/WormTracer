@@ -179,15 +179,14 @@ def run(
         dataset_path, output_directory
     )
 
-    print("dataset_path =", dataset_path)
-    print("output_path =", output_path)
-
     # setup logger
     logging.basicConfig(
         filename=output_path.joinpath(f"{output_name}.log"),
         format="%(message)s",
         level=logging.INFO,
     )
+    logger.info("dataset_path =", dataset_path)
+    logger.info("output_path =", output_path)
 
     # log
     time_now = datetime.datetime.now()
@@ -239,7 +238,7 @@ def run(
     )
     theta = make_theta_from_xy(x, y)
 
-    print(
+    logger.info(
         "\rframe = ",
         len(Tscaled_ind),
         " shape = ",
@@ -274,7 +273,7 @@ def run(
 
     show_image(real_image, params["num_t"], title="real image")
     show_image(model_image, params["num_t"], title="model image")
-    print("use_points \n", use_points)
+    logger.debug("use_points \n", use_points)
 
     # log 3
     time_now = datetime.datetime.now()
@@ -294,7 +293,7 @@ def run(
             losses_all.append(0)
             continue
         use_area = (use_points[i], use_points[i + 1])
-        print(use_area)
+        logger.debug(use_area)
         params["use_area"] = use_area
         # filenames_ = filenames[use_area[0]:use_area[1]+1]
         T = use_area[1] - use_area[0] + 1
@@ -387,17 +386,19 @@ center loss : {np.mean(losses[4])}
         shape_params, params
     )
     logger.info("STEP2 : optimization for complex posture blocks\n")
-
     # main loop 2
     for i in range(len(use_points) - 1):
         if not nont_flag[i]:
             continue
-        use_area = (use_points[i], use_points[i + 1])
-        print(use_area)
-        params["use_area"] = use_area
+
+        # Inclusive both end [Start, end]
+        start, end = use_points[i], use_points[i + 1]
+
+        print(start, end)
+        params["use_area"] = (start, end)
         # filenames_ = filenames[use_area[0]:use_area[1]+1]
-        T = use_area[1] - use_area[0] + 1
-        theta_ = theta[use_area[0] : use_area[1] + 1, :].copy()
+        T = end - start + 1
+        theta_ = theta[start : end + 1, :].copy()
 
         # read and preprocess images
         # real_image, y_st, x_st = read_image(imshape, filenames_, params['rescale'], Worm_is_black)
@@ -406,7 +407,7 @@ center loss : {np.mean(losses[4])}
             params["rescale"],
             Worm_is_black,
             multi_flag,
-            Tscaled_ind[use_area[0] : use_area[1] + 1],
+            Tscaled_ind[start : end + 1],
         )
         show_image(real_image, params["num_t"], title="real image")
         save_progress(real_image, output_path, output_name, params, txt="real")
@@ -484,18 +485,18 @@ center loss : {np.mean(losses[4])}
             losses_all[i] = losses
         remove_progress(
             output_path,
-            "{}-{}_id{}*.png".format(use_area[0], use_area[1], 1 - select_ind),
+            "{}-{}_id{}*.png".format(start, end, 1 - select_ind),
         )
 
         # reconstruct plots from model results
         x_model, y_model = make_plot(theta_model, unitL_model, x_cent, y_cent)
         show_image(model_image, params["num_t"], title="model image")
         show_loss_plot(losses_all[i], title="losses of model{}".format(select_ind))
-        x[use_area[0] : use_area[1] + 1, :] = x_model + x_st
-        y[use_area[0] : use_area[1] + 1, :] = y_model + y_st
+        x[start : end + 1, :] = x_model + x_st
+        y[start : end + 1, :] = y_model + y_st
 
         # log
-        logger.info(f"""{str(use_area)}
+        logger.info(f"""{str((start, end))}
 image loss : {np.mean(losses[0])}
 continuity loss : {np.mean(losses[1])}
 smoothing loss : {np.mean(losses[2])}
@@ -515,12 +516,12 @@ center loss : {np.mean(losses[4])}
 
     for i in range(len(use_points) - 1):
         if losslarge_area[i] and nont_flag[i]:
-            use_area = (use_points[i], use_points[i + 1])
-            print(use_area[0], ":", use_area[1], " too large loss! ")
-            params["use_area"] = use_area
+            start, end = use_points[i], use_points[i + 1]
+            print(start, ":", end, " too large loss! ")
+            params["use_area"] = (start, end)
             # filenames_ = filenames[use_area[0]:use_area[1]+1]
-            T = use_area[1] - use_area[0] + 1
-            theta_ = theta[use_area[0] : use_area[1] + 1, :].copy()
+            T = end - start + 1
+            theta_ = theta[start : end + 1, :].copy()
 
             # read and preprocess images
             # real_image, y_st, x_st = read_image(imshape, filenames_, params['rescale'], Worm_is_black)
@@ -529,7 +530,7 @@ center loss : {np.mean(losses[4])}
                 params["rescale"],
                 Worm_is_black,
                 multi_flag,
-                Tscaled_ind[use_area[0] : use_area[1] + 1],
+                Tscaled_ind[start : end + 1],
             )
             show_image(real_image, params["num_t"], title="real image")
             image_info["image_shape"] = real_image.shape
@@ -575,14 +576,10 @@ center loss : {np.mean(losses[4])}
                 )
                 model_image = model()
                 losses_all[i] = losses
-                remove_progress(
-                    output_path, "{}-{}_id[0-1]*.png".format(use_area[0], use_area[1])
-                )
+                remove_progress(output_path, "{}-{}_id[0-1]*.png".format(start, end))
             else:
                 print("no update")
-                remove_progress(
-                    output_path, "{}-{}_id2*.png".format(use_area[0], use_area[1])
-                )
+                remove_progress(output_path, "{}-{}_id2*.png".format(start, end))
 
             # flip final theta and trace again
             init_theta = torch.from_numpy(np.linspace(theta_[0, :], theta_cand[1], T))
@@ -618,14 +615,10 @@ center loss : {np.mean(losses[4])}
                 )
                 model_image = model()
                 losses_all[i] = losses
-                remove_progress(
-                    output_path, "{}-{}_id[0-2]*.png".format(use_area[0], use_area[1])
-                )
+                remove_progress(output_path, "{}-{}_id[0-2]*.png".format(start, end))
             else:
                 print("no update")
-                remove_progress(
-                    output_path, "{}-{}_id3*.png".format(use_area[0], use_area[1])
-                )
+                remove_progress(output_path, "{}-{}_id3*.png".format(start, end))
 
             if update:
                 x_model, y_model = make_plot(theta_model, unitL_model, x_cent, y_cent)
@@ -633,11 +626,11 @@ center loss : {np.mean(losses[4])}
                 show_loss_plot(losses_all[i], title="losses of new model")
 
                 # reconstruct plots from model results
-                x[use_area[0] : use_area[1] + 1, :] = x_model + x_st
-                y[use_area[0] : use_area[1] + 1, :] = y_model + y_st
+                x[start : end + 1, :] = x_model + x_st
+                y[start : end + 1, :] = y_model + y_st
 
                 # log
-                logger.info(f"""{str(use_area)} updated
+                logger.info(f"""{str((start, end))} updated
 image loss : {np.mean(losses_all[i][0])}
 continuity loss : {np.mean(losses_all[i][1])}
 smoothing loss : {np.mean(losses_all[i][2])}

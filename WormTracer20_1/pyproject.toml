@@ -1,0 +1,28 @@
+[project]
+name = "WormTracer"
+version = "20.2rc4"
+description = "WormTracer package"
+authors = [
+    { name = "Koyo Kuze" },
+    { name = "Ukyo T. Tazawa" },
+    { name = "Karin Suwazono" },
+    { name = "Chung-Kuan Chen", email = "b97b01045@gmail.com" },
+    { name = "Yu Toyoshima" },
+    { name = "Yuichi Iino", email = "iino@bs.s.u-tokyo.ac.jp" },
+]
+dependencies = [
+    "numpy",
+    "opencv-python",
+    "matplotlib",
+    "Pillow",
+    "scikit-image",
+    "scipy",
+    "pyyaml",
+]
+readme = "README.md"
+requires-python = ">= 3.10"
+
+
+[tool.ruff.lint]
+extend-select = ["I001"]
+ignore = ["F401", "F405"]

@@ -2,14 +2,18 @@
 
 import collections
 import glob
+import itertools
+import logging
 import math
 import os
 import shutil
 from math import pi
 from pathlib import Path
+from typing import Tuple, Union
 
 import cv2
 import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
 import tifffile
 import torch
@@ -23,7 +27,7 @@ from scipy.spatial import distance_matrix
 from scipy.special import expit as np_sigmoid
 from skimage import morphology
 
-from typing import Tuple, Union
+logger = logging.getLogger()
 
 
 def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
@@ -102,15 +106,15 @@ def get_filenames(dataset_path: Union[str, bytes, os.PathLike]):
 
     if not ext_files_map:
         msg = "No extensions were found for openCV available. Please check if image files with the following extensions exist in the specified path"
-        print(msg)
-        print(extensions_available)
+        logger.error(msg)
+        logger.error(extensions_available)
         raise FileNotFoundError(dataset_path)
 
     ext, files = max(ext_files_map.items(), key=lambda x: len(x[1]))
 
     if len(ext_files_map) > 1:
-        print("We found several extensions available in openCV.")
-        print(
+        logger.error("We found several extensions available in openCV.")
+        logger.error(
             f"In this case, we loaded a {ext} file, but if you want to load a file with a different extension, delete the unrelated file."
         )
     return sorted(files)
@@ -128,7 +132,7 @@ def get_property(filenames, rescale):
         ims = np.asarray(ims)
     im = ims[0]
     if np.any((0 < np.asarray(im)) & (np.asarray(im) < 255)):
-        print("Warning! : Input images seem not to be binary.")
+        logger.warning("Warning! : Input images seem not to be binary.")
     if not math.isclose(rescale, 1.0, rel_tol=1e4):
         im = cv2.resize(
             im,
@@ -259,7 +263,9 @@ def get_skeleton(im: np.ndarray, plot_n: int):
     im_skeleton = morphology.skeletonize(im_filled)
     point_list = np.argwhere(im_skeleton == 1)
 
-    if len(point_list) == 1:
+    if len(point_list) == 0:
+        raise ValueError("Original image is empty")
+    elif len(point_list) == 1:
         x_splined = np.ones(plot_n) * point_list[0][1]
         y_splined = np.ones(plot_n) * point_list[0][0]
         return x_splined, y_splined
@@ -296,6 +302,47 @@ def get_skeleton(im: np.ndarray, plot_n: int):
     arclen = np.array(arclen)[::-1]
 
     # interpolation
+    div_linespace = np.linspace(0, np.max(arclen), plot_n)
+    x_splined = np.interp(div_linespace, arclen, plots[:, 1])
+    y_splined = np.interp(div_linespace, arclen, plots[:, 0])
+
+    return x_splined, y_splined
+
+
+def get_skeleton_networkx(im: np.ndarray, plot_n: int):
+    """skeletonize image and get splined plots
+    2024/10/01 Speed is same as previous implemenetation
+    """
+    # skeletonize image
+    im_filled = ndi.binary_fill_holes(im)
+    im_skeleton = morphology.skeletonize(im_filled)
+    point_list = np.argwhere(im_skeleton == 1)
+
+    if len(point_list) == 1:
+        x_splined = np.ones(plot_n) * point_list[0][1]
+        y_splined = np.ones(plot_n) * point_list[0][0]
+        return x_splined, y_splined
+
+    # make distance matrix
+    adj_mtx = distance_matrix(
+        point_list,
+        point_list,
+    )
+    adj_mtx[adj_mtx > 1.5] = 0  # delete distance between isolated points
+
+    G = nx.from_numpy_array(adj_mtx)
+    # Obtain end from 1 degree node.
+    ends = [node for node, deg in G.degree if deg == 1]
+    # Calculate the shortest path of all ends pairing
+    pairs = itertools.combinations(ends, 2)
+    paths = [nx.dijkstra_path(G, st, end, weight="weight") for st, end in pairs]
+    # Obtain the maximum distance
+    skel_idx = max(paths, key=lambda x: adj_mtx[x[1:], x[:-1]].sum())
+    arclen = np.zeros_like(skel_idx, dtype="f8")
+    arclen[1:] = np.cumsum(adj_mtx[skel_idx[1:], skel_idx[:-1]])
+    plots = point_list[skel_idx]
+
+    # Interpolation
     div_linespace = np.linspace(0, np.max(arclen), plot_n)
     x_splined = np.interp(div_linespace, arclen, plots[:, 1])
     y_splined = np.interp(div_linespace, arclen, plots[:, 0])
@@ -340,7 +387,7 @@ def cut_image(image):
 
     (ys, xs) = np.nonzero(thresh)
     if ys.size == 0:
-        print("[Warning] the imagestack have no signal")
+        logger.warning("[Warning] the imagestack have no signal")
         return image, 0, 0
 
     max_h, max_w = thresh.shape
@@ -549,11 +596,15 @@ def get_use_points(
     try:
         if nont_ini[0] > nont_end[0]:
             nont_end = nont_end[1:]
-            print("Warning! The initial frame of images is difficult to skeletonize.")
-            print("Biginning of Results will be incorrect.")
+            logger.warning(
+                "Warning! The initial frame of images is difficult to skeletonize."
+            )
+            logger.warning("Biginning of Results will be incorrect.")
         if nont_ini[-1] > nont_end[-1]:
-            print("Warning! The end frame of images is difficult to skeletonize.")
-            print("End of Results will be incorrect.")
+            logger.warning(
+                "Warning! The end frame of images is difficult to skeletonize."
+            )
+            logger.warning("End of Results will be incorrect.")
             nont_ini = nont_ini[:-1]
 
         # expand complex area
@@ -611,7 +662,7 @@ def get_use_points(
                         Tscale_rec = max(max_span // 150, 1)
             if int((max_span * rescale_rec**2) / Tscale_rec) > cap_span:
                 rescale_rec = np.sqrt(cap_span / max_span)
-                print(
+                logger.warning(
                     """
         Warning! This task uses large memory.
         If CUDA run out of memory, please go back to setting hyperparameters and set rescale as {:.2f}, Tscale as {}.
@@ -619,7 +670,7 @@ def get_use_points(
         """.format(rescale_rec, Tscale_rec)
                 )
             else:
-                print(
+                logger.warning(
                     """
         Warning! This task uses large memory.
         If CUDA run out of memory, please go back to setting hyperparameters and set rescale as {:.2f}, Tscale as {}.
@@ -627,7 +678,7 @@ def get_use_points(
                 )
 
     except IndexError:
-        print("All frames seem to be simple; easy to skeletonize.")
+        logger.warning("All frames seem to be simple; easy to skeletonize.")
         use_points = np.linspace(0, T - 1, (T - 1) // (cap_span + 1) + 2, dtype=int)
         nont_flag = [0] * (use_points.shape[0])
 
@@ -906,10 +957,11 @@ def make_worm(
     delta_y = (cent_mid_y_3d - y_3d) ** 2
 
     worm_wid_3d = worm_wid.reshape([1, plot_n - 1, 1, 1])
-    segment_distance_3d = torch.sqrt(
-        delta_x.reshape(T, plot_n - 1, 1, W) + delta_y.reshape(T, plot_n - 1, H, 1)
+    segment_distance_3d = delta_x.reshape(T, plot_n - 1, 1, W) + delta_y.reshape(
+        T, plot_n - 1, H, 1
     )
-    delta_max = (worm_wid_3d - segment_distance_3d).max(dim=1)
+    delta_max = torch.sqrt((worm_wid_3d - segment_distance_3d).max(dim=1))
+
     image = pixel_value_from_dist_max(delta_max.values)
     return image
 
@@ -1115,7 +1167,9 @@ def train3(
         del loss
         if early_stopping.early_stop:
             if params["ShowProgress"]:
-                print("Early stopping at epoch +{}.".format(e - int(T / (2 * speed))))
+                logger.info(
+                    "Early stopping at epoch +{}.".format(e - int(T / (2 * speed)))
+                )
             break
         optimizer.step()
 
@@ -1134,7 +1188,7 @@ def train3(
             continue
 
         # Show Progress
-        print(
+        logger.info(
             "{:.2f} {:.2f} {:.2f} {:.2f} {:.2f}".format(
                 image_loss.item(),
                 continuity_loss.item(),
@@ -1178,12 +1232,12 @@ def train3(
         del loss
         if early_stopping.early_stop:
             if params["ShowProgress"]:
-                print("Minor adjustment done.")
+                logger.info("Minor adjustment done.")
             break
         optimizer.step()
 
     if not params["ShowProgress"]:  # Show Progress
-        print(
+        logger.info(
             "{:.2f} {:.2f} {:.2f} {:.2f}".format(
                 image_loss.item(),
                 continuity_loss.item(),
@@ -1342,7 +1396,7 @@ def judge_head_frequency(x, y):
     sp_sum = np.sum(spat, axis=1)
     freq_cut = np.max(np.where(sp_sum > np.max(sp_sum) / 10)[0])
     spat = spat[: freq_cut + 1, :]
-    # print('freq_cut =', freq_cut)
+    # logger.info('freq_cut =', freq_cut)
 
     # calculate correlation
     xmean = np.sum(spat.sum(axis=0) / spat.sum() * np.arange(spat.shape[1]))
@@ -1354,7 +1408,7 @@ def judge_head_frequency(x, y):
         / np.sqrt(np.sum(spat * xcoord * xcoord))
         / np.sqrt(np.sum(spat * ycoord * ycoord))
     )
-    # print('correlation =', cor)
+    # logger.info('correlation =', cor)
 
     # show power spectrum plot
     fig = plt.figure()
