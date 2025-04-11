@@ -957,10 +957,10 @@ def make_worm(
     delta_y = (cent_mid_y_3d - y_3d) ** 2
 
     worm_wid_3d = worm_wid.reshape([1, plot_n - 1, 1, 1])
-    segment_distance_3d = delta_x.reshape(T, plot_n - 1, 1, W) + delta_y.reshape(
-        T, plot_n - 1, H, 1
+    segment_distance_3d = torch.sqrt(
+        delta_x.reshape(T, plot_n - 1, 1, W) + delta_y.reshape(T, plot_n - 1, H, 1)
     )
-    delta_max = torch.sqrt((worm_wid_3d - segment_distance_3d).max(dim=1))
+    delta_max = (worm_wid_3d - segment_distance_3d).max(dim=1)
 
     image = pixel_value_from_dist_max(delta_max.values)
     return image
