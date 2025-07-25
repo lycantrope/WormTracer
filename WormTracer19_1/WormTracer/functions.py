@@ -216,7 +216,7 @@ def flip_check(x, y):
   gap_headtail = np.mean((x[1:,:]-x[:-1,:])**2+(y[1:,:]-y[:-1,:])**2, axis=1)
   gap_headtail_ex = np.mean((x[1:,:]-x[:,::-1][:-1,:])**2+(y[1:,:]-y[:,::-1][:-1,:])**2, axis=1)
   ex_t = gap_headtail > gap_headtail_ex
-  ex_r = np.zeros(ex_t.shape, dtype=np.bool8)
+  ex_r = np.zeros(ex_t.shape, dtype=bool)
   ex_r[np.cumsum(ex_t)%2==1] = True
   x[1:,:][ex_r] = x[:,::-1][1:,:][ex_r]
   y[1:,:][ex_r] = y[:,::-1][1:,:][ex_r]
