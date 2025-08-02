@@ -250,8 +250,9 @@ def run(
     # log
     time_now = datetime.datetime.now()
     logger.info(f"Reading images finished at {time_now}")
+    logger.info(f"Original shape = {imshape} \n")
     logger.info(
-        f"frame = {len(Tscaled_ind)} shape = {real_image.shape} unitLength = {unitLength}\n"
+        f"frame = {len(Tscaled_ind)} cropped_shape = {real_image.shape} unitLength = {unitLength}\n"
     )
 
     # make worm model image from plots

@@ -131,7 +131,7 @@ def get_property(filenames, rescale):
         _, ims = cv2.imreadmulti(filename=filenames[0], mats=[], flags=0)
         ims = np.asarray(ims)
     im = ims[0]
-    if np.any((0 < np.asarray(im)) & (np.asarray(im) < 255)):
+    if np.any((0 != np.asarray(im)) | (np.asarray(im) != 255)):
         logger.warning("Warning! : Input images seem not to be binary.")
     if not math.isclose(rescale, 1.0, rel_tol=1e4):
         im = cv2.resize(
@@ -599,7 +599,7 @@ def get_use_points(
             logger.warning(
                 "Warning! The initial frame of images is difficult to skeletonize."
             )
-            logger.warning("Biginning of Results will be incorrect.")
+            logger.warning("Beginning of Results will be incorrect.")
         if nont_ini[-1] > nont_end[-1]:
             logger.warning(
                 "Warning! The end frame of images is difficult to skeletonize."
