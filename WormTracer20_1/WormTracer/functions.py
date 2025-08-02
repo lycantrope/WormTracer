@@ -131,7 +131,7 @@ def get_property(filenames, rescale):
         _, ims = cv2.imreadmulti(filename=filenames[0], mats=[], flags=0)
         ims = np.asarray(ims)
     im = ims[0]
-    if np.any((0 != np.asarray(im)) | (np.asarray(im) != 255)):
+    if np.all((0 == np.asarray(im)) | (np.asarray(im) == 255)):
         logger.warning("Warning! : Input images seem not to be binary.")
     if not math.isclose(rescale, 1.0, rel_tol=1e4):
         im = cv2.resize(
@@ -433,22 +433,22 @@ def make_theta_from_xy(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 ### prepare for training ###
 
 
-def calc_cap_span(image_info, plot_n, s_m=8000):
+def calc_cap_span(image_info, plot_n):
     """Calculate maximum span of trainig in terms of CUDA memory."""
     device = image_info["device"]
-    GiB = 1e20
+
     try:
-        free_memory = (
-            torch.cuda.get_device_properties(device).total_memory
-            - torch.cuda.memory_allocated(device)
-        ) / GiB
+        # bytes
+        free_memory = torch.cuda.get_device_properties(
+            device
+        ).total_memory - torch.cuda.memory_allocated(device)
         cap_span = int(
-            s_m
-            * free_memory
+            free_memory
             / (
                 image_info["image_shape"][1]
                 * image_info["image_shape"][2]
                 * (plot_n - 1)
+                * 8
             )
         )
     except Exception as _:
