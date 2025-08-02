@@ -185,8 +185,8 @@ def run(
         format="%(message)s",
         level=logging.INFO,
     )
-    logger.info("dataset_path =", dataset_path)
-    logger.info("output_path =", output_path)
+    logger.info("dataset_path =", os.fspath(dataset_path))
+    logger.info("output_path =", os.fspath(output_path))
 
     # log
     time_now = datetime.datetime.now()
@@ -790,11 +790,11 @@ center loss : {np.mean(losses_all[i][4])}
         filename = os.path.join(output_path, output_name + ".tif")
 
         end_T = n_input_images - 1 if params["end_T"] == 0 else params["end_T"]
-        T, Y, X = read_image.shape
+        T, Y, X = real_image.shape
 
         def image_gen():
             pts = np.stack((x - x_st, y - y_st), axis=-1)
-            for i, (pt, im) in enumerate(zip(pts, read_image)):
+            for i, (pt, im) in enumerate(zip(pts, real_image)):
                 if i % 100 == 0:
                     print(i + 1, end=" ")
                 im_rgb = cv2.cvtColor(im, cv2.COLOR_GRAY2BGR)
