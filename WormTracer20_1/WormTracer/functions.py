@@ -439,22 +439,22 @@ def make_theta_from_xy(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 ### prepare for training ###
 
 
-def calc_cap_span(image_info, plot_n):
+def calc_cap_span(image_info, plot_n, s_m=8000):
     """Calculate maximum span of trainig in terms of CUDA memory."""
     device = image_info["device"]
-
+    GiB = 1024**2
     try:
-        # bytes
-        free_memory = torch.cuda.get_device_properties(
-            device
-        ).total_memory - torch.cuda.memory_allocated(device)
+        free_memory = (
+            torch.cuda.get_device_properties(device).total_memory
+            - torch.cuda.memory_allocated(device)
+        ) / GiB
         cap_span = int(
-            free_memory
+            s_m
+            * free_memory
             / (
                 image_info["image_shape"][1]
                 * image_info["image_shape"][2]
                 * (plot_n - 1)
-                * 8
             )
         )
     except Exception as _:

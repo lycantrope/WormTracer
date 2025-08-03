@@ -9,7 +9,7 @@ WormTracer codes are written in Python and provided in two forms, as an IPython 
 bioRxiv 2023.12.11.571048; doi: https://doi.org/10.1101/2023.12.11.571048
 and a manuscript under review.<br><br>
 
-**WormTracer19_3 runs about three times faster than WormTracer19_1 thanks to Chung-Kuan Chen.<br>
+**WormTracer20_1 runs about three times faster than WormTracer19_1 thanks to Chung-Kuan Chen.<br>
 Also, directory structures have been changed so that the results can be saved to any location that users specify.**<br><br>
 
 #### <<< How to use WormTracer >>>

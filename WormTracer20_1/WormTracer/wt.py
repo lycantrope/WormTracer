@@ -4,7 +4,7 @@ import datetime
 import json
 import logging
 import os
-from pathlib import Path
+from pathlib import Path, PurePath
 
 import cv2
 import matplotlib
@@ -185,9 +185,9 @@ def run(
         format="%(message)s",
         level=logging.INFO,
     )
-    logger.info("WormTracer:20.4")
-    logger.info("dataset_path =", os.fspath(dataset_path))
-    logger.info("output_path =", os.fspath(output_path))
+    logger.info("WormTracer:20.5")
+    logger.info("dataset_path =", os.fspath(PurePath(dataset_path)))
+    logger.info("output_path =", os.fspath(PurePath(output_path)))
 
     # log
     time_now = datetime.datetime.now()
@@ -261,7 +261,7 @@ def run(
     params["gamma"] = 0.0
     params["delta"] = 0.0
     image_info = {"image_shape": real_image.shape, "device": device}
-    cap_span = calc_cap_span(image_info, params["plot_n"])
+    cap_span = calc_cap_span(image_info, params["plot_n"], s_m=8000)
     model_image = make_image(x, y, x_st, y_st, params, image_info)
 
     # get points for trace blocks
