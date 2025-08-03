@@ -61,7 +61,13 @@ def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
 
 
 def set_output_path(dataset_path, output_directory):
-    output_directory = Path(output_directory or Path(dataset_path).parent)
+    if not output_directory:
+        if dataset_path.is_dir():
+            output_directory = Path(dataset_path)
+        else:
+            output_directory = Path(dataset_path).parent
+    else:
+        output_directory = Path(output_directory)
     Path(output_directory).mkdir(exist_ok=True)
 
     dataset_prefix = Path(dataset_path).stem

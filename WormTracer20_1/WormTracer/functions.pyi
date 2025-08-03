@@ -52,7 +52,7 @@ def make_theta_from_xy(x: np.ndarray, y: np.ndarray) -> np.ndarray: ...
 
 ### prepare for training ###
 
-def calc_cap_span(image_info, plot_n, s_m=8000):
+def calc_cap_span(image_info, plot_n):
     """Calculate maximum span of trainig in terms of CUDA memory."""
 
 def pixel_value_from_dist_max_np(
