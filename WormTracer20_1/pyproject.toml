@@ -1,6 +1,6 @@
 [project]
 name = "WormTracer"
-version = "20.6.1"
+version = "20.6.2"
 description = "WormTracer package"
 authors = [
     { name = "Koyo Kuze" },
@@ -18,7 +18,7 @@ dependencies = [
     "scikit-image",
     "scipy",
     "pyyaml",
-    "roifile[all]",
+    "roifile[all]>=2024.9.15",
 ]
 readme = "README.md"
 
