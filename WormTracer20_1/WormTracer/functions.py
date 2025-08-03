@@ -62,7 +62,7 @@ def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
 
 def set_output_path(dataset_path, output_directory):
     if not output_directory:
-        if dataset_path.is_dir():
+        if Path(dataset_path).is_dir():
             output_directory = Path(dataset_path)
         else:
             output_directory = Path(dataset_path).parent
