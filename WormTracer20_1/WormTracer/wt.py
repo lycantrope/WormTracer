@@ -10,6 +10,7 @@ import cv2
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import roifile
 import tifffile
 import torch
 import yaml
@@ -185,7 +186,7 @@ def run(
         format="%(message)s",
         level=logging.INFO,
     )
-    logger.info("WormTracer:20.5.2")
+    logger.info("WormTracer:20.6")
     logger.info("dataset_path = " + os.fspath(PurePath(dataset_path)))
     logger.info("output_path = " + os.fspath(PurePath(output_path)))
 
@@ -718,6 +719,75 @@ center loss : {np.mean(losses_all[i][4])}
         y_rev / params["rescale"],
         delimiter=",",
     )
+
+    rois = []
+    for pos, skel in enumerate(zip(x, y)):
+        centerline = np.asarray(skel).T
+        name = f"{i:0>6d}"
+        head_roi = roifile.ImagejRoi.frompoints(
+            [centerline[0]],
+            name=name + "_Head",
+            position=pos,
+        )
+
+        tail_roi = roifile.ImagejRoi.frompoints(
+            [centerline[-1]],
+            name=name + "_Tail",
+            position=pos,
+        )
+
+        head_roi.roitype = roifile.ROI_TYPE.POINT
+        tail_roi.roitype = roifile.ROI_TYPE.POINT
+        head_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
+        tail_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
+
+        skel_roi = roifile.ImagejRoi.frompoints(
+            centerline,
+            name=name,
+            position=pos,
+        )
+        skel_roi.roitype = roifile.ROI_TYPE.POLYLINE
+        skel_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
+        rois.extend((head_roi, tail_roi, skel_roi))
+
+    roifile.roiwrite(
+        os.path.join(output_path, output_name + "_RoiSet.zip"), rois, mode="w"
+    )
+
+    rois = []
+    for pos, skel in enumerate(zip(x_rev, y_rev)):
+        centerline = np.asarray(skel).T
+        name = f"{i:0>6d}"
+        head_roi = roifile.ImagejRoi.frompoints(
+            [centerline[0]],
+            name=name + "_Head",
+            position=pos,
+        )
+
+        tail_roi = roifile.ImagejRoi.frompoints(
+            [centerline[-1]],
+            name=name + "_Tail",
+            position=pos,
+        )
+
+        head_roi.roitype = roifile.ROI_TYPE.POINT
+        tail_roi.roitype = roifile.ROI_TYPE.POINT
+        head_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
+        tail_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
+
+        skel_roi = roifile.ImagejRoi.frompoints(
+            centerline,
+            name=name,
+            position=pos,
+        )
+        skel_roi.roitype = roifile.ROI_TYPE.POLYLINE
+        skel_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
+        rois.extend((head_roi, tail_roi, skel_roi))
+
+    roifile.roiwrite(
+        os.path.join(output_path, output_name + "_RoiSet_rev.zip"), rois, mode="w"
+    )
+
     logger.info("Params and plots are successfully saved.\n")
 
     if not (
