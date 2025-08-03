@@ -1319,7 +1319,6 @@ def loss_compare(loss_pair):
 
 
 def show_loss_plot(losses, title=""):
-    _ = losses[0].shape[0]
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.plot(losses[0], label="im")
