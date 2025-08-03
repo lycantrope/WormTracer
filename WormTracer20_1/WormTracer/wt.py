@@ -242,12 +242,7 @@ def run(
     theta = make_theta_from_xy(x, y)
 
     logger.info(
-        "\rframe = ",
-        len(Tscaled_ind),
-        " shape = ",
-        real_image.shape,
-        " unitLength = ",
-        unitLength,
+        f"frame = {len(Tscaled_ind):d} shape = {real_image.shape} unitLength = {unitLength}"
     )
 
     # log

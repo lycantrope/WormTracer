@@ -233,10 +233,11 @@ def calc_xy_and_prewidth(
     pre_width[0] = get_width(imagestack[0], x[0], y[0])
     print("")
     for t in range(1, T):
-        bar = "\rget_skeleton and width:[{:<100}] {}/{}".format(
-            "▉" * round((t + 1) * 100 / T), t + 1, T
-        )
-        print(bar, end="")
+        if __debug__:
+            bar = "\rget_skeleton and width:[{:<100}] {}/{}".format(
+                "▉" * round((t + 1) * 100 / T), t + 1, T
+            )
+            print(bar, end="")
         im = imagestack[t]
         x1, y1 = get_skeleton(im, plot_n)
 
@@ -1203,7 +1204,8 @@ def train3(
                 center_loss.item(),
             )
         )
-        show_image(model_image, params["num_t"], title=f"epoch {e}")
+        if __debug__:
+            show_image(model_image, params["num_t"], title=f"epoch {e}")
 
     model.alpha.requires_grad = True
     model.gamma.requires_grad = True
