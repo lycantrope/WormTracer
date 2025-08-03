@@ -1260,17 +1260,20 @@ def train3(
         params,
         txt="id{}_{}".format(params["id"], "final"),
     )
-    l1_loss = nn.L1Loss()
-    # Calculate the loss for display, this part does not require grad.
-    losses = [
-        l1_loss(model_image, real_image),
-        continuity_loss_weight * l1_loss(model.theta[:-1, :], model.theta[1:, :]),
-        smoothness_loss_weight * l1_loss(model.theta[:, :-1], model.theta[:, 1:]),
-        length_loss_weight * ((model.unitLength[:-1] - model.unitLength[1:]) ** 2),
-        center_loss_weight * ((model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2),
-    ]
-    for i in range(len(losses)):
-        losses[i] = float(losses[i].clone().detach().cpu().numpy())
+    with torch.no_grad():
+        # Calculate the loss for display, this part does not require grad.
+        losses = [
+            torch.mean((model_image - real_image) ** 2, axis=(1, 2)),
+            continuity_loss_weight
+            * torch.mean((model.theta[:-1, :] - model.theta[1:, :]) ** 2, axis=1),
+            smoothness_loss_weight
+            * torch.mean((model.theta[:, :-1] - model.theta[:, 1:]) ** 2, axis=1),
+            length_loss_weight * ((model.unitLength[:-1] - model.unitLength[1:]) ** 2),
+            center_loss_weight
+            * ((model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2),
+        ]
+        for i in range(len(losses)):
+            losses[i] = losses[i].clone().detach().cpu().numpy()
     return losses
 
 
@@ -1301,19 +1304,19 @@ def get_shape_params(shape_params, params):
 
 
 def loss_compare(loss_pair):
-    im_select = int(loss_pair[0][0] > loss_pair[1][0])
-    con_select = int(loss_pair[0][1] > loss_pair[1][1])
-    smo_select = int(loss_pair[0][2] > loss_pair[1][2])
+    im_select = int(max(loss_pair[0][0]) > max(loss_pair[1][0]))
+    con_select = int(max(loss_pair[0][1]) > max(loss_pair[1][1]))
+    smo_select = int(max(loss_pair[0][2]) > max(loss_pair[1][2]))
     if im_select + con_select + smo_select == 3:
         return 1
     if im_select + con_select + smo_select == 0:
         return 0
     q75, q50, q25 = np.percentile(loss_pair[im_select][0], [75, 50, 25])
-    im_exrate = (loss_pair[1 - im_select][0] - q50) / (q75 - q25)
+    im_exrate = (max(loss_pair[1 - im_select][0]) - q50) / (q75 - q25)
     q75, q50, q25 = np.percentile(loss_pair[im_select][1], [75, 50, 25])
-    con_exrate = (loss_pair[1 - con_select][1] - q50) / (q75 - q25)
+    con_exrate = (max(loss_pair[1 - con_select][1]) - q50) / (q75 - q25)
     q75, q50, q25 = np.percentile(loss_pair[im_select][2], [75, 50, 25])
-    smo_exrate = (loss_pair[1 - smo_select][2] - q50) / (q75 - q25)
+    smo_exrate = (max(loss_pair[1 - smo_select][2]) - q50) / (q75 - q25)
     exrate_loss = np.argmax(np.array([im_exrate, con_exrate, smo_exrate]))
     return [im_select, con_select, smo_select][exrate_loss]
 

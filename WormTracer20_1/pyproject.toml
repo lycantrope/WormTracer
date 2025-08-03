@@ -1,6 +1,6 @@
 [project]
 name = "WormTracer"
-version = "20.6.3"
+version = "20.6.4"
 description = "WormTracer package"
 authors = [
     { name = "Koyo Kuze" },
