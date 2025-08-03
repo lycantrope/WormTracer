@@ -859,7 +859,7 @@ center loss : {np.mean(losses_all[i][4])}
             },
         )
 
-        pts = np.stack((x - x_st, y - y_st), axis=-1).astype(int)
+        pts = np.clip(np.stack((x - x_st, y - y_st), axis=-1), 0.0, None)
 
         for i, (pt, im) in enumerate(zip(pts, real_image)):
             if i % 100 == 0:
