@@ -721,12 +721,13 @@ center loss : {np.mean(losses_all[i][4])}
     )
 
     rois = []
+    n_digit = len(str(x.shape[0]))
     for pos, skel in enumerate(zip(x, y)):
         centerline = np.asarray(skel).T
-        name = f"{pos:d}"
+        name = str(pos).rjust(n_digit, "0")
         head_roi = roifile.ImagejRoi.frompoints(
             [centerline[0]],
-            name="Head",
+            name=name + "-Head",
             position=pos,
         )
 
@@ -751,10 +752,10 @@ center loss : {np.mean(losses_all[i][4])}
     rois = []
     for pos, skel in enumerate(zip(x_rev, y_rev)):
         centerline = np.asarray(skel).T
-        name = f"{pos:d}"
+        name = str(pos).rjust(n_digit, "0")
         head_roi = roifile.ImagejRoi.frompoints(
             [centerline[0]],
-            name="Head",
+            name=name + "-Head",
             position=pos,
         )
 
