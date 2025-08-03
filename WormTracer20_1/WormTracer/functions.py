@@ -1254,16 +1254,20 @@ def train3(
         params,
         txt="id{}_{}".format(params["id"], "final"),
     )
-    L1loss = nn.L1Loss()
-    losses = [
-        L1loss(model_image, real_image),
-        continuity_loss_weight * L1loss(model.theta[:-1, :], model.theta[1:, :]),
-        smoothness_loss_weight * L1loss(model.theta[:, :-1], model.theta[:, 1:]),
-        length_loss_weight * ((model.unitLength[:-1] - model.unitLength[1:]) ** 2),
-        center_loss_weight * ((model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2),
-    ]
-    for i in range(len(losses)):
-        losses[i] = losses[i].clone().detach().cpu().numpy()
+    with torch.no_grad():
+        # Calculate the loss for display, this part does not require grad.
+        losses = [
+            torch.mean((model_image - real_image) ** 2, axis=(1, 2)),
+            continuity_loss_weight
+            * torch.mean((model.theta[:-1, :] - model.theta[1:, :]) ** 2, axis=1),
+            smoothness_loss_weight
+            * torch.mean((model.theta[:, :-1] - model.theta[:, 1:]) ** 2, axis=1),
+            length_loss_weight * ((model.unitLength[:-1] - model.unitLength[1:]) ** 2),
+            center_loss_weight
+            * ((model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2),
+        ]
+        for i in range(len(losses)):
+            losses[i] = losses[i].clone().detach().cpu().numpy()
     return losses
 
 
