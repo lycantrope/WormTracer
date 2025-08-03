@@ -31,6 +31,9 @@ logger = logging.getLogger()
 
 
 def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
+    if not __debug__:
+        return
+
     T = image.shape[0]
     num_t = min(num_t, T)
     t_sparse = np.linspace(0, T - 1, min(num_t, T), dtype=int)
@@ -689,7 +692,7 @@ def get_use_points(
         use_points = np.linspace(0, T - 1, (T - 1) // (cap_span + 1) + 2, dtype=int)
         nont_flag = [0] * (use_points.shape[0])
 
-    if show_plot:
+    if __debug__ and show_plot:
         plt.plot(image_losses)
         plt.plot([borderline] * T)
         plt.plot([under_borderline] * T)
@@ -1324,6 +1327,8 @@ def loss_compare(loss_pair):
 
 
 def show_loss_plot(losses, title=""):
+    if not __debug__:
+        return
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.plot(losses[0], label="im")
@@ -1363,12 +1368,13 @@ def judge_head_amplitude(x, y):
     curve_rate_var = ((theta[:, 1:] - theta[:, :-1] + np.pi) % (2 * np.pi) - np.pi).var(
         axis=0
     )
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    ax.plot(curve_rate_var)
-    ax.set_xlabel("body segment", fontsize=20)
-    ax.set_ylabel("curve rate var", fontsize=20)
-    # plt.show()
+    if __debug__:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.plot(curve_rate_var)
+        ax.set_xlabel("body segment", fontsize=20)
+        ax.set_ylabel("curve rate var", fontsize=20)
+        # plt.show()
     idx15per = int(np.round(x.shape[1] * 0.15))
     idx20per = int(np.round(x.shape[1] * 0.20))
     curve_mean1 = curve_rate_var[idx15per : idx20per + 1].mean()
@@ -1420,14 +1426,15 @@ def judge_head_frequency(x, y):
     # logger.info('correlation =', cor)
 
     # show power spectrum plot
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    ax.imshow(spat)
-    ax.set_aspect(0.1)
-    ax.set_xlabel("body segment", fontsize=20)
-    ax.set_ylabel("peak curve freq", fontsize=20)
-    ax.set_title(f"Correlation = {cor:.3g}")
-    # plt.show()
+    if __debug__:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.imshow(spat)
+        ax.set_aspect(0.1)
+        ax.set_xlabel("body segment", fontsize=20)
+        ax.set_ylabel("peak curve freq", fontsize=20)
+        ax.set_title(f"Correlation = {cor:.3g}")
+        # plt.show()
 
     x_rev, y_rev = x[:, ::-1], y[:, ::-1]
     # Reversed

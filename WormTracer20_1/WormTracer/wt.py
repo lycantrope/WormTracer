@@ -267,7 +267,7 @@ def run(
         image_losses, real_image, x, y, x_st, y_st, params, image_info, cap_span
     )
     use_points, nont_flag, simple_area = get_use_points(
-        image_losses, image_loss_max, cap_span, x, y, params["plot_n"], show_plot=True
+        image_losses, image_loss_max, cap_span, x, y, params["plot_n"], show_plot=False
     )
 
     show_image(real_image, params["num_t"], title="real image")
