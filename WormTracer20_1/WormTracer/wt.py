@@ -185,7 +185,7 @@ def run(
         format="%(message)s",
         level=logging.INFO,
     )
-    logger.info("WormTracer:20.5.1")
+    logger.info("WormTracer:20.5.2")
     logger.info("dataset_path = " + os.fspath(PurePath(dataset_path)))
     logger.info("output_path = " + os.fspath(PurePath(output_path)))
 

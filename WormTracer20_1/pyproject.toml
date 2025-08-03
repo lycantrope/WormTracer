@@ -1,6 +1,6 @@
 [project]
 name = "WormTracer"
-version = "20.5.1"
+version = "20.5.2"
 description = "WormTracer package"
 authors = [
     { name = "Koyo Kuze" },
@@ -12,7 +12,7 @@ authors = [
 ]
 dependencies = [
     "numpy",
-    "opencv-python",
+    "opencv-python-headless",
     "matplotlib",
     "Pillow",
     "scikit-image",
@@ -20,6 +20,9 @@ dependencies = [
     "pyyaml",
 ]
 readme = "README.md"
+
+[project.scripts]
+wormtracer = "WormTracer.__main__:main"
 
 
 [tool.ruff.lint]
