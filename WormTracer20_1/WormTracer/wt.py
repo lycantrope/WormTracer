@@ -186,7 +186,7 @@ def run(
         format="%(message)s",
         level=logging.INFO,
     )
-    logger.info("WormTracer:20.6.4")
+    logger.info("WormTracer:20.6.5")
     logger.info("dataset_path = " + os.fspath(PurePath(dataset_path)))
     logger.info("output_path = " + os.fspath(PurePath(output_path)))
 
@@ -866,14 +866,14 @@ center loss : {np.mean(losses_all[i][4])}
                     thickness=3,
                 )
                 im_lines_5d = im_lines[None, None, :, :, :]
-                yield np.transpose(im_lines_5d, (0, 1, 4, 2, 3)).astype(np.uint8)
+                yield np.transpose(im_lines_5d, (0, 1, 4, 2, 3)).astype("u1")
 
         tifffile.imwrite(
             filename,
             data=image_gen(),
             imagej=True,
             shape=(T, 1, 3, Y, X),
-            dtype=np.uint8,
+            dtype="u1",
             metadata={
                 "axes": "TZCYX",
                 "labels": [
