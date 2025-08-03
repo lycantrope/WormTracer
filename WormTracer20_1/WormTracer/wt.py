@@ -723,7 +723,7 @@ center loss : {np.mean(losses_all[i][4])}
 
     rois = []
     n_digit = len(str(x.shape[0]))
-    for pos, skel in enumerate(zip(x, y)):
+    for pos, skel in enumerate(zip(x, y), start=1):
         centerline = np.asarray(skel).T
         name = str(pos).rjust(n_digit, "0")
         head_roi = roifile.ImagejRoi.frompoints(
@@ -751,7 +751,7 @@ center loss : {np.mean(losses_all[i][4])}
     )
 
     rois = []
-    for pos, skel in enumerate(zip(x_rev, y_rev)):
+    for pos, skel in enumerate(zip(x_rev, y_rev), start=1):
         centerline = np.asarray(skel).T
         name = str(pos).rjust(n_digit, "0")
         head_roi = roifile.ImagejRoi.frompoints(
@@ -852,34 +852,32 @@ center loss : {np.mean(losses_all[i][4])}
 
         end_T = n_input_images - 1 if params["end_T"] == 0 else params["end_T"]
         T, Y, X = real_image.shape
-
-        def image_gen():
-            pts = np.stack((x - x_st, y - y_st), axis=-1)
-            for i, (pt, im) in enumerate(zip(pts, real_image)):
-                if i % 100 == 0:
-                    print(i + 1, end=" ")
-                im_rgb = cv2.cvtColor(im, cv2.COLOR_GRAY2BGR)
-                im_lines = cv2.polylines(
-                    im_rgb,
-                    pt,
-                    isClosed=False,
-                    color=(0, 0, 255),
-                    thickness=3,
-                )
-                im_lines_5d = im_lines[None, None, :, :, :]
-                yield np.transpose(im_lines_5d, (0, 1, 4, 2, 3)).astype("u1")
-
-        tifffile.imwrite(
+        stack = tifffile.memmap(
             filename,
-            data=image_gen(),
-            imagej=True,
-            shape=(T, 1, 3, Y, X),
+            shape=(T, 3, Y, X),
             dtype="u1",
             metadata={
-                "axes": "TZCYX",
+                "axes": "TCYX",
                 "labels": [
-                    "index: %d" % i for i in range(params["start_T"], end_T + 1)
+                    f"index: {i:d}" for i in range(params["start_T"], end_T + 1)
                 ],
             },
         )
-        print("\nMultipage tiff saved to " + filename)
+
+        pts = np.stack((x - x_st, y - y_st), axis=-1).astype(int)
+
+        for i, (pt, im) in enumerate(zip(pts, real_image)):
+            if i % 100 == 0:
+                print(i + 1, end=" ")
+            im_rgb = cv2.cvtColor(im, cv2.COLOR_GRAY2BGR)
+            im_lines = cv2.polylines(
+                im_rgb,
+                pt,
+                isClosed=False,
+                color=(0, 0, 255),
+                thickness=3,
+            )  # (Y, X, C)
+            # (Y, X, C) => (C, Y, X)
+            stack[i] = np.transpose(im_lines, (2, 0, 1)).astype("u1")
+            stack.flush()
+        logger.info("Multipage Tiff saved to " + filename)
