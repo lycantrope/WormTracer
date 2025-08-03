@@ -858,16 +858,19 @@ center loss : {np.mean(losses_all[i][4])}
                 ],
             },
         )
+        pts = np.stack((x - x_st, y - y_st), axis=-1)
 
-        pts = np.clip(np.stack((x - x_st, y - y_st), axis=-1), 0.0, None)
+        # OpenCV only accept np.int32
+        pts = np.clip(pts, 0, None).astype("i4")
 
         for i, (pt, im) in enumerate(zip(pts, real_image)):
             if i % 100 == 0:
                 print(i + 1, end=" ")
             im_rgb = cv2.cvtColor(im, cv2.COLOR_GRAY2BGR)
+            # pt is an [N, 2] array, OpenCV only use (1, N, 2) for plotting.
             im_lines = cv2.polylines(
                 im_rgb,
-                pt,
+                [pt],
                 isClosed=False,
                 color=(0, 0, 255),
                 thickness=3,
