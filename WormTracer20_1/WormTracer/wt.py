@@ -16,6 +16,7 @@ import torch
 import yaml
 from matplotlib import animation, rc
 
+from . import __version__
 from .functions import (
     Model,
     calc_cap_span,
@@ -186,7 +187,7 @@ def run(
         format="%(message)s",
         level=logging.INFO,
     )
-    logger.info("WormTracer:20.6.5")
+    logger.info("WormTracer:" + __version__)
     logger.info("dataset_path = " + os.fspath(PurePath(dataset_path)))
     logger.info("output_path = " + os.fspath(PurePath(output_path)))
 

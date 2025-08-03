@@ -1,6 +1,5 @@
 [project]
 name = "WormTracer"
-version = "20.6.5"
 description = "WormTracer package"
 authors = [
     { name = "Koyo Kuze" },
@@ -10,6 +9,7 @@ authors = [
     { name = "Yu Toyoshima" },
     { name = "Yuichi Iino", email = "iino@bs.s.u-tokyo.ac.jp" },
 ]
+dynamic = ["version", "readme"]
 dependencies = [
     "numpy<2",
     "opencv-python-headless",
@@ -20,14 +20,17 @@ dependencies = [
     "pyyaml",
     "roifile[all]>=2020.11.28",
 ]
-readme = "README.md"
 
 [project.scripts]
 wormtracer = "WormTracer.__main__:main"
 
 [build-system]
-requires = ["setuptools", "wheel", "hatchling"]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools"
 
+[tool.setuptools.dynamic]
+version = { attr = "WormTracer.__version__" }
+readme = { file = ["README.md"] }
 
 [tool.ruff.lint]
 extend-select = ["I001"]
