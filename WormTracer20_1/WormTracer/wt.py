@@ -851,6 +851,7 @@ center loss : {np.mean(losses_all[i][4])}
             filename,
             shape=(T, 3, Y, X),
             dtype="u1",
+            imagej=True,
             metadata={
                 "axes": "TCYX",
                 "labels": [
