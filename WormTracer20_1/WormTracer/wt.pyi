@@ -1,9 +1,10 @@
 import os
+from typing import Optional
 
 def run(
     parameter_file: os.PathLike,
     dataset_path: os.PathLike,
-    output_directory: os.PathLike = "",
+    output_directory: Optional[os.PathLike] = None,
     **kwargs,
 ):
     """

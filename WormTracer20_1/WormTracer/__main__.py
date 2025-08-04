@@ -21,7 +21,7 @@ def get_parser():
         "-o",
         "--output",
         dest="output_directory",
-        default="",
+        default=None,
         help="Path to a directory to save the output results. Defaults to the input folder if not specified.",
     )
 

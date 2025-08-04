@@ -163,7 +163,7 @@ logger = logging.getLogger(__name__)
 
 
 def run(
-    parameter_file, dataset_path, output_directory="", **kwargs
+    parameter_file, dataset_path, output_directory=None, **kwargs
 ):  # execute the whole WormTracer process, kwargs are optional parameter=value pairs
     matplotlib.use("Agg")
 
@@ -254,7 +254,7 @@ def run(
     params["gamma"] = 0.0
     params["delta"] = 0.0
     image_info = {"image_shape": real_image.shape, "device": device}
-    cap_span = calc_cap_span(image_info, params["plot_n"], s_m=8000)
+    cap_span = calc_cap_span(image_info, params["plot_n"])
     model_image = make_image(x, y, x_st, y_st, params, image_info)
 
     # get points for trace blocks
