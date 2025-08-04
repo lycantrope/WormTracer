@@ -4,6 +4,7 @@ import datetime
 import json
 import logging
 import os
+import sys
 from pathlib import Path, PurePath
 
 import cv2
@@ -187,6 +188,7 @@ def run(
         format="%(message)s",
         level=logging.INFO,
     )
+    logger.info(f"Python: {sys.version_info}")
     logger.info("WormTracer:" + __version__)
     logger.info("dataset_path = " + os.fspath(PurePath(dataset_path)))
     logger.info("output_path = " + os.fspath(PurePath(output_path)))
