@@ -241,10 +241,6 @@ def run(
     )
     theta = make_theta_from_xy(x, y)
 
-    logger.info(
-        f"frame = {len(Tscaled_ind):d} shape = {real_image.shape} unitLength = {unitLength}"
-    )
-
     # log
     time_now = datetime.datetime.now()
     logger.info(f"Reading images finished at {time_now}")
