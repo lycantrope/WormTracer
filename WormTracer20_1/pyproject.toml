@@ -20,6 +20,7 @@ dependencies = [
     "pyyaml",
     "roifile[all]>=2020.11.28",
 ]
+license = { file = "LICENSE" }
 
 [project.scripts]
 wormtracer = "WormTracer.__main__:main"
@@ -31,6 +32,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.dynamic]
 version = { attr = "WormTracer.__version__" }
 readme = { file = ["README.md"] }
+
 
 [tool.ruff.lint]
 extend-select = ["I001"]
