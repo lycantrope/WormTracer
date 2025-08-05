@@ -727,6 +727,9 @@ center loss : {np.mean(losses_all[i][4])}
 
         head_roi.roitype = roifile.ROI_TYPE.POINT
         head_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
+        head_roi.arrow_style_or_aspect_ratio = 3
+        head_roi.stroke_width = 5
+        head_roi.stroke_color = b"\xff\xff\x00\x00"
 
         skel_roi = roifile.ImagejRoi.frompoints(
             centerline,
@@ -735,6 +738,8 @@ center loss : {np.mean(losses_all[i][4])}
         )
         skel_roi.roitype = roifile.ROI_TYPE.POLYLINE
         skel_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
+        skel_roi.stroke_color = b"\xff\xff\xff\x00"
+        skel_roi.stroke_width = 2
         rois.extend((head_roi, skel_roi))
 
     roifile.roiwrite(
@@ -755,6 +760,9 @@ center loss : {np.mean(losses_all[i][4])}
 
         head_roi.roitype = roifile.ROI_TYPE.POINT
         head_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
+        head_roi.arrow_style_or_aspect_ratio = 3
+        head_roi.stroke_width = 5
+        head_roi.stroke_color = b"\xff\xff\x00\x00"
 
         skel_roi = roifile.ImagejRoi.frompoints(
             centerline,
@@ -763,6 +771,8 @@ center loss : {np.mean(losses_all[i][4])}
         )
         skel_roi.roitype = roifile.ROI_TYPE.POLYLINE
         skel_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
+        skel_roi.stroke_color = b"\xff\xff\xff\x00"
+        skel_roi.stroke_width = 2
         rois.extend((head_roi, skel_roi))
 
     roifile.roiwrite(
