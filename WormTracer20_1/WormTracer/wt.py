@@ -738,9 +738,9 @@ center loss : {np.mean(losses_all[i][4])}
         )
         skel_roi.roitype = roifile.ROI_TYPE.POLYLINE
         skel_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
-        skel_roi.stroke_color = b"\xff\xff\xff\x00"
+        skel_roi.stroke_color = b"\xff\x00\x00\xff"
         skel_roi.stroke_width = 2
-        rois.extend((head_roi, skel_roi))
+        rois.extend((skel_roi, head_roi))
 
     roifile.roiwrite(
         os.path.join(output_path, output_name + "_RoiSet.zip"),
@@ -771,9 +771,9 @@ center loss : {np.mean(losses_all[i][4])}
         )
         skel_roi.roitype = roifile.ROI_TYPE.POLYLINE
         skel_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
-        skel_roi.stroke_color = b"\xff\xff\xff\x00"
+        skel_roi.stroke_color = b"\xff\x00\x00\xff"
         skel_roi.stroke_width = 2
-        rois.extend((head_roi, skel_roi))
+        rois.extend((skel_roi, head_roi))
 
     roifile.roiwrite(
         os.path.join(output_path, output_name + "_RoiSet_rev.zip"),
