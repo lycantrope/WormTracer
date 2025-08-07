@@ -137,7 +137,8 @@ def get_property(filenames, rescale):
         _, ims = cv2.imreadmulti(filename=filenames[0], mats=[], flags=0)
         ims = np.asarray(ims)
     im = ims[0]
-    if np.unique(im) != 2:
+
+    if np.unique(im).size != 2:
         logger.warning("Warning! : Input images seem not to be binary.")
     if not math.isclose(rescale, 1.0, rel_tol=1e4):
         im = cv2.resize(
