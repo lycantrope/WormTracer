@@ -264,13 +264,23 @@ def run(
     # Retrieve the best frame which has the lowest loss.
     best_frame_idx = np.argmin(image_losses)
 
-    image_loss_max = get_image_loss_max(
-        best_fit_image=real_image[best_frame_idx],
-        cx=x[best_frame_idx, 0],
-        cy=y[best_frame_idx, 0],
-        params=params,
-        image_info=image_info,
+    image_loss_max = max(
+        get_image_loss_max(
+            best_fit_image=real_image[best_frame_idx],
+            cx=x[best_frame_idx, 0],
+            cy=y[best_frame_idx, 0],
+            params=params,
+            image_info=image_info,
+        ),
+        get_image_loss_max(
+            best_fit_image=real_image[best_frame_idx],
+            cx=x[best_frame_idx, -1],
+            cy=y[best_frame_idx, -1],
+            params=params,
+            image_info=image_info,
+        ),
     )
+
     if __debug__:
         show_image(real_image, params["num_t"], title="real image")
         show_image(model_image, params["num_t"], title="model image")
@@ -455,7 +465,6 @@ center loss : {np.mean(losses[4])}
             min(block.end + padding, training_block.nframe - 1),
         )
 
-        logger.info(f"[{start} {end}]")
         params["use_area"] = block
         # filenames_ = filenames[use_area[0]:use_area[1]+1]
         theta_ = theta[start : end + 1, :].copy()

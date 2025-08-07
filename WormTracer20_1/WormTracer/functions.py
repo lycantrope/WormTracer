@@ -361,12 +361,16 @@ def get_skeleton_networkx(im: np.ndarray, plot_n: int):
 def get_width(im, x, y):
     """Get width of the object by measure distance of centerline to the object's surface."""
     im_filled = ndi.binary_fill_holes(im)
+    H, W = im_filled.shape
+    scale = max(H, W)
+
     x = x.reshape([-1, 1, 1])
     y = y.reshape([-1, 1, 1])
-    y_3d = np.arange(im_filled.shape[0]).reshape([1, -1, 1])
-    x_3d = np.arange(im_filled.shape[1]).reshape([1, 1, -1])
+
+    y_3d = np.arange(H).reshape([1, -1, 1]) * 2 / scale - 1.0
+    x_3d = np.arange(W).reshape([1, 1, -1]) * 2 / scale - 1.0
     segment_distance = np.sqrt((x - x_3d) ** 2 + (y - y_3d) ** 2)
-    max_dist = im_filled.shape[0] + im_filled.shape[1]
+    max_dist = (H + W) * 2 / scale
     new_segment_distance = segment_distance + im_filled * max_dist
     wid = new_segment_distance.min(axis=(1, 2)).max()
     return wid
@@ -654,8 +658,9 @@ def get_use_blocks(
     Judge frames complex or not and get span for training.
     """
     # the criteria to filter complex area
-    rigid = 0.4 * image_loss_max + 0.6 * np.min(image_losses)
-    relaxed = 0.2 * image_loss_max + 0.8 * np.min(image_losses)
+    image_losses_min = np.min(image_losses)
+    rigid = 0.4 * image_loss_max + 0.6 * image_losses_min
+    relaxed = 0.2 * image_loss_max + 0.8 * image_losses_min
     return TrainingBlocks(losses=image_losses, relaxed=relaxed, rigid=rigid)
 
 
@@ -665,8 +670,9 @@ def get_use_points_old(
     """Judge flames complex or not and get span for training."""
     T = image_losses.shape[0]
     # find complex area
-    borderline = 0.4 * image_loss_max + 0.6 * np.min(image_losses)
-    under_borderline = 0.2 * image_loss_max + 0.8 * np.min(image_losses)
+    image_losses_min = np.min(image_losses)
+    borderline = 0.4 * image_loss_max + 0.6 * image_losses_min
+    under_borderline = 0.2 * image_loss_max + 0.8 * image_losses_min
     nont_ini, nont_end, simple_area = find_nont_area(
         image_losses, borderline, under_borderline
     )
@@ -981,7 +987,7 @@ def pixel_value_from_dist_max(
     sharpness: float = 2.0,
 ) -> torch.Tensor:
     """Get pixel value when distance from midline is given."""
-    return 255 * (contrast * (torch.sigmoid(max_dist * sharpness) - 0.5) + 0.5)
+    return contrast * (torch.sigmoid(max_dist * sharpness) - 0.5) + 0.5
 
 
 PIXEL_MINIMUM = 255 * -0.1
@@ -1215,6 +1221,7 @@ def train3(
     if not torch.is_tensor(real_image):
         real_image = torch.tensor(real_image).to(device)
 
+    real_image = real_image.to(torch.float32) / 255.0
     # main optimization
     for e in range(epochs):
         # We should zero the gradient before training.
@@ -1328,7 +1335,7 @@ def train3(
         optimizer.step()
         optimizer.zero_grad()
 
-    if not params["ShowProgress"]:  # Show Progress
+    if params["ShowProgress"]:  # Show Progress
         logger.info(
             "{:.2f} {:.2f} {:.2f} {:.2f}".format(
                 image_loss.item(),
