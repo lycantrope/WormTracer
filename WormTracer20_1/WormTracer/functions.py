@@ -577,7 +577,10 @@ def get_image_loss_max(best_fit_image, cx, cy, params, image_info):
     # Create a straigthen line to make a bad image that maximize the loss.
     x0 = np.ones(params["plot_n"]) * cx
     y0 = np.ones(params["plot_n"]) * cy
+    x0 = x0.reshape(1, -1)
+    y0 = y0.reshape(1, -1)
     im0 = make_image(x0, y0, params, image_info)
+    im0 = im0[0]
     image_loss_max = np.mean((best_fit_image - im0) ** 2)
     return image_loss_max
 
