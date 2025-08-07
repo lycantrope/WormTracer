@@ -334,10 +334,9 @@ def run(
         if block.is_complex:
             continue
 
-        logger.debug(block)
+        logger.info(str(block))
         params["use_area"] = block
         # filenames_ = filenames[use_area[0]:use_area[1]+1]
-        T = block.start - block[0] + 1
         theta_ = theta[block.start : block.end + 1, :].copy()
 
         # read and preprocess images
@@ -455,13 +454,14 @@ center loss : {np.mean(losses[4])}
             max(block.start - padding, 0),
             min(block.end + padding, training_block.nframe - 1),
         )
-        print(start, end)
+
+        logger.info(f"[{start} {end}]")
         params["use_area"] = block
         # filenames_ = filenames[use_area[0]:use_area[1]+1]
         theta_ = theta[start : end + 1, :].copy()
 
         # read and preprocess images
-        real_image, _, _ = parse_image(
+        real_image, y_st, x_st = parse_image(
             filenames_all,
             params["rescale"],
             Worm_is_black,
@@ -469,6 +469,7 @@ center loss : {np.mean(losses[4])}
             Tscaled_ind[start : end + 1],
         )
 
+        T, H, W = real_image.shape
         # make flipping theta candidate
         theta_cand, _ = make_theta_cand(theta_)
 
@@ -504,7 +505,6 @@ center loss : {np.mean(losses[4])}
             model.cx.detach().cpu().numpy(),
             model.cy.detach().cpu().numpy(),
         )
-        T, H, W = real_image.shape
         model_image = model(batch=T, width=W, height=H)
 
         # flip final theta to trace again
@@ -512,7 +512,7 @@ center loss : {np.mean(losses[4])}
 
         # make model instance and training
         model = (
-            Model(init_cx, init_cy, init_theta, init_unitLength, image_info, params)
+            Model(init_cx, init_cy, init_theta, init_unitLength, params)
             .to(torch.float32)
             .to(device)
         )
