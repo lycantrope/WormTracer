@@ -387,7 +387,7 @@ def run(
         )
 
         # get trace information
-        losses_all[block.index](losses)
+        losses_all[block.index] = losses
         theta_model = model.theta.detach().cpu().numpy()
         unitL_model = model.unitLength.detach().cpu().numpy().reshape(-1, 1)
         x_cent, y_cent = (
