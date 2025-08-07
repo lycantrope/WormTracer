@@ -394,6 +394,7 @@ def run(
             model.cx.detach().cpu().numpy(),
             model.cy.detach().cpu().numpy(),
         )
+
         shape_params.append(
             (
                 block.size,
@@ -402,8 +403,6 @@ def run(
                 model.delta.detach().cpu(),
             )
         )
-        model_image = model(batch=T, width=W, height=H)
-
         # reconstruct plots from model results
         x_model, y_model = make_plot(theta_model, unitL_model, x_cent, y_cent)
         x[block.start : block.end + 1, :] = x_model
@@ -423,6 +422,8 @@ length loss : {np.mean(losses[3])}
 center loss : {np.mean(losses[4])}
 """)
         if __debug__:
+            # Only compute the model_image, if we want to show the result.
+            model_image = model(batch=T, width=W, height=H)
             show_image(real_image, params["num_t"], title="real image")
             show_image(model_image, params["num_t"], title="model image")
             show_loss_plot(losses_all[block.index], title="losses of model")
@@ -437,9 +438,9 @@ center loss : {np.mean(losses[4])}
         weights=shape_params[:, 0],
         axis=0,
     )
-    params["init_alpha"] = weighted_params[0]
-    params["init_gamma"] = weighted_params[1]
-    params["init_delta"] = weighted_params[2]
+    params["init_alpha"] = float(weighted_params[0])
+    params["init_gamma"] = float(weighted_params[1])
+    params["init_delta"] = float(weighted_params[2])
 
     logger.info("STEP2 : optimization for complex posture blocks\n")
 
