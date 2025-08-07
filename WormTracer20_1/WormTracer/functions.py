@@ -1303,8 +1303,7 @@ def train3(
 
     # minor adjustment
     for e in range(params["epoch_plus"]):
-        model_image = model().to(device)
-        optimizer.zero_grad()
+        model_image = model(batch=T, width=W, height=H).to(device)
 
         image_loss = torch.mean((model_image - real_image) ** 2)
         continuity_loss = continuity_loss_weight * torch.mean(
@@ -1327,6 +1326,7 @@ def train3(
                 logger.info("Minor adjustment done.")
             break
         optimizer.step()
+        optimizer.zero_grad()
 
     if not params["ShowProgress"]:  # Show Progress
         logger.info(
