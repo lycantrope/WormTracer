@@ -137,7 +137,7 @@ def get_property(filenames, rescale):
         _, ims = cv2.imreadmulti(filename=filenames[0], mats=[], flags=0)
         ims = np.asarray(ims)
     im = ims[0]
-    if np.all((0 == np.asarray(im)) | (np.asarray(im) == 255)):
+    if np.unique(im) != 2:
         logger.warning("Warning! : Input images seem not to be binary.")
     if not math.isclose(rescale, 1.0, rel_tol=1e4):
         im = cv2.resize(
@@ -841,7 +841,9 @@ def make_progress_image(image, num_t=20):
     T, H, W = image.shape
     t_sparse = np.linspace(0, T - 1, min(num_t, T), dtype=int)
     subset = image[t_sparse]
-    n_chunk = (subset.shape[0] + 1) // 5
+    n_chunk = subset.shape[0] // 5
+    if subset.shape[0] % 5 > 0:
+        n_chunk += 1
     progress_image = np.zeros((H * n_chunk, W * 5))
     for i, chunk in enumerate(np.array_split(subset, n_chunk, axis=0)):
         merge = np.hstack(chunk)
@@ -1264,16 +1266,17 @@ def train3(
             continue
 
         # Save Progres
-        save_progress(
-            model_image,
-            output_path,
-            output_name,
-            params,
-            txt="id{}_{}".format(params["id"], e),
-        )
         if not params["ShowProgress"]:
             continue
 
+        if params.get("SaveProgress"):
+            save_progress(
+                model_image,
+                output_path,
+                output_name,
+                params,
+                txt="id{}_{}".format(params["id"], e),
+            )
         # Show Progress
         logger.info(
             "{:.2f} {:.2f} {:.2f} {:.2f} {:.2f}".format(
@@ -1335,13 +1338,14 @@ def train3(
         )
         show_image(model_image, params["num_t"], title="final")
 
-    save_progress(
-        model_image,
-        output_path,
-        output_name,
-        params,
-        txt="id{}_{}".format(params["id"], "final"),
-    )
+    if params.get("SaveProgress"):
+        save_progress(
+            model_image,
+            output_path,
+            output_name,
+            params,
+            txt="id{}_{}".format(params["id"], "final"),
+        )
     with torch.no_grad():
         # Calculate the loss for display, this part does not require grad.
         losses = [
