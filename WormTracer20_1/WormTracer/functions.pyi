@@ -1,7 +1,7 @@
 # from __future__ import annotations
 
 import os
-from typing import Tuple, Union
+from typing import Generator, List, NamedTuple, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -14,7 +14,7 @@ def set_output_path(dataset_path, output_directory): ...
 def get_filenames(dataset_path: Union[str, bytes, os.PathLike]): ...
 def get_property(filenames, rescale): ...
 def read_serial_images(filenames, Tscaled_ind): ...
-def read_image(
+def parse_image(
     filenames,
     rescale,
     Worm_is_black,
@@ -26,8 +26,6 @@ def read_image(
 def calc_xy_and_prewidth(
     imagestack: np.ndarray,
     plot_n: int,
-    x_st: float,
-    y_st: float,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     """read images and get skeletonized plots"""
 
@@ -80,18 +78,16 @@ def make_single_image(
     height: int,
     pixel_matrix: np.ndarray,
 ) -> np.ndarray: ...
-def make_image(x, y, x_st, y_st, params, image_info):
-    """Create model image by dividing them to avoid CUDA memory error."""
+def make_image(x, y, params, image_info):
+    """Create model image based on centerline and parameters"""
 
-def get_image_loss_max(
-    image_losses, real_image, x, y, x_st, y_st, params, image_info, cap_span
-):
+def get_image_loss_max(best_fit_image, cx, cy, params, image_info):
     """Create bad image and get bad image_loss to judge complex area."""
 
-def get_use_points(
-    image_losses, image_loss_max, cap_span, x, y, plot_n, show_plot=True
-):
-    """Judge flames complex or not and get span for training."""
+def get_use_blocks(
+    image_losses: np.ndarray,
+    image_loss_max: float,
+) -> TrainingBlocks:
 
 def find_nont_area(image_losses, borderline, under_borderline): ...
 def check_enough_expanded(nont_span, temp_ini, temp_end, enough_rate=2): ...
@@ -107,7 +103,7 @@ def remove_progress(output_pathh, filename): ...
 def get_center(binimg):
     """Calculate center of images."""
 
-def set_init_xy(real_image):
+def set_init_xy(imstack):
     """Set init center plots for training."""
 
 def find_theta(theta, pretheta, plus=1):
@@ -117,7 +113,7 @@ def make_theta_cand(theta): ...
 def body_axis_function(body_ratio, plot_n, base=0.5): ...
 def annealing_function(epoch, T, speed=0.2, start=0, slope=1): ...
 def worm_width_all(
-    plot_n: torch.Tensor,
+    plot_n: int,
     alpha: torch.Tensor,
     gamma: torch.Tensor,
     delta: torch.Tensor,
@@ -164,7 +160,7 @@ def make_plot(theta, unitLength, x_cent, y_cent, x_st=0, y_st=0): ...
 def get_shape_params(shape_params, params): ...
 def loss_compare(loss_pair): ...
 def show_loss_plot(losses, title=""): ...
-def find_losslarge_area(losses_all): ...
+def find_losslarge_area(losses_all)->List[int]: ...
 
 ### arrange and save data ###
 
@@ -218,10 +214,39 @@ def straigthen(
 
 class Model(torch.nn.Module):
     def __init__(
-        self, init_cx, init_cy, init_theta, init_unitLength, image_info, params
+        self, init_cx, init_cy, init_theta, init_unitLength, params
     ): ...
-    def forward(self): ...
+    def forward(self, *, batch, width, height):...
 
 class EarlyStopping:
     def __init__(self, patience=30, delta=0): ...
     def __call__(self, loss, model): ...
+
+
+class Block(NamedTuple):
+    start: int
+    end: int
+    index: int
+    is_complex: bool
+
+    @property
+    def size(self) -> int:...
+
+    def __repr__(self) -> str:...
+
+class TrainingBlocks:
+    blocks:np.ndarray
+    complex_block:np.ndarray
+
+    complex_area:np.ndarray
+    simple_area:np.ndarray
+    
+    nblock:int
+
+    def __init__(self, losses:np.ndarray, relaxed:float, rigid:float): ...
+
+    def batch_iter(self, batchsize: Optional[int] = None) -> Generator[Block, None, None]:
+        """Return an iterator that yields Block(idx, start, end, is_complex) within a batchsize"""
+
+    @property
+    def nframe(self)->int: ...

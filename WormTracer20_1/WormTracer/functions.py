@@ -9,7 +9,7 @@ import os
 import shutil
 from math import pi
 from pathlib import Path
-from typing import Tuple, Union
+from typing import Iterator, NamedTuple, Optional, Tuple, Union
 
 import cv2
 import matplotlib.pyplot as plt
@@ -31,9 +31,6 @@ logger = logging.getLogger()
 
 
 def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
-    if not __debug__:
-        return
-
     T = image.shape[0]
     num_t = min(num_t, T)
     t_sparse = np.linspace(0, T - 1, min(num_t, T), dtype=int)
@@ -168,7 +165,7 @@ def read_serial_images(filenames, Tscaled_ind):
         yield cv2.imread(filenames[ind], cv2.IMREAD_GRAYSCALE)
 
 
-def read_image(
+def parse_image(
     filenames,
     rescale,
     Worm_is_black,
@@ -220,8 +217,6 @@ def read_image(
 def calc_xy_and_prewidth(
     imagestack: np.ndarray,
     plot_n: int,
-    x_st: float,
-    y_st: float,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     """read images and get skeletonized plots"""
     T = imagestack.shape[0]
@@ -260,18 +255,20 @@ def calc_xy_and_prewidth(
     unitLength = np.sqrt(
         np.median(((x[:, :-1] - x[:, 1:]) ** 2 + (y[:, :-1] - y[:, 1:]) ** 2))
     )
-    x += x_st
-    y += y_st
     return x, y, pre_width, unitLength
 
 
 def get_skeleton(im: np.ndarray, plot_n: int):
     """skeletonize image and get splined plots"""
-
     # skeletonize image
     im_filled = ndi.binary_fill_holes(im)
     im_skeleton = morphology.skeletonize(im_filled)
     point_list = np.argwhere(im_skeleton == 1)
+
+    H, W = im_skeleton.shape
+
+    # Normalized the points to (-1., 1.)
+    point_list = 2 * point_list / max(H, W) - 1.0
 
     if len(point_list) == 0:
         raise ValueError("Original image is empty")
@@ -506,7 +503,7 @@ def make_distance_matrix_np(radius: int) -> np.ndarray:
     return distance_matrix
 
 
-def make_distance_matrix(radius: int) -> np.ndarray:
+def make_distance_matrix(radius: int) -> torch.Tensor:
     diameter = radius * 2 + 1
     delta = (torch.arange(diameter) - radius) ** 2
     distance_matrix = torch.sqrt(delta[None, :] + delta[:, None])
@@ -523,8 +520,12 @@ def make_single_image(
     height: int,
     pixel_matrix: np.ndarray,
 ) -> np.ndarray:
-    cent_x = x.astype(np.int32)
-    cent_y = y.astype(np.int32)
+    scale = max(width, height)
+    # Since x and y will be (-1., 1.) array, we need to rescale back to the original coordinates
+    cent_x = (x + 1.0) * scale / 2
+    cent_y = (y + 1.0) * scale / 2
+    cent_x = cent_x.astype("i4")
+    cent_y = cent_y.astype("i4")
 
     diameter = pixel_matrix.shape[1]
     radius = diameter // 2
@@ -540,8 +541,8 @@ def make_single_image(
     return pad_image[radius : radius + height, radius : radius + width]
 
 
-def make_image(x, y, x_st, y_st, params, image_info):
-    """Create model image by dividing them to avoid CUDA memory error."""
+def make_image(x, y, params, image_info):
+    """Create model image using centerline and parameters"""
     T = x.shape[0]
     worm_wid = worm_width_all_np(
         plot_n=params["plot_n"],
@@ -558,10 +559,11 @@ def make_image(x, y, x_st, y_st, params, image_info):
     im_width = image_info["image_shape"][2]
     image = np.zeros((T, im_height, im_width))
 
+    # This part can be vectorize, but I think the running speed is relative OK.
     for i in range(T):
         image[i, :, :] = make_single_image(
-            x[i] - x_st,
-            y[i] - y_st,
+            x[i],
+            y[i],
             width=im_width,
             height=im_height,
             pixel_matrix=pixel_matrix,
@@ -570,22 +572,90 @@ def make_image(x, y, x_st, y_st, params, image_info):
     return image
 
 
-def get_image_loss_max(
-    image_losses, real_image, x, y, x_st, y_st, params, image_info, cap_span
-):
+def get_image_loss_max(best_fit_image, cx, cy, params, image_info):
     """Create bad image and get bad image_loss to judge complex area."""
-    small_loss_frame = np.argmin(image_losses)
-    im = real_image[small_loss_frame].reshape(
-        -1, real_image.shape[1], real_image.shape[2]
-    )
-    x0 = np.ones(params["plot_n"]) * x[small_loss_frame, 0].reshape(1, -1)
-    y0 = np.ones(params["plot_n"]) * y[small_loss_frame, 0].reshape(1, -1)
-    im0 = make_image(x0, y0, x_st, y_st, params, image_info)
-    image_loss_max = np.mean((im - im0) ** 2)
+    # Create a straigthen line to make a bad image that maximize the loss.
+    x0 = np.ones(params["plot_n"]) * cx
+    y0 = np.ones(params["plot_n"]) * cy
+    im0 = make_image(x0, y0, params, image_info)
+    image_loss_max = np.mean((best_fit_image - im0) ** 2)
     return image_loss_max
 
 
-def get_use_points(
+class Block(NamedTuple):
+    start: int
+    end: int
+    index: int
+    is_complex: bool
+
+    @property
+    def size(self) -> int:
+        return self.end - self.start + 1
+
+    def __repr__(self) -> str:
+        return f"Block(start={self.start:d}, end={self.end:d}, index={self.index:d}, is_complex={self.is_complex}, size={self.size:d})"
+
+
+class TrainingBlocks:
+    def __init__(self, losses, relaxed, rigid):
+        assert rigid > relaxed, "rigid margin must be greater than relaxed margin"
+
+        # Use relaxed criteria to separate the blocks
+        complex_area = losses > relaxed
+        distinct_from_prev = np.zeros_like(complex_area).astype(bool)
+        distinct_from_prev[1:] = complex_area[:-1] ^ complex_area[1:]
+        # labeling all blocks in 0-index
+        blocks = distinct_from_prev.astype(int).cumsum()
+        # If the block contains a complex block, label it as complex block.
+        complex_block_count = np.bincount(blocks, weights=(losses > rigid))
+        complex_block = np.where(complex_block_count > 0)[0]
+
+        self.blocks = blocks
+        self.complex_block = complex_block
+
+        self.complex_area = np.isin(blocks, complex_block)
+        self.simple_area = np.bitwise_not(self.complex_area)
+
+        label = np.unique(self.blocks)
+        self.nblock = len(label)
+
+    @property
+    def nframe(self):
+        return len(self.blocks)
+
+    def batch_iter(self, batchsize: Optional[int] = None):
+        """Return an iterator that yields Block(idx, is_complex, start, end) with a batchsize"""
+        block_sizes = np.bincount(self.blocks)
+        # it will return the index of first occurence.
+        label, onset = np.unique(self.blocks, return_index=True)
+        offset = onset + block_sizes - 1
+
+        mask = self.complex_area[onset]
+
+        if batchsize is None:
+            # We set the batchsize greater than the maximum block.
+            batchsize = int(block_sizes.max()) + 1
+
+        counter = itertools.count()
+        for is_complex, start, end in zip(mask, onset, offset):
+            for st in range(start, end, batchsize):
+                yield Block(next(counter), st, min(st + batchsize - 1, end), is_complex)
+
+
+def get_use_blocks(
+    image_losses: np.ndarray,
+    image_loss_max: float,
+) -> TrainingBlocks:
+    """
+    Judge frames complex or not and get span for training.
+    """
+    # the criteria to filter complex area
+    rigid = 0.4 * image_loss_max + 0.6 * np.min(image_losses)
+    relaxed = 0.2 * image_loss_max + 0.8 * np.min(image_losses)
+    return TrainingBlocks(losses=image_losses, relaxed=relaxed, rigid=rigid)
+
+
+def get_use_points_old(
     image_losses, image_loss_max, cap_span, x, y, plot_n, show_plot=True
 ):
     """Judge flames complex or not and get span for training."""
@@ -777,15 +847,14 @@ def make_progress_image(image, num_t=20):
 
 
 def save_progress(image, output_path, output_name: str, params, txt="real"):
-    if params["SaveProgress"]:
-        use_area = params["use_area"]
-        progress_image = make_progress_image(image, params["save_progress_num"])
-        filename = os.path.join(
-            output_path,
-            output_name + "_progress_image",
-            "{}-{}_{}.png".format(use_area[0], use_area[1], txt),
-        )
-        cv2.imwrite(filename, progress_image)
+    use_area = params["use_area"]
+    progress_image = make_progress_image(image, params["save_progress_num"])
+    filename = os.path.join(
+        output_path,
+        output_name + "_progress_image",
+        "{}-{}_{}.png".format(use_area[0], use_area[1], txt),
+    )
+    cv2.imwrite(filename, progress_image)
 
 
 def remove_progress(output_pathh, filename):
@@ -804,14 +873,24 @@ def get_center(binimg):
     return x, y
 
 
-def set_init_xy(real_image):
-    """Set init center plots for training."""
-    T = real_image.shape[0]
-    init_cx = torch.zeros(T)
-    init_cy = torch.zeros(T)
-    for t in range(T):
-        init_cx[t], init_cy[t] = get_center(real_image[t, :, :])
-    return init_cx, init_cy
+def set_init_xy(imstack):
+    """Set init center plots for training. The center will be normalized to (-1., 1.)"""
+    assert imstack.ndim == 3, "real_image is not 3-d array (T, H, W)"
+    if torch.is_tensor(imstack):
+        imstack = imstack.clone().detach().cpu().numpy()
+    imstack_max = np.max(imstack, axis=(1, 2), keepdims=True)
+    (zs, ys, xs) = np.where(imstack == imstack_max)
+    count_per_frame = np.bincount(zs)
+    init_cx = np.bincount(zs, weights=xs) / count_per_frame
+    init_cy = np.bincount(zs, weights=ys) / count_per_frame
+
+    _, H, W = imstack.shape
+    scale = max(H, W)
+
+    init_cx = (init_cx * 2).astype("f4") / scale - 1.0
+    init_cy = (init_cy * 2).astype("f4") / scale - 1.0
+
+    return torch.from_numpy(init_cx), torch.from_numpy(init_cy)
 
 
 def find_theta(theta, pretheta, plus=1):
@@ -866,7 +945,7 @@ def annealing_function(epoch, T, speed=0.2, start=0, slope=1):
 
 
 def worm_width_all(
-    plot_n: torch.Tensor,
+    plot_n: int,
     alpha: torch.Tensor,
     gamma: torch.Tensor,
     delta: torch.Tensor,
@@ -1008,7 +1087,6 @@ class Model(torch.nn.Module):
         init_cy,
         init_theta,
         init_unitLength,
-        image_info,
         params,
     ):
         super().__init__()
@@ -1019,16 +1097,14 @@ class Model(torch.nn.Module):
         self.alpha = nn.parameter.Parameter(params["init_alpha"])
         self.gamma = nn.parameter.Parameter(params["init_gamma"])
         self.delta = nn.parameter.Parameter(params["init_delta"])
-        self.image_info = image_info
         params["alpha"] = self.alpha
         params["gamma"] = self.gamma
         params["delta"] = self.delta
-        self.params = params
+        self.plot_n = params["plot_n"]
 
-    def forward(self):
+    def forward(self, *, batch, width, height):
         device = self.alpha.device
-        T, im_height, im_width = self.image_info["image_shape"]
-        plot_n = self.params["plot_n"]
+        plot_n = self.plot_n
         worm_wid = worm_width_all(
             plot_n,
             self.alpha,
@@ -1045,31 +1121,33 @@ class Model(torch.nn.Module):
 
         x = torch.cat(
             (
-                torch.zeros((T, 1)).to(device),
+                torch.zeros((batch, 1)).to(device),
                 torch.cumsum(
-                    self.unitLength.reshape((T, 1)).to(device) * torch.cos(self.theta),
+                    self.unitLength.reshape((batch, 1)).to(device)
+                    * torch.cos(self.theta),
                     dim=1,
                 ),
             ),
             dim=1,
         )
         x = (
-            x - torch.mean(x, dim=1).reshape((T, 1)) + self.cx.reshape((T, 1))
+            x - torch.mean(x, dim=1).reshape((batch, 1)) + self.cx.reshape((batch, 1))
         )  # length plot size +1
         y = torch.cat(
             (
-                torch.zeros((T, 1)).to(device),
+                torch.zeros((batch, 1)).to(device),
                 torch.cumsum(
-                    self.unitLength.reshape((T, 1)).to(device) * torch.sin(self.theta),
+                    self.unitLength.reshape((batch, 1)).to(device)
+                    * torch.sin(self.theta),
                     dim=1,
                 ),
             ),
             dim=1,
         )
         y = (
-            y - torch.mean(y, dim=1).reshape((T, 1)) + self.cy.reshape((T, 1))
+            y - torch.mean(y, dim=1).reshape((batch, 1)) + self.cy.reshape((batch, 1))
         )  # length plot size +1
-        image = make_worm(x, y, im_width, im_height, worm_wid)
+        image = make_worm(x, y, width, height, worm_wid)
         return image
 
 
@@ -1099,7 +1177,7 @@ class EarlyStopping:
 
 
 def train3(
-    model,
+    model: Model,
     real_image,
     optimizer,
     params,
@@ -1109,7 +1187,7 @@ def train3(
     output_name,
     is_nont=True,
 ):
-    T = real_image.shape[0]
+    T, H, W = real_image.shape
     speed = params["speed"]
     epochs = int(T / (2 * speed) + params["epoch_plus"])
     continuity_loss_weight = params["continuity_loss_weight"]
@@ -1133,8 +1211,9 @@ def train3(
 
     # main optimization
     for e in range(epochs):
-        model_image = model().to(device)
+        # We should zero the gradient before training.
         optimizer.zero_grad()
+        model_image = model(batch=T, width=W, height=H).to(device)
 
         if is_nont:
             annealing_weight = annealing_function(e, T, speed).to(device)
@@ -1176,6 +1255,7 @@ def train3(
                 )
             break
         optimizer.step()
+        optimizer.zero_grad()
 
         if e % save_progress_freq > 0:
             continue
@@ -1277,29 +1357,14 @@ def train3(
 
 
 def make_plot(theta, unitLength, x_cent, y_cent, x_st=0, y_st=0):
-    T = theta.shape[0]
-    x = np.hstack((np.zeros((T, 1)), np.cumsum(unitLength * np.cos(theta), axis=1)))
-    y = np.hstack((np.zeros((T, 1)), np.cumsum(unitLength * np.sin(theta), axis=1)))
-    x = x - np.mean(x, axis=1).reshape((T, 1)) + x_cent.reshape((T, 1)) + x_st
-    y = y - np.mean(y, axis=1).reshape((T, 1)) + y_cent.reshape((T, 1)) + y_st
+    T, n_pts = theta.shape
+    x = np.zeros((T, n_pts + 1))
+    y = np.zeros((T, n_pts + 1))
+    x[:, 1:] = np.cumsum(unitLength * np.cos(theta), axis=1)
+    y[:, 1:] = np.cumsum(unitLength * np.sin(theta), axis=1)
+    x = x - np.mean(x, axis=1, keepdims=True) + x_cent[:, None] + x_st
+    y = y - np.mean(y, axis=1, keepdims=True) + y_cent[:, None] + y_st
     return x, y
-
-
-def get_shape_params(shape_params, params):
-    T_sum = 0
-    params["init_alpha"] = 0
-    params["init_gamma"] = 0
-    params["init_delta"] = 0
-    for para in shape_params:
-        T_sum += para[0]
-        params["init_alpha"] += para[0] * para[1]
-        params["init_gamma"] += para[0] * para[2]
-        params["init_delta"] += para[0] * para[3]
-    return (
-        params["init_alpha"] / T_sum,
-        params["init_gamma"] / T_sum,
-        params["init_delta"] / T_sum,
-    )
 
 
 def loss_compare(loss_pair):
@@ -1307,22 +1372,20 @@ def loss_compare(loss_pair):
     con_select = int(max(loss_pair[0][1]) > max(loss_pair[1][1]))
     smo_select = int(max(loss_pair[0][2]) > max(loss_pair[1][2]))
     if im_select + con_select + smo_select == 3:
-        return 1
+        return True
     if im_select + con_select + smo_select == 0:
-        return 0
+        return False
     q75, q50, q25 = np.percentile(loss_pair[im_select][0], [75, 50, 25])
     im_exrate = (max(loss_pair[1 - im_select][0]) - q50) / (q75 - q25)
     q75, q50, q25 = np.percentile(loss_pair[im_select][1], [75, 50, 25])
     con_exrate = (max(loss_pair[1 - con_select][1]) - q50) / (q75 - q25)
     q75, q50, q25 = np.percentile(loss_pair[im_select][2], [75, 50, 25])
     smo_exrate = (max(loss_pair[1 - smo_select][2]) - q50) / (q75 - q25)
-    exrate_loss = np.argmax(np.array([im_exrate, con_exrate, smo_exrate]))
-    return [im_select, con_select, smo_select][exrate_loss]
+    exrate_loss = np.argmax([im_exrate, con_exrate, smo_exrate])
+    return bool([im_select, con_select, smo_select][exrate_loss])
 
 
 def show_loss_plot(losses, title=""):
-    if not __debug__:
-        return
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.plot(losses[0], label="im")
@@ -1338,15 +1401,16 @@ def show_loss_plot(losses, title=""):
 
 
 def find_losslarge_area(losses_all):
-    losslarge_area = np.zeros(len(losses_all))
-    for i in range(3):
-        lossi = []
-        for j in range(len(losses_all)):
-            lossi = lossi + list(losses_all[j][i])
-        q75, q50, q25 = np.percentile(lossi, [75, 50, 25])
-        for j in range(len(losses_all)):
-            if np.max(losses_all[j][i]) - q50 > (q75 - q25) * 4:
-                losslarge_area[j] += 1
+    losses_arr = np.concatenate([loss for loss in losses_all.values()], axis=1)
+    q75, q50, q25 = np.percentile(losses_arr, [75, 50, 25], axis=1)
+
+    losslarge_area = []
+    for i, loss in losses_all.items():
+        loss_max = loss.max(axis=1)
+        large_loss = (loss_max - q50) > (q75 - q25) * 4
+        if np.any(large_loss):
+            losslarge_area.append(i)
+
     return losslarge_area
 
 
