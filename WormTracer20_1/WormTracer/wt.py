@@ -191,9 +191,9 @@ def run(
     )
     # log
     time_now = datetime.datetime.now()
-    logger.info(f"Code executed at {time_now}\nParams : {params}\n")
     logger.info(f"Python: {sys.version_info}")
     logger.info("WormTracer:" + __version__)
+    logger.info(f"Code executed at {time_now}\nParams : {params}\n")
     logger.info("dataset_path = " + os.fspath(PurePath(dataset_path)))
     logger.info("output_path = " + os.fspath(PurePath(output_path)))
 
@@ -438,9 +438,9 @@ center loss : {np.mean(losses[4])}
         weights=shape_params[:, 0],
         axis=0,
     )
-    params["init_alpha"] = float(weighted_params[0])
-    params["init_gamma"] = float(weighted_params[1])
-    params["init_delta"] = float(weighted_params[2])
+    params["init_alpha"] = torch.tensor(weighted_params[0])
+    params["init_gamma"] = torch.tensor(weighted_params[1])
+    params["init_delta"] = torch.tensor(weighted_params[2])
 
     logger.info("STEP2 : optimization for complex posture blocks\n")
 
