@@ -9,7 +9,7 @@ import os
 import shutil
 from math import pi
 from pathlib import Path
-from typing import Iterator, NamedTuple, Optional, Tuple, Union
+from typing import NamedTuple, Optional, Tuple, Union
 
 import cv2
 import matplotlib.pyplot as plt
