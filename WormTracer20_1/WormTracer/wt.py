@@ -191,9 +191,10 @@ def run(
     )
     # log
     time_now = datetime.datetime.now()
+    logger.info(f"Code executed at {time_now}")
     logger.info(f"Python: {sys.version_info}")
     logger.info("WormTracer:" + __version__)
-    logger.info(f"Code executed at {time_now}\nParams : {params}\n")
+    logger.info(f"Params : {params}")
     logger.info("dataset_path = " + os.fspath(PurePath(dataset_path)))
     logger.info("output_path = " + os.fspath(PurePath(output_path)))
 
@@ -296,8 +297,11 @@ def run(
     logger.info(f"Determining time blocks finished at {time_now}")
     logger.info(f"Total blocks: {training_block.nblock}")
     logger.info(f"Complex blocks: {len(training_block.complex_block)}")
+    logger.info(f"Capspan: {cap_span}")
 
     all_blocks = list(training_block.batch_iter(cap_span))
+    logger.info(f"{all_blocks}")
+
     assert all_blocks, "The training block is empty. Something goes wrong."
 
     if all_blocks[0].is_complex:
@@ -439,7 +443,7 @@ center loss : {np.mean(losses[4])}
 
     time_now = datetime.datetime.now()
     logger.info(f"STEP1 finished at {time_now}\n")
-
+    print(shape_params)
     shape_params = np.array(shape_params)
     # Calculating weighted average parameters
     weighted_params = np.average(
