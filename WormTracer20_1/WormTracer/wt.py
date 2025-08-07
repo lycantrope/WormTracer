@@ -433,9 +433,9 @@ center loss : {np.mean(losses[4])}
     shape_params = np.array(shape_params)
     # Calculating weighted average parameters
     weighted_params = np.average(
-        shape_params[1:],
-        weights=shape_params[0],
-        axis=1,
+        shape_params[:, 1:],
+        weights=shape_params[:, 0],
+        axis=0,
     )
     params["init_alpha"] = weighted_params[0]
     params["init_gamma"] = weighted_params[1]
