@@ -459,7 +459,7 @@ def calc_cap_span(image_info, plot_n):
         free_memory = (reserved_mem - allocated_mem) / GB
         cap_span = max(int(free_memory / mem_used_per_stack), 1)
     except Exception as _:
-        cap_span = image_info["image_shape"][0]
+        cap_span = T
     return cap_span
 
 
@@ -556,13 +556,17 @@ def make_image(x, y, params, image_info):
         gamma=params["gamma"],
         delta=params["delta"],
     )
+    im_height = image_info["image_shape"][1]
+    im_width = image_info["image_shape"][2]
+    # The worm_wid is determined by the normalized params["alpha"]
+    # # We need to scale back to the original image size, otherwise the distance_matrix will be wrong.
+    worm_wid = worm_wid / 2 * max(im_height, im_width)
+
     max_radius = int(np.ceil(worm_wid.max())) + 2
     distance_matrix = make_distance_matrix_np(max_radius)
 
     distance_matrix_3d = worm_wid[:, None, None] - distance_matrix[None, :, :]
     pixel_matrix = pixel_value_from_dist_max_np(distance_matrix_3d)
-    im_height = image_info["image_shape"][1]
-    im_width = image_info["image_shape"][2]
     image = np.zeros((T, im_height, im_width))
 
     # This part can be vectorize, but I think the running speed is relative OK.
@@ -1062,35 +1066,35 @@ def make_worm(
     return image
 
 
-def make_model_image(cent_x, cent_y, theta, unitLength, image_info, params):
-    T = image_info["image_shape"][0]
-    device = image_info["device"]
-    x = torch.cat(
-        (
-            torch.zeros((T, 1)).to(device),
-            torch.cumsum(
-                unitLength.reshape((T, 1)).to(device) * torch.cos(theta), dim=1
-            ),
-        ),
-        dim=1,
-    )
-    x = (
-        x - torch.mean(x, dim=1).reshape((T, 1)) + cent_x.reshape((T, 1))
-    )  # length plot size +1
-    y = torch.cat(
-        (
-            torch.zeros((T, 1)).to(device),
-            torch.cumsum(
-                unitLength.reshape((T, 1)).to(device) * torch.sin(theta), dim=1
-            ),
-        ),
-        dim=1,
-    )
-    y = (
-        y - torch.mean(y, dim=1).reshape((T, 1)) + cent_y.reshape((T, 1))
-    )  # length plot size +1
-    image = make_worm(x, y, image_info, params)
-    return image
+# def make_model_image(cent_x, cent_y, theta, unitLength, image_info, params):
+#     T = image_info["image_shape"][0]
+#     device = image_info["device"]
+#     x = torch.cat(
+#         (
+#             torch.zeros((T, 1)).to(device),
+#             torch.cumsum(
+#                 unitLength.reshape((T, 1)).to(device) * torch.cos(theta), dim=1
+#             ),
+#         ),
+#         dim=1,
+#     )
+#     x = (
+#         x - torch.mean(x, dim=1).reshape((T, 1)) + cent_x.reshape((T, 1))
+#     )  # length plot size +1
+#     y = torch.cat(
+#         (
+#             torch.zeros((T, 1)).to(device),
+#             torch.cumsum(
+#                 unitLength.reshape((T, 1)).to(device) * torch.sin(theta), dim=1
+#             ),
+#         ),
+#         dim=1,
+#     )
+#     y = (
+#         y - torch.mean(y, dim=1).reshape((T, 1)) + cent_y.reshape((T, 1))
+#     )  # length plot size +1
+#     image = make_worm(x, y, image_info, params)
+#     return image
 
 
 class Model(torch.nn.Module):
@@ -1124,6 +1128,7 @@ class Model(torch.nn.Module):
             self.gamma,
             self.delta,
         )
+        worm_wid = worm_wid / 2 * max(width, height)
         # worm_wid_max = worm_wid.max().long().item() + 15
         # distance_matrix = make_distance_matrix(worm_wid_max).to(device)
 
