@@ -447,13 +447,14 @@ def calc_cap_span(image_info, plot_n):
     """Calculate maximum span of trainig in terms of CUDA memory."""
     GB = 1024**3
     T, H, W = image_info["image_shape"]
+    device = image_info["device"]
     # bytes used per stack under float32 and multiple by 8 for some margin case.
-    mem_used_per_stack = 8 * 4 * H * W * (plot_n - 1) / GB
+    mem_used_per_stack = 4 * H * W * (plot_n - 1)
     try:
-        reserved_mem = torch.cuda.memory_reserved(0)
-        allocated_mem = torch.cuda.memory_allocated(0)
+        total_memory = torch.cuda.get_device_properties(device).total_memory
+        allocated_mem = torch.cuda.memory_allocated(device)
         # GB
-        free_memory = (reserved_mem - allocated_mem) / GB
+        free_memory = (total_memory - allocated_mem) / GB
         cap_span = max(int(free_memory / mem_used_per_stack), 1)
     except Exception as _:
         cap_span = image_info["image_shape"][0]
@@ -1273,6 +1274,7 @@ def train3(
         ]
         for i in range(len(losses)):
             losses[i] = losses[i].clone().detach().cpu().numpy()
+    torch.cuda.empty_cache()
     return losses
 
 
