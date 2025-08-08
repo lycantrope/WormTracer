@@ -266,11 +266,6 @@ def get_skeleton(im: np.ndarray, plot_n: int):
     im_skeleton = morphology.skeletonize(im_filled)
     point_list = np.argwhere(im_skeleton == 1)
 
-    H, W = im_skeleton.shape
-
-    # Normalized the points to (-1., 1.)
-    point_list = 2 * point_list / max(H, W) - 1.0
-
     if len(point_list) == 0:
         raise ValueError("Original image is empty")
     elif len(point_list) == 1:
@@ -307,6 +302,12 @@ def get_skeleton(im: np.ndarray, plot_n: int):
     plots.append(point_list[point])
     arclen.append(d2[point])
     plots = np.array(plots)
+
+    H, W = im_skeleton.shape
+
+    # Normalized the points to (-1., 1.)
+    plots = 2 * plots / max(H, W) - 1.0
+
     arclen = np.array(arclen)[::-1]
 
     # interpolation
