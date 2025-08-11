@@ -159,6 +159,8 @@ If True, saves input images with estimated centerline as a multipage tiff full_l
 """
 
 logger = logging.getLogger(__name__)
+handler = logging.StreamHandler(sys.stdout)
+logger.addHandler(handler)
 
 
 def run(
@@ -201,16 +203,13 @@ def run(
     #### make use of GPU ####
     if torch.cuda.is_available():
         device = "cuda"
-        print("Running using GPU.")
-        logger.info("Running using GPU.\n")
+        logger.info("Running using GPU.")
     elif torch.backends.mps.is_available():
         device = "mps"
-        print("Running using GPU.")
-        logger.info("Running using GPU.\n")
+        logger.info("Running using Apple silicon (mps).")
     else:
         device = "cpu"
-        print("Running using CPU. GPU is recommended")
-        logger.info("Running using CPU. GPU is recommended\n")
+        logger.info("Running using CPU. GPU is recommended")
 
     # basic informatin to save
     params["dataset_path"] = dataset_path
@@ -235,12 +234,19 @@ def run(
         multi_flag,
         Tscaled_ind,
     )
-
     # getting xy plots by thinning in function ; calc_xy_and_prewidth()
     x, y, pre_width, unitLength = calc_xy_and_prewidth(
         real_image,
         params["plot_n"],
+        x_st=x_st,
+        y_st=y_st,
     )
+
+    normalized_scale = max(imshape)
+    # Normalized to the original size
+    x = (x * 2) / normalized_scale - 1.0
+    y = (y * 2) / normalized_scale - 1.0
+
     theta = make_theta_from_xy(x, y)
 
     # log
@@ -324,7 +330,7 @@ def run(
     params["init_alpha"] = torch.tensor(pre_width[simple_area].mean())
     params["init_gamma"] = torch.tensor(0.0)
     params["init_delta"] = torch.tensor(0.0)
-    np.diff((x[simple_area], y[simple_area]))
+
     unitLength = np.sqrt(
         np.median(
             np.diff(
@@ -338,10 +344,6 @@ def run(
     )
 
     logger.info("STEP1 : optimization for simple posture blocks\n")
-
-    # This is important to restore the true x and y point, since each parse_image can result in different trimming size.
-    # (scale, y_t, x_t)
-    offset = np.zeros((training_block.nframe, 3))
 
     # main loop 1
     for block in all_blocks:
@@ -420,11 +422,6 @@ def run(
         x_model, y_model = make_plot(theta_model, unitL_model, x_cent, y_cent)
         x[block.start : block.end + 1, :] = x_model
         y[block.start : block.end + 1, :] = y_model
-
-        # (scale, y_t, x_t)
-        offset[block.start : block.end + 1, 0] = max(H, W)
-        offset[block.start : block.end + 1, 1] = y_st
-        offset[block.start : block.end + 1, 2] = x_st
 
         # log
         logger.info(f"""{str(block)}
@@ -567,8 +564,8 @@ center loss : {np.mean(losses[4])}
 
         # (scale, y_t, x_t)
         offset[block.start : block.end + 1, 0] = max(H, W)
-        offset[block.start : block.end + 1, 1] = y_st
-        offset[block.start : block.end + 1, 2] = x_st
+        offset[block.start : block.end + 1, 1] = org_y_st
+        offset[block.start : block.end + 1, 2] = org_x_st
 
         if params.get("SaveProgress"):
             remove_progress(
@@ -623,7 +620,7 @@ center loss : {np.mean(losses[4])}
 
         # read and preprocess images
         # real_image, y_st, x_st = read_image(imshape, filenames_, params['rescale'], Worm_is_black)
-        real_image, y_st, x_st = parse_image(
+        real_image, org_y_st, org_x_st = parse_image(
             filenames_all,
             params["rescale"],
             Worm_is_black,
@@ -735,8 +732,8 @@ center loss : {np.mean(losses[4])}
 
             # (scale, y_t, x_t)
             offset[block.start : block.end + 1, 0] = max(H, W)
-            offset[block.start : block.end + 1, 1] = y_st
-            offset[block.start : block.end + 1, 2] = x_st
+            offset[block.start : block.end + 1, 1] = org_y_st
+            offset[block.start : block.end + 1, 2] = org_x_st
 
             # log
             logger.info(f"""{str((start, end))} updated
@@ -916,7 +913,7 @@ center loss : {np.mean(losses_all[i][4])}
 
     # save full of real_image and centerline as png images
     # real_image, y_st, x_st = read_image(imshape, filenames_full, params['rescale'], Worm_is_black)
-    real_image, y_st, x_st = parse_image(
+    real_image, org_y_st, org_x_st = parse_image(
         filenames_all,
         params["rescale"],
         Worm_is_black,
@@ -936,7 +933,7 @@ center loss : {np.mean(losses_all[i][4])}
                 "image" + str(t).zfill(len(str(n_input_images))) + ".png",
             )
             ax.imshow(real_image[t], cmap="gray")
-            ax.plot(x[i] - x_st, y[i] - y_st, c="r", lw=3)
+            ax.plot(x[i] - org_x_st, y[i] - org_y_st, c="r", lw=3)
             plt.savefig(filename)
             plt.cla()
         plt.close()
@@ -952,7 +949,7 @@ center loss : {np.mean(losses_all[i][4])}
             if i % 100 == 0:
                 print(t, end=" ")
             lines = []
-            lines.extend(ax.plot(x[i] - x_st, y[i] - y_st, c="r", lw=3))
+            lines.extend(ax.plot(x[i] - org_x_st, y[i] - org_y_st, c="r", lw=3))
             lines.extend([ax.imshow(real_image[t], cmap="gray")])
             title = ax.text(
                 0.5,
@@ -991,7 +988,7 @@ center loss : {np.mean(losses_all[i][4])}
                 ],
             },
         )
-        pts = np.stack((x - x_st, y - y_st), axis=-1)
+        pts = np.stack((x - org_x_st, y - org_y_st), axis=-1)
 
         # OpenCV only accept np.int32
         pts = np.clip(pts, 0, None).astype("i4")
