@@ -9,7 +9,7 @@ authors = [
     { name = "Yu Toyoshima" },
     { name = "Yuichi Iino", email = "iino@bs.s.u-tokyo.ac.jp" },
 ]
-dynamic = ["version", "readme"]
+dynamic = [ "version", "readme" ]
 requires-python = ">=3.8"
 dependencies = [
     "numpy<2",
@@ -27,14 +27,13 @@ license = { file = "LICENSE" }
 wormtracer = "WormTracer.__main__:main"
 
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = [ "setuptools", "wheel" ]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.dynamic]
 version = { attr = "WormTracer.__version__" }
-readme = { file = ["README.md"] }
-
+readme = { file = [ "README.md" ] }
 
 [tool.ruff.lint]
-extend-select = ["I001"]
-ignore = ["F401", "F405"]
+extend-select = [ "I001" ]
+ignore = [ "F401", "F405" ]

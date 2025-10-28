@@ -292,7 +292,7 @@ def run(
         show_image(real_image, params["num_t"], title="real image")
         show_image(model_image, params["num_t"], title="model image")
 
-    # Since dataset will be loaded during each training block, the entire dataset will be drop here.
+    # Since dataset will be loaded during each training block, the entire dataset can be drop here.
     del real_image
     del model_image
 

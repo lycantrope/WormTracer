@@ -361,7 +361,7 @@ def get_skeleton_networkx(im: np.ndarray, plot_n: int):
 
 def get_width(im, x, y):
     """Get width of the object by measure distance of centerline to the object's surface."""
-    im_filled = ndi.binary_fill_holes(im)
+    im_filled = np.asarray(ndi.binary_fill_holes(im))  # To avoid unknown types
     H, W = im_filled.shape
     scale = max(H, W)
 
@@ -480,21 +480,15 @@ def worm_width_all_np(
     delta: float,
 ) -> np.ndarray:
     """Get all worm widths when segment number is given."""
-
-    worm_x = np.linspace(-1.0, 1.0, plot_n)
-
-    delta_sigmoid = np_sigmoid(delta)
-    gamma_e = 0.5 + np.exp(gamma)
-    worm_x_abs = np.abs(worm_x)
+    # w_i  = α√(1-|h|^2γ (1+2γδ-2γδ|h|))
+    worm_x = np.linspace(-1.0, 1.0, plot_n)  # h
+    worm_x_abs = np.abs(worm_x)  # |h|
+    delta_sig = np_sigmoid(delta)  # δ
+    # 2γ
+    gamma_e = 1 + 2 * np.exp(gamma)  # 2 * γ
+    eps = 1e-5  # To avoid some floating points below zeros.
     width = alpha * np.sqrt(
-        1
-        + 1e-5
-        - worm_x_abs ** (2 * gamma_e)
-        * (
-            1
-            + (2 * gamma_e) * delta_sigmoid
-            - (2 * gamma_e) * delta_sigmoid * worm_x_abs
-        )
+        1 - worm_x_abs ** (gamma_e) * (1 + gamma_e * delta_sig * (1 - worm_x_abs)) + eps
     )
     return width
 
@@ -558,9 +552,9 @@ def make_image(x, y, params, image_info):
     )
     im_height = image_info["image_shape"][1]
     im_width = image_info["image_shape"][2]
-    # The worm_wid is determined by the normalized params["alpha"]
-    # # We need to scale back to the original image size, otherwise the distance_matrix will be wrong.
-    worm_wid = worm_wid / 2 * max(im_height, im_width)
+    # # The worm_wid is determined by the normalized params["alpha"]
+    # # # We need to scale back to the original image size, otherwise the distance_matrix will be wrong.
+    # worm_wid = worm_wid / 2 * max(im_height, im_width)
 
     max_radius = int(np.ceil(worm_wid.max())) + 2
     distance_matrix = make_distance_matrix_np(max_radius)
@@ -969,19 +963,14 @@ def worm_width_all(
 ) -> torch.Tensor:
     """Get all worm widths when segment number is given."""
     device = alpha.device
-    worm_x = torch.linspace(-1.0, 1.0, plot_n - 1).to(device)
-    delta_sigmoid = torch.sigmoid(delta)
-    gamma_e = 0.5 + torch.exp(gamma)
+    worm_x = torch.linspace(-1.0, 1.0, plot_n - 1, requires_grad=False).to(device)
     worm_x_abs = torch.abs(worm_x)
+
+    delta_sigmoid = torch.sigmoid(delta)
+    gamma_e = 1 + 2 * torch.exp(gamma)
+    eps = torch.tensor((1e-5,), requires_grad=False)
     width = alpha * torch.sqrt(
-        1
-        + 1e-5
-        - worm_x_abs ** (2 * gamma_e)
-        * (
-            1
-            + (2 * gamma_e) * delta_sigmoid
-            - (2 * gamma_e) * delta_sigmoid * worm_x_abs
-        )
+        1 - worm_x_abs**gamma_e * (1 + gamma_e * delta_sigmoid * (1 - worm_x_abs)) + eps
     )
     return width
 
