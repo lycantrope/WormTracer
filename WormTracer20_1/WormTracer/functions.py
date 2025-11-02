@@ -86,7 +86,7 @@ def set_output_path(dataset_path, output_directory):
     return dataset_prefix, output_path, Path(output_path).stem
 
 
-def get_filenames(dataset_path: Union[str, bytes, os.PathLike]):
+def get_filenames(dataset_path: Union[Path, os.PathLike]):
     extensions_available = {
         ".bmp",
         ".dib",
@@ -974,6 +974,15 @@ def make_worm(
 def make_model_image(cent_x, cent_y, theta, unitLength, image_info, params):
     T = image_info["image_shape"][0]
     device = image_info["device"]
+
+    plot_n = params["plot_n"]
+    worm_wid = worm_width_all(
+        plot_n,
+        params["alpha"],
+        params["gamma"],
+        params["delta"],
+    )
+
     x = torch.cat(
         (
             torch.zeros((T, 1)).to(device),
@@ -998,7 +1007,7 @@ def make_model_image(cent_x, cent_y, theta, unitLength, image_info, params):
     y = (
         y - torch.mean(y, dim=1).reshape((T, 1)) + cent_y.reshape((T, 1))
     )  # length plot size +1
-    image = make_worm(x, y, image_info, params)
+    image = make_worm(x, y, image_info, params, worm_wid)
     return image
 
 
