@@ -20,6 +20,8 @@ dependencies = [
     "scipy",
     "pyyaml",
     "roifile[all]>=2020.11.28",
+    "torch",
+    "torchvision",
 ]
 license = { file = "LICENSE" }
 
