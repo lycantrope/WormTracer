@@ -1,7 +1,7 @@
 # from __future__ import annotations
 
 import os
-from typing import Tuple, Union
+from typing import Generator, List, NamedTuple, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import torch
@@ -11,8 +11,8 @@ def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0): ...
 ### read, preprocess images and get information ###
 
 def set_output_path(dataset_path, output_directory): ...
-def get_filenames(dataset_path: Union[str, bytes, os.PathLike]): ...
-def get_property(filenames, rescale): ...
+def get_filenames(dataset_path: Union[str, bytes, os.PathLike]) -> List[str]: ...
+def get_property(filenames, rescale) -> Tuple[Sequence[int], bool, bool, int]: ...
 def read_serial_images(filenames, Tscaled_ind): ...
 def load_image(
     filenames,
@@ -31,28 +31,28 @@ def calc_xy_and_prewidth(
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     """read images and get skeletonized plots"""
 
-def get_skeleton(im: np.ndarray, plot_n: int):
+def get_skeleton(im: np.ndarray, plot_n: int) -> Tuple[np.ndarray, np.ndarray]:
     """skeletonize image and get splined plots"""
 
-def get_skeleton_networkx(im: np.ndarray, plot_n: int):
+def get_skeleton_networkx(im: np.ndarray, plot_n: int) -> Tuple[np.ndarray, np.ndarray]:
     """skeletonize image and get splined plots
     2024/10/01 Speed is same as previous implemenetation
     """
 
-def get_width(im, x, y):
+def get_width(im: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
     """Get width of the object by measure distance of centerline to the object's surface."""
 
-def flip_check(x, y):
+def flip_check(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Check if plots of head and tail is flipping."""
 
-def cut_image(image):
-    """Cut images to minimum size."""
+def trim_image(image, *, padding: int = 5) -> np.ndarray:
+    """Crop images to minimum size."""
 
 def make_theta_from_xy(x: np.ndarray, y: np.ndarray) -> np.ndarray: ...
 
 ### prepare for training ###
 
-def calc_cap_span(image_info, plot_n):
+def calc_cap_span(image_shape, plot_n) -> int:
     """Calculate maximum span of trainig in terms of CUDA memory."""
 
 def pixel_value_from_dist_max_np(
@@ -83,9 +83,7 @@ def make_single_image(
 def make_image(x, y, x_st, y_st, params, image_info):
     """Create model image by dividing them to avoid CUDA memory error."""
 
-def get_image_loss_max(
-    image_losses, real_image, x, y, x_st, y_st, params, image_info, cap_span
-):
+def get_image_loss_max(best_fit_image, cx, cy, x_st, y_st, params, image_info) -> float:
     """Create bad image and get bad image_loss to judge complex area."""
 
 def get_use_points(
@@ -96,13 +94,20 @@ def get_use_points(
 def find_nont_area(image_losses, borderline, under_borderline): ...
 def check_enough_expanded(nont_span, temp_ini, temp_end, enough_rate=2): ...
 def check_collision(temp_ini, temp_end, T): ...
-def prepare_for_train(pre_width, simple_area, x, y, params): ...
 
 ### training ###
 def make_progress_image(image, num_t=20):
     """Make one large image with images laid out on it."""
 
-def save_progress(image, output_path, output_name: str, params, txt="real"): ...
+def save_progress(
+    image: np.ndarray,
+    output_path: str,
+    output_name: str,
+    start: int,
+    end: int,
+    num_t: int,
+    txt="real",
+) -> None: ...
 def remove_progress(output_pathh, filename): ...
 def get_center(binimg):
     """Calculate center of images."""
@@ -161,7 +166,6 @@ def train3(
     is_nont=True,
 ): ...
 def make_plot(theta, unitLength, x_cent, y_cent, x_st=0, y_st=0): ...
-def get_shape_params(shape_params, params): ...
 def loss_compare(loss_pair): ...
 def show_loss_plot(losses, title=""): ...
 def find_losslarge_area(losses_all): ...
@@ -217,11 +221,42 @@ def straigthen(
     """
 
 class Model(torch.nn.Module):
-    def __init__(
-        self, init_cx, init_cy, init_theta, init_unitLength, image_info, params
-    ): ...
-    def forward(self): ...
+    def __init__(self, init_cx, init_cy, init_theta, init_unitLength, params): ...
+    def forward(self, batch, width, height): ...
 
 class EarlyStopping:
     def __init__(self, patience=30, delta=0): ...
     def __call__(self, loss, model): ...
+
+class TrainingBlocks:
+    blocks: np.ndarray
+    complex_block: np.ndarray
+
+    complex_area: np.ndarray
+    simple_area: np.ndarray
+
+    nblock: int
+
+    class Block(NamedTuple):
+        start: int
+        end: int
+        index: int
+        is_complex: bool
+
+        @property
+        def size(self) -> int: ...
+        def __repr__(self) -> str: ...
+
+    def __init__(self, losses, relaxed, rigid) -> None: ...
+    @property
+    def nframe(self) -> int: ...
+    def batch_iter(
+        self, batchsize: Optional[int] = None
+    ) -> Generator[TrainingBlocks.Block, None, None]:
+        """Return an iterator that yields Block(idx, is_complex, start, end) within the batchsize"""
+
+def get_use_blocks(
+    image_losses: np.ndarray,
+    image_loss_max: float,
+) -> TrainingBlocks:
+    """Judge frames complex or not and get span for training."""

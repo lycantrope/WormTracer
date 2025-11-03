@@ -1,6 +1,7 @@
 # from __future__ import annotations
 
 import collections
+import functools
 import glob
 import itertools
 import logging
@@ -9,7 +10,7 @@ import os
 import shutil
 from math import pi
 from pathlib import Path
-from typing import Tuple, Union
+from typing import NamedTuple, Optional, Tuple, Union
 
 import cv2
 import matplotlib.pyplot as plt
@@ -39,9 +40,14 @@ def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
     t_sparse = np.linspace(0, T - 1, min(num_t, T), dtype=int)
     if torch.is_tensor(image):
         image = image.clone().detach().cpu().numpy()
-    if torch.is_tensor(x):
+    if torch.is_tensor(x) and torch.is_tensor(y):
         x = x.clone().detach().cpu().numpy()
         y = y.clone().detach().cpu().numpy()
+
+    if torch.is_tensor(x2) and torch.is_tensor(y2):
+        x2 = x2.clone().detach().cpu().numpy()
+        y2 = y2.clone().detach().cpu().numpy()
+
     n_rows = (t_sparse.shape[0] + 4) // 5
     fig, axes = plt.subplots(
         n_rows, 5, figsize=(12, 2 * n_rows), squeeze=False, tight_layout=True
@@ -52,9 +58,9 @@ def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
         )
         axes[i // 5, i % 5].axis([0, image.shape[2], 0, image.shape[1]])
         axes[i // 5, i % 5].set_title(title + " t = {}".format(t_sparse[i]))
-        if isinstance(x, np.ndarray):
+        if isinstance(x, np.ndarray) and isinstance(y, np.ndarray):
             axes[i // 5, i % 5].scatter(x[t_sparse[i]], y[t_sparse[i]], c="r", s=30)
-        if isinstance(x2, np.ndarray):
+        if isinstance(x2, np.ndarray) and isinstance(y2, np.ndarray):
             axes[i // 5, i % 5].scatter(x2[t_sparse[i]], y2[t_sparse[i]], c="y", s=30)
     # plt.show()
     plt.close(fig)
@@ -86,7 +92,7 @@ def set_output_path(dataset_path, output_directory):
     return dataset_prefix, output_path, Path(output_path).stem
 
 
-def get_filenames(dataset_path: Union[Path, os.PathLike]):
+def get_filenames(dataset_path):
     extensions_available = {
         ".bmp",
         ".dib",
@@ -213,7 +219,7 @@ def load_image(
 
     ims_subset = [preprocess(im) for im in ims_gen]
     imagestack = np.asarray(ims_subset)
-    imagestack, y_st, x_st = cut_image(imagestack)
+    imagestack, y_st, x_st = trim_image(imagestack)
     return imagestack, y_st, x_st
 
 
@@ -377,33 +383,34 @@ def get_width(im, x, y):
 def flip_check(x, y):
     """Check if plots of head and tail is flipping."""
     gap_headtail = np.mean(
-        (x[1:, :] - x[:-1, :]) ** 2 + (y[1:, :] - y[:-1, :]) ** 2, axis=1
+        (x[1:, :] - x[:-1, :]) ** 2 + (y[1:, :] - y[:-1, :]) ** 2,
+        axis=1,
     )
     gap_headtail_ex = np.mean(
         (x[1:, :] - x[:, ::-1][:-1, :]) ** 2 + (y[1:, :] - y[:, ::-1][:-1, :]) ** 2,
         axis=1,
     )
     ex_t = gap_headtail > gap_headtail_ex
-    ex_r = np.zeros(ex_t.shape, dtype="?")
-    ex_r[np.cumsum(ex_t) % 2 == 1] = True
+    ex_r = np.cumsum(ex_t) % 2 == 1
     x[1:, :][ex_r] = x[:, ::-1][1:, :][ex_r]
     y[1:, :][ex_r] = y[:, ::-1][1:, :][ex_r]
     return x, y
 
 
-def cut_image(image):
+def trim_image(image, *, padding=5):
     """Cut images to minimum size."""
     thresh = np.bitwise_or.reduce(image > 0, axis=0)
 
     (ys, xs) = np.nonzero(thresh)
-    if ys.size == 0:
-        logger.warning("[Warning] the imagestack have no signal")
-        return image, 0, 0
-
+    assert (
+        ys.size > 0
+    ), "the image has no signal. Please confirm your image is properly loaded"
     max_h, max_w = thresh.shape
 
-    x1, x2 = np.clip((xs.min() - 5, xs.max() + 5), 0, max_w).tolist()
-    y1, y2 = np.clip((ys.min() - 5, ys.max() + 5), 0, max_h).tolist()
+    x1 = max(xs.min() - padding, 0)
+    x2 = min(xs.max() + padding, max_w)
+    y1 = max(ys.min() - padding, 0)
+    y2 = min(ys.max() + padding, max_h)
 
     return image[:, y1:y2, x1:x2], y1, x1
 
@@ -443,21 +450,24 @@ def make_theta_from_xy(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 ### prepare for training ###
 
 
-def calc_cap_span(image_info, plot_n):
+def calc_cap_span(image_shape, plot_n):
     """Calculate maximum span of trainig in terms of CUDA memory."""
     GB = 1024**3
-    T, H, W = image_info["image_shape"]
-    device = image_info["device"]
+
+    T = image_shape[0]
+    # dim_size = d0 x d1 x d2 x ... x dn
+    dim_size = functools.reduce(lambda acc, x: acc * x, image_shape[1:], 1)
+
     # bytes used per stack under float32 and multiple by 8 for some margin case.
-    mem_used_per_stack = 4 * H * W * (plot_n - 1)
+    mem_used_per_stack = 8 * 4 * dim_size * (plot_n - 1) / GB
     try:
-        total_memory = torch.cuda.get_device_properties(device).total_memory
-        allocated_mem = torch.cuda.memory_allocated(device)
+        reserved_mem = torch.cuda.memory_reserved(0)
+        allocated_mem = torch.cuda.memory_allocated(0)
         # GB
-        free_memory = (total_memory - allocated_mem) / GB
+        free_memory = (reserved_mem - allocated_mem) / GB
         cap_span = max(int(free_memory / mem_used_per_stack), 1)
     except Exception as _:
-        cap_span = image_info["image_shape"][0]
+        cap_span = T
     return cap_span
 
 
@@ -478,21 +488,15 @@ def worm_width_all_np(
     delta: float,
 ) -> np.ndarray:
     """Get all worm widths when segment number is given."""
-
-    worm_x = np.linspace(-1.0, 1.0, plot_n)
-
-    delta_sigmoid = np_sigmoid(delta)
-    gamma_e = 0.5 + np.exp(gamma)
-    worm_x_abs = np.abs(worm_x)
+    # w_i  = α√(1-|h|^2γ (1+2γδ-2γδ|h|))
+    worm_x = np.linspace(-1.0, 1.0, plot_n)  # h
+    worm_x_abs = np.abs(worm_x)  # |h|
+    delta_sig = np_sigmoid(delta)  # δ
+    # 2γ
+    gamma_e = 1 + 2 * np.exp(gamma)  # 2 * γ
+    eps = 1e-5  # To avoid some floating points below zeros.
     width = alpha * np.sqrt(
-        1
-        + 1e-5
-        - worm_x_abs ** (2 * gamma_e)
-        * (
-            1
-            + (2 * gamma_e) * delta_sigmoid
-            - (2 * gamma_e) * delta_sigmoid * worm_x_abs
-        )
+        1 - worm_x_abs ** (gamma_e) * (1 + gamma_e * delta_sig * (1 - worm_x_abs)) + eps
     )
     return width
 
@@ -573,19 +577,92 @@ def make_image(x, y, x_st, y_st, params, image_info):
     return image
 
 
-def get_image_loss_max(
-    image_losses, real_image, x, y, x_st, y_st, params, image_info, cap_span
-):
+def get_image_loss_max(best_fit_image, cx, cy, x_st, y_st, params, image_info) -> float:
     """Create bad image and get bad image_loss to judge complex area."""
-    small_loss_frame = np.argmin(image_losses)
-    im = real_image[small_loss_frame].reshape(
-        -1, real_image.shape[1], real_image.shape[2]
-    )
-    x0 = np.ones(params["plot_n"]) * x[small_loss_frame, 0].reshape(1, -1)
-    y0 = np.ones(params["plot_n"]) * y[small_loss_frame, 0].reshape(1, -1)
+    # Create a straigthen line to make a bad image that maximize the loss.
+    x0 = np.ones(params["plot_n"]) * cx
+    y0 = np.ones(params["plot_n"]) * cy
+    x0 = x0.reshape(1, -1)
+    y0 = y0.reshape(1, -1)
     im0 = make_image(x0, y0, x_st, y_st, params, image_info)
-    image_loss_max = np.mean((im - im0) ** 2)
+    im0 = im0[0]
+    image_loss_max = float(np.mean((best_fit_image - im0) ** 2))
     return image_loss_max
+
+
+class TrainingBlocks:
+    class Block(NamedTuple):
+        start: int
+        end: int
+        index: int
+        is_complex: bool
+
+        @property
+        def size(self) -> int:
+            return self.end - self.start + 1
+
+        def __repr__(self) -> str:
+            return f"({self.start:d}, {self.end:d}, {'complex' if self.is_complex else 'simple'})"
+
+    def __init__(self, losses, relaxed, rigid):
+        assert rigid > relaxed, "rigid margin must be greater than relaxed margin"
+
+        # Use relaxed criteria to separate the blocks
+        complex_area = losses > relaxed
+        distinct_from_prev = np.zeros_like(complex_area).astype(bool)
+        distinct_from_prev[1:] = complex_area[:-1] ^ complex_area[1:]
+        # labeling all blocks in 0-index
+        blocks = distinct_from_prev.astype(int).cumsum()
+        # If the block contains a complex block, label it as complex block.
+        complex_block_count = np.bincount(blocks, weights=(losses > rigid))
+        complex_block = np.where(complex_block_count > 0)[0]
+
+        self.blocks = blocks
+        self.complex_block = complex_block
+
+        self.complex_area = np.isin(blocks, complex_block)
+        self.simple_area = np.bitwise_not(self.complex_area)
+
+        label = np.unique(self.blocks)
+        self.nblock = len(label)
+
+    @property
+    def nframe(self):
+        return len(self.blocks)
+
+    def batch_iter(self, batchsize: Optional[int] = None):
+        """Return an iterator that yields Block(idx, is_complex, start, end) within the batchsize"""
+        block_sizes = np.bincount(self.blocks)
+        # it will return the index of first occurence.
+        label, onset = np.unique(self.blocks, return_index=True)
+        offset = onset + block_sizes - 1
+
+        mask = self.complex_area[onset]
+
+        if batchsize is None:
+            # We set the batchsize greater than the maximum block.
+            batchsize = int(block_sizes.max()) + 1
+
+        counter = itertools.count()
+        for is_complex, start, end in zip(mask, onset, offset):
+            for st in range(start, end, batchsize):
+                yield TrainingBlocks.Block(
+                    next(counter), st, min(st + batchsize - 1, end), is_complex
+                )
+
+
+def get_use_blocks(
+    image_losses: np.ndarray,
+    image_loss_max: float,
+) -> TrainingBlocks:
+    """
+    Judge frames complex or not and get span for training.
+    """
+    # the criteria to filter complex area
+    image_losses_min = np.min(image_losses)
+    rigid = 0.4 * image_loss_max + 0.6 * image_losses_min
+    relaxed = 0.2 * image_loss_max + 0.8 * image_losses_min
+    return TrainingBlocks(losses=image_losses, relaxed=relaxed, rigid=rigid)
 
 
 def get_use_points(
@@ -779,16 +856,14 @@ def make_progress_image(image, num_t=20):
     return progress_image
 
 
-def save_progress(image, output_path, output_name: str, params, txt="real"):
-    if params["SaveProgress"]:
-        use_area = params["use_area"]
-        progress_image = make_progress_image(image, params["save_progress_num"])
-        filename = os.path.join(
-            output_path,
-            output_name + "_progress_image",
-            "{}-{}_{}.png".format(use_area[0], use_area[1], txt),
-        )
-        cv2.imwrite(filename, progress_image)
+def save_progress(image, output_path, output_name, start, end, num_t, txt="real"):
+    progress_image = make_progress_image(image, num_t)
+    filename = os.path.join(
+        output_path,
+        output_name + "_progress_image",
+        "{}-{}_{}.png".format(start, end, txt),
+    )
+    cv2.imwrite(filename, progress_image)
 
 
 def remove_progress(output_pathh, filename):
@@ -807,14 +882,25 @@ def get_center(binimg):
     return x, y
 
 
-def set_init_xy(real_image):
+def set_init_xy(imstack):
     """Set init center plots for training."""
-    T = real_image.shape[0]
-    init_cx = torch.zeros(T)
-    init_cy = torch.zeros(T)
-    for t in range(T):
-        init_cx[t], init_cy[t] = get_center(real_image[t, :, :])
-    return init_cx, init_cy
+    assert imstack.ndim == 3, "real_image is not 3-d array (T, H, W)"
+    if torch.is_tensor(imstack):
+        imstack = imstack.clone().detach().cpu().numpy()
+    imstack_max = np.max(imstack, axis=(1, 2), keepdims=True)
+    (zs, ys, xs) = np.where(imstack == imstack_max)
+    count_per_frame = np.bincount(zs)
+    init_cx = np.bincount(zs, weights=xs) / count_per_frame
+    init_cy = np.bincount(zs, weights=ys) / count_per_frame
+
+    # This parts is to normalize the center coordinates to (-1, 1)
+    # _, H, W = imstack.shape
+    # scale = max(H, W)
+
+    # init_cx = (init_cx * 2).astype("f4") / scale - 1.0
+    # init_cy = (init_cy * 2).astype("f4") / scale - 1.0
+
+    return torch.from_numpy(init_cx), torch.from_numpy(init_cy)
 
 
 def find_theta(theta, pretheta, plus=1):
@@ -869,26 +955,21 @@ def annealing_function(epoch, T, speed=0.2, start=0, slope=1):
 
 
 def worm_width_all(
-    plot_n: torch.Tensor,
+    plot_n: int,
     alpha: torch.Tensor,
     gamma: torch.Tensor,
     delta: torch.Tensor,
 ) -> torch.Tensor:
     """Get all worm widths when segment number is given."""
     device = alpha.device
-    worm_x = torch.linspace(-1.0, 1.0, plot_n - 1).to(device)
-    delta_sigmoid = torch.sigmoid(delta)
-    gamma_e = 0.5 + torch.exp(gamma)
+    worm_x = torch.linspace(-1.0, 1.0, plot_n - 1, requires_grad=False).to(device)
     worm_x_abs = torch.abs(worm_x)
+
+    delta_sigmoid = torch.sigmoid(delta)
+    gamma_e = 1 + 2 * torch.exp(gamma)
+    eps = torch.tensor((1e-5,), requires_grad=False)
     width = alpha * torch.sqrt(
-        1
-        + 1e-5
-        - worm_x_abs ** (2 * gamma_e)
-        * (
-            1
-            + (2 * gamma_e) * delta_sigmoid
-            - (2 * gamma_e) * delta_sigmoid * worm_x_abs
-        )
+        1 - worm_x_abs**gamma_e * (1 + gamma_e * delta_sigmoid * (1 - worm_x_abs)) + eps
     )
     return width
 
@@ -1020,7 +1101,6 @@ class Model(torch.nn.Module):
         init_cy,
         init_theta,
         init_unitLength,
-        image_info,
         params,
     ):
         super().__init__()
@@ -1031,15 +1111,14 @@ class Model(torch.nn.Module):
         self.alpha = nn.parameter.Parameter(params["init_alpha"])
         self.gamma = nn.parameter.Parameter(params["init_gamma"])
         self.delta = nn.parameter.Parameter(params["init_delta"])
-        self.image_info = image_info
         params["alpha"] = self.alpha
         params["gamma"] = self.gamma
         params["delta"] = self.delta
         self.params = params
 
-    def forward(self):
+    def forward(self, batch, width, height):
         device = self.alpha.device
-        T, im_height, im_width = self.image_info["image_shape"]
+        T, im_height, im_width = batch, height, width
         plot_n = self.params["plot_n"]
         worm_wid = worm_width_all(
             plot_n,
@@ -1057,7 +1136,7 @@ class Model(torch.nn.Module):
 
         x = torch.cat(
             (
-                torch.zeros((T, 1)).to(device),
+                torch.zeros((batch, 1)).to(device),
                 torch.cumsum(
                     self.unitLength.reshape((T, 1)).to(device) * torch.cos(self.theta),
                     dim=1,
@@ -1111,7 +1190,7 @@ class EarlyStopping:
 
 
 def train3(
-    model,
+    model: Model,
     real_image,
     optimizer,
     params,
@@ -1121,14 +1200,20 @@ def train3(
     output_name,
     is_nont=True,
 ):
-    T = real_image.shape[0]
+    T, H, W = real_image.shape
     speed = params["speed"]
     epochs = int(T / (2 * speed) + params["epoch_plus"])
+    block = params["use_area"]
+    # Loss Weight
     continuity_loss_weight = params["continuity_loss_weight"]
     smoothness_loss_weight = params["smoothness_loss_weight"]
     length_loss_weight = params["length_loss_weight"]
     center_loss_weight = params["center_loss_weight"]
+    # Progress setup
     save_progress_freq = params["save_progress_freq"]
+    save_flag = params.get("SaveProgress", False)
+    show_flag = params.get("ShowProgress", False)
+
     init_cx = init_data[0].to(device)
     init_cy = init_data[1].to(device)
     unitL = init_data[2]
@@ -1145,7 +1230,7 @@ def train3(
 
     # main optimization
     for e in range(epochs):
-        model_image = model().to(device)
+        model_image = model(batch=T, width=W, height=H).to(device)
         optimizer.zero_grad()
 
         if is_nont:
@@ -1192,29 +1277,31 @@ def train3(
         if e % save_progress_freq > 0:
             continue
 
-        # Save Progres
-        save_progress(
-            model_image,
-            output_path,
-            output_name,
-            params,
-            txt="id{}_{}".format(params["id"], e),
-        )
-        if not params["ShowProgress"]:
-            continue
+        # Save Progress
+        if save_flag:
+            save_progress(
+                real_image,
+                output_path,
+                output_name,
+                block.start,
+                block.end,
+                params["save_progress_num"],
+                txt="id{}_{}".format(params["id"], e),
+            )
 
         # Show Progress
-        logger.info(
-            "{:.2f} {:.2f} {:.2f} {:.2f} {:.2f}".format(
-                image_loss.item(),
-                continuity_loss.item(),
-                smoothness_loss.item(),
-                length_loss.item(),
-                center_loss.item(),
+        if show_flag:
+            logger.info(
+                "{:.2f} {:.2f} {:.2f} {:.2f} {:.2f}".format(
+                    image_loss.item(),
+                    continuity_loss.item(),
+                    smoothness_loss.item(),
+                    length_loss.item(),
+                    center_loss.item(),
+                )
             )
-        )
-        if __debug__:
-            show_image(model_image, params["num_t"], title=f"epoch {e}")
+            if __debug__:
+                show_image(model_image, params["num_t"], title=f"epoch {e}")
 
     model.alpha.requires_grad = True
     model.gamma.requires_grad = True
@@ -1228,7 +1315,7 @@ def train3(
 
     # minor adjustment
     for e in range(params["epoch_plus"]):
-        model_image = model().to(device)
+        model_image = model(batch=T, width=W, height=H).to(device)
         optimizer.zero_grad()
 
         image_loss = torch.mean((model_image - real_image) ** 2)
@@ -1253,7 +1340,7 @@ def train3(
             break
         optimizer.step()
 
-    if not params["ShowProgress"]:  # Show Progress
+    if show_flag:
         logger.info(
             "{:.2f} {:.2f} {:.2f} {:.2f}".format(
                 image_loss.item(),
@@ -1262,15 +1349,20 @@ def train3(
                 length_loss.item(),
             )
         )
-        show_image(model_image, params["num_t"], title="final")
+        if __debug__:
+            show_image(model_image, params["num_t"], title="final")
 
-    save_progress(
-        model_image,
-        output_path,
-        output_name,
-        params,
-        txt="id{}_{}".format(params["id"], "final"),
-    )
+    if save_flag:
+        save_progress(
+            real_image,
+            output_path,
+            output_name,
+            block.start,
+            block.end,
+            params["save_progress_num"],
+            txt="id{}_{}".format(params["id"], "final"),
+        )
+
     with torch.no_grad():
         # Calculate the loss for display, this part does not require grad.
         losses = [
@@ -1296,23 +1388,6 @@ def make_plot(theta, unitLength, x_cent, y_cent, x_st=0, y_st=0):
     x = x - np.mean(x, axis=1).reshape((T, 1)) + x_cent.reshape((T, 1)) + x_st
     y = y - np.mean(y, axis=1).reshape((T, 1)) + y_cent.reshape((T, 1)) + y_st
     return x, y
-
-
-def get_shape_params(shape_params, params):
-    T_sum = 0
-    params["init_alpha"] = 0
-    params["init_gamma"] = 0
-    params["init_delta"] = 0
-    for para in shape_params:
-        T_sum += para[0]
-        params["init_alpha"] += para[0] * para[1]
-        params["init_gamma"] += para[0] * para[2]
-        params["init_delta"] += para[0] * para[3]
-    return (
-        params["init_alpha"] / T_sum,
-        params["init_gamma"] / T_sum,
-        params["init_delta"] / T_sum,
-    )
 
 
 def loss_compare(loss_pair):
@@ -1403,7 +1478,7 @@ def judge_head_frequency(x, y):
     dy = y[:, 1:] - y[:, :-1]
     theta = np.arctan2(dy, dx)
 
-    curve_rate = (theta[:, 1:] - theta[:, :-1] + np.pi) % (2 * np.pi) - np.pi
+    curve_rate = np.unwrap(theta[:, 1:] - theta[:, :-1] + np.pi) - np.pi
     T = curve_rate.shape[0]
 
     # fast fourier transform
@@ -1559,7 +1634,7 @@ def straigthen_multi(
     src_t = torch.from_numpy(src).reshape((N, -1, H, W)).float()
     grid = torch.from_numpy(gxy).float()
 
-    straigthen_dst = F.grid_sample(src_t, grid, align_corners=True)
+    straigthen_dst = F.grid_sample(src_t, grid, mode="bicubic", align_corners=True)
     straigthen_dst = (
         torch.clamp(straigthen_dst, src.min(), src.max())
         .detach()
