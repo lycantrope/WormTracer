@@ -501,13 +501,12 @@ def make_distance_matrix_np(radius: int) -> np.ndarray:
     diameter = radius * 2 + 1
     delta = (np.arange(diameter) - radius) ** 2
     distance_matrix = np.sqrt(delta[None, :] + delta[:, None])
-
     # let distance_kernel become circular
     distance_matrix[distance_matrix > radius] = np.inf
     return distance_matrix
 
 
-def make_distance_matrix(radius: int) -> np.ndarray:
+def make_distance_matrix(radius: int) -> torch.Tensor:
     diameter = radius * 2 + 1
     delta = (torch.arange(diameter) - radius) ** 2
     distance_matrix = torch.sqrt(delta[None, :] + delta[:, None])
@@ -529,9 +528,12 @@ def make_single_image(
 
     diameter = pixel_matrix.shape[1]
     radius = diameter // 2
+
+    min_val = pixel_matrix.min()
+
     pad_image = np.full(
         (height + diameter, width + diameter),
-        fill_value=-25.5,
+        fill_value=min_val,
     )
     for i, j, pix in zip(cent_x, cent_y, pixel_matrix):
         pad_image[j : j + diameter, i : i + diameter] = np.maximum(
@@ -542,7 +544,7 @@ def make_single_image(
 
 
 def make_image(x, y, x_st, y_st, params, image_info):
-    """Create model image by dividing them to avoid CUDA memory error."""
+    """Create Model imaging using precalculated mask"""
     T = x.shape[0]
     worm_wid = worm_width_all_np(
         plot_n=params["plot_n"],
