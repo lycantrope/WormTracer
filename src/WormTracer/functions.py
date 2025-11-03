@@ -168,7 +168,7 @@ def read_serial_images(filenames, Tscaled_ind):
         yield cv2.imread(filenames[ind], cv2.IMREAD_GRAYSCALE)
 
 
-def read_image(
+def load_image(
     filenames,
     rescale,
     Worm_is_black,

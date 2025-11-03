@@ -33,13 +33,13 @@ from .functions import (
     get_use_points,
     judge_head_amplitude,
     judge_head_frequency,
+    load_image,
     loss_compare,
     make_image,
     make_plot,
     make_theta_cand,
     make_theta_from_xy,
     prepare_for_train,
-    read_image,
     remove_progress,
     save_progress,
     set_init_xy,
@@ -226,8 +226,8 @@ def run(
     )
     Tscaled_ind = Tscaled_ind[:: params["Tscale"]]
 
-    # read images and get information: read_image
-    real_image, y_st, x_st = read_image(
+    # read images and get information: load_image
+    real_image, y_st, x_st = load_image(
         filenames_all,
         params["rescale"],
         Worm_is_black,
@@ -297,7 +297,7 @@ def run(
         theta_ = theta[use_area[0] : use_area[1] + 1, :].copy()
 
         # read and preprocess images
-        real_image, y_st, x_st = read_image(
+        real_image, y_st, x_st = load_image(
             filenames_all,
             params["rescale"],
             Worm_is_black,
@@ -398,8 +398,8 @@ center loss : {np.mean(losses[4])}
         theta_ = theta[start : end + 1, :].copy()
 
         # read and preprocess images
-        # real_image, y_st, x_st = read_image(imshape, filenames_, params['rescale'], Worm_is_black)
-        real_image, y_st, x_st = read_image(
+        # real_image, y_st, x_st = load_image(imshape, filenames_, params['rescale'], Worm_is_black)
+        real_image, y_st, x_st = load_image(
             filenames_all,
             params["rescale"],
             Worm_is_black,
@@ -521,8 +521,8 @@ center loss : {np.mean(losses[4])}
             theta_ = theta[start : end + 1, :].copy()
 
             # read and preprocess images
-            # real_image, y_st, x_st = read_image(imshape, filenames_, params['rescale'], Worm_is_black)
-            real_image, y_st, x_st = read_image(
+            # real_image, y_st, x_st = load_image(imshape, filenames_, params['rescale'], Worm_is_black)
+            real_image, y_st, x_st = load_image(
                 filenames_all,
                 params["rescale"],
                 Worm_is_black,
@@ -791,8 +791,8 @@ center loss : {np.mean(losses_all[i][4])}
         return
 
     # save full of real_image and centerline as png images
-    # real_image, y_st, x_st = read_image(imshape, filenames_full, params['rescale'], Worm_is_black)
-    real_image, y_st, x_st = read_image(
+    # real_image, y_st, x_st = load_image(imshape, filenames_full, params['rescale'], Worm_is_black)
+    real_image, y_st, x_st = load_image(
         filenames_all,
         params["rescale"],
         Worm_is_black,
