@@ -1391,25 +1391,26 @@ def train3(
         # Calculate the loss for display, this part does not require grad.
         image_loss = torch.mean((model_image - real_image) ** 2, axis=(1, 2))
 
-        continuity_loss = continuity_loss_weight * torch.mean(
-            (model.theta[:-1, :] - model.theta[1:, :]) ** 2,
-            axis=1,
-        )
-
         smoothness_loss = smoothness_loss_weight * torch.mean(
             (model.theta[:, :-1] - model.theta[:, 1:]) ** 2,
             axis=1,
         )
-        length_loss = length_loss_weight * (
-            (model.unitLength[:-1] - model.unitLength[1:]) ** 2
-        )
         center_loss = center_loss_weight * (
             (model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2
         )
+
         if block.size < 2:
             # If block contains only single frame. Then, we ignore continuity_loss and length_loss by filled it to zeros
-            continuity_loss = torch.nan_to_num(continuity_loss)
-            length_loss = torch.nan_to_num(length_loss)
+            continuity_loss = torch.zeros(1, device=model.theta.device)
+            length_loss = torch.zeros(1, device=model.unitLength.device)
+        else:
+            continuity_loss = continuity_loss_weight * torch.mean(
+                (model.theta[:-1, :] - model.theta[1:, :]) ** 2,
+                axis=1,
+            )
+            length_loss = length_loss_weight * (
+                (model.unitLength[:-1] - model.unitLength[1:]) ** 2
+            )
 
         losses = [
             image_loss,
