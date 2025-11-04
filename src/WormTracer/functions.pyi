@@ -1,7 +1,7 @@
 # from __future__ import annotations
 
 import os
-from typing import Generator, List, NamedTuple, Optional, Sequence, Tuple, Union
+from typing import Generator, List, NamedTuple, Optional, Sequence, Set, Tuple, Union
 
 import numpy as np
 import torch
@@ -168,7 +168,7 @@ def train3(
 def make_plot(theta, unitLength, x_cent, y_cent, x_st=0, y_st=0): ...
 def loss_compare(loss_pair): ...
 def show_loss_plot(losses, title=""): ...
-def find_losslarge_area(losses_all): ...
+def find_losslarge_area(losses_all) -> Set[int]: ...
 
 ### arrange and save data ###
 

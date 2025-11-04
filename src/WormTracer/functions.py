@@ -1432,15 +1432,13 @@ def show_loss_plot(losses, title=""):
 
 
 def find_losslarge_area(losses_all):
-    losslarge_area = np.zeros(len(losses_all))
+    losslarge_area = set()
     for i in range(3):
-        lossi = []
-        for j in range(len(losses_all)):
-            lossi = lossi + list(losses_all[j][i])
+        lossi = np.concatenate([loss[i] for loss in losses_all.values()], axis=None)
         q75, q50, q25 = np.percentile(lossi, [75, 50, 25])
-        for j in range(len(losses_all)):
-            if np.max(losses_all[j][i]) - q50 > (q75 - q25) * 4:
-                losslarge_area[j] += 1
+        for idx, loss in losses_all.items():
+            if np.max(loss[i]) - q50 > (q75 - q25) * 4:
+                losslarge_area.add(idx)
     return losslarge_area
 
 
