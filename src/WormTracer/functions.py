@@ -967,7 +967,7 @@ def worm_width_all(
 
     delta_sigmoid = torch.sigmoid(delta)
     gamma_e = 1 + 2 * torch.exp(gamma)
-    eps = torch.tensor((1e-5,), requires_grad=False)
+    eps = torch.tensor((1e-5,), requires_grad=False).to(device)
     width = alpha * torch.sqrt(
         1 - worm_x_abs**gamma_e * (1 + gamma_e * delta_sigmoid * (1 - worm_x_abs)) + eps
     )
