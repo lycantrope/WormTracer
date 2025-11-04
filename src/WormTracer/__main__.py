@@ -1,5 +1,8 @@
 import argparse
+import os
 import pathlib
+import subprocess
+import sys
 
 from WormTracer import wt
 
@@ -32,6 +35,16 @@ def main():
     parser = get_parser()
     args, unknown_params = parser.parse_known_args()
     wt.run(**vars(args))
+
+
+def main_wrapper():
+    # To run script mode with optimized flag.
+    # Equivalent to uv run python -O -m WormTracer ...
+    command = [sys.executable, "-O", "-m", "WormTracer"] + sys.argv[1:]
+    return subprocess.run(
+        command,
+        env=os.environ.copy(),
+    )
 
 
 if __name__ == "__main__":

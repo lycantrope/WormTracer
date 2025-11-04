@@ -467,7 +467,7 @@ def calc_cap_span(image_shape, plot_n):
         free_memory = (reserved_mem - allocated_mem) / GB
         print(reserved_mem, allocated_mem, free_memory, mem_used_per_stack)
         # Since the continuity and center loss require two consecutive frames, the cap_span must be greater than 1.
-        cap_span = max(int(free_memory / mem_used_per_stack), 2)
+        cap_span = max(int(free_memory / mem_used_per_stack), 5)
     except Exception as _:
         cap_span = T
     return cap_span
@@ -640,7 +640,6 @@ class TrainingBlocks:
         offset = onset + block_sizes - 1
 
         mask = self.complex_area[onset]
-
         if batchsize is None:
             # We set the batchsize greater than the maximum block.
             batchsize = int(block_sizes.max()) + 1
@@ -649,7 +648,10 @@ class TrainingBlocks:
         for is_complex, start, end in zip(mask, onset, offset):
             for st in range(start, end, batchsize):
                 yield TrainingBlocks.Block(
-                    next(counter), st, min(st + batchsize - 1, end), is_complex
+                    start=st,
+                    end=min(st + batchsize - 1, end),
+                    index=next(counter),
+                    is_complex=is_complex,
                 )
 
 

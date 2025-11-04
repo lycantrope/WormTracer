@@ -159,6 +159,7 @@ If True, saves input images with estimated centerline as a multipage tiff full_l
 """
 
 logger = logging.getLogger(__name__)
+logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
 def run(
@@ -294,7 +295,6 @@ def run(
     logger.info(f"{all_blocks}")
 
     assert all_blocks, "The training block is empty. Something goes wrong."
-
     if all_blocks[0].is_complex:
         logger.warning(
             "Warning! The initial frame of images is difficult to skeletonize."
@@ -302,10 +302,8 @@ def run(
         logger.warning("Beginning of Results will be incorrect.")
 
     if all_blocks[-1].is_complex:
-        logger.warning(
-            "Warning! The initial frame of images is difficult to skeletonize."
-        )
-        logger.warning("Beginning of Results will be incorrect.")
+        logger.warning("Warning! The last frame of images is difficult to skeletonize.")
+        logger.warning("Last of Results will be incorrect.")
 
     losses_all = {}
     shape_params = []
@@ -342,6 +340,9 @@ def run(
         )
 
         T, H, W = real_image.shape
+
+        logger.info(f"im_shape: {real_image.shape}")
+
         if params.get("SaveProgress"):
             save_progress(
                 real_image,
@@ -360,11 +361,6 @@ def run(
         init_theta = torch.tensor(theta_)
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
         init_data = [init_cx, init_cy, unitLength]
-
-        print(real_image.shape)
-        print(init_cx.shape)
-        print(init_theta.shape)
-        print(init_unitLength.shape)
 
         # make model instance and training
         model = (

@@ -26,7 +26,7 @@ dependencies = [
 license = { file = "LICENSE" }
 
 [project.scripts]
-wormtracer = "WormTracer.__main__:main"
+wormtracer = "WormTracer.__main__:main_wrapper"
 
 [build-system]
 requires = [ "setuptools", "wheel" ]
