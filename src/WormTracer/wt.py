@@ -390,7 +390,6 @@ def run(
             model.cx.detach().cpu().numpy(),
             model.cy.detach().cpu().numpy(),
         )
-
         shape_params.append(
             (
                 block.size,
@@ -399,8 +398,11 @@ def run(
                 model.delta.detach().cpu(),
             )
         )
-        # reconstruct plots from model results
+        # Add x_st, y_st to restore original position before reconstruction.
+        x_cent += x_st
+        y_cent += y_st
         x_model, y_model = make_plot(theta_model, unitL_model, x_cent, y_cent)
+
         x[block.start : block.end + 1, :] = x_model
         y[block.start : block.end + 1, :] = y_model
 
@@ -496,6 +498,7 @@ center loss : {np.mean(losses[4])}
             model.cx.detach().cpu().numpy(),
             model.cy.detach().cpu().numpy(),
         )
+
         model_image = model(batch=T, width=W, height=H)
 
         # flip final theta to trace again
@@ -532,7 +535,9 @@ center loss : {np.mean(losses[4])}
             model_image = model(batch=T, width=W, height=H)
             losses_all[block.index] = losses
 
-        # reconstruct plots from model results
+        # Add x_st, y_st to restore original position before reconstruction.
+        x_cent += x_st
+        y_cent += y_st
         x_model, y_model = make_plot(theta_model, unitL_model, x_cent, y_cent)
 
         l_pad = block.start - start
@@ -605,7 +610,7 @@ center loss : {np.mean(losses[4])}
 
         # read and preprocess images
         # real_image, y_st, x_st = read_image(imshape, filenames_, params['rescale'], Worm_is_black)
-        real_image, org_y_st, org_x_st = load_image(
+        real_image, y_st, x_st = load_image(
             filenames_all,
             params["rescale"],
             Worm_is_black,
@@ -700,6 +705,9 @@ center loss : {np.mean(losses[4])}
             remove_progress(output_path, "{}-{}_id3*.png".format(start, end))
 
         if update:
+            # Add x_st, y_st to restore original position before reconstruction.
+            x_cent += x_st
+            y_cent += y_st
             x_model, y_model = make_plot(theta_model, unitL_model, x_cent, y_cent)
             if __debug__:
                 show_image(real_image, params["num_t"], title="real image")
@@ -739,13 +747,6 @@ center loss : {np.mean(losses_all[i][4])}
 
     # check flipping
     x, y = flip_check(x, y)
-    real_image, _, _ = load_image(
-        filenames_all,
-        params["rescale"],
-        Worm_is_black,
-        multi_flag,
-        Tscaled_ind[:1],
-    )
 
     # check which side is head or tail
     if (

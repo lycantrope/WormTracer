@@ -1387,12 +1387,12 @@ def train3(
     return losses
 
 
-def make_plot(theta, unitLength, x_cent, y_cent, x_st=0, y_st=0):
+def make_plot(theta, unitLength, x_cent, y_cent):
     T = theta.shape[0]
     x = np.hstack((np.zeros((T, 1)), np.cumsum(unitLength * np.cos(theta), axis=1)))
     y = np.hstack((np.zeros((T, 1)), np.cumsum(unitLength * np.sin(theta), axis=1)))
-    x = x - np.mean(x, axis=1).reshape((T, 1)) + x_cent.reshape((T, 1)) + x_st
-    y = y - np.mean(y, axis=1).reshape((T, 1)) + y_cent.reshape((T, 1)) + y_st
+    x = x - np.mean(x, axis=1).reshape((T, 1)) + x_cent.reshape((T, 1))
+    y = y - np.mean(y, axis=1).reshape((T, 1)) + y_cent.reshape((T, 1))
     return x, y
 
 
