@@ -646,7 +646,8 @@ class TrainingBlocks:
 
         counter = itertools.count()
         for is_complex, start, end in zip(mask, onset, offset):
-            for st in range(start, end, batchsize):
+            # Since end is inclusive, we should add one to include the end index.
+            for st in range(start, end + 1, batchsize):
                 yield TrainingBlocks.Block(
                     start=st,
                     end=min(st + batchsize - 1, end),
@@ -664,8 +665,8 @@ def get_use_blocks(
     """
     # the criteria to filter complex area
     image_losses_min = np.min(image_losses)
-    rigid = 0.4 * image_loss_max + 0.6 * image_losses_min
-    relaxed = 0.2 * image_loss_max + 0.8 * image_losses_min
+    rigid = 0.3 * image_loss_max + 0.7 * image_losses_min
+    relaxed = 0.1 * image_loss_max + 0.9 * image_losses_min
     return TrainingBlocks(losses=image_losses, relaxed=relaxed, rigid=rigid)
 
 
@@ -1244,9 +1245,11 @@ def train3(
         image_loss = torch.mean(
             ((model_image - real_image) ** 2) * annealing_weight.reshape([T, 1, 1])
         )
+
         continuity_loss = continuity_loss_weight * torch.mean(
             (model.theta[:-1, :] - model.theta[1:, :]) ** 2
         )
+
         smoothness_loss = smoothness_loss_weight * torch.mean(
             (
                 (model.theta[:, :-1] - model.theta[:, 1:])
@@ -1265,6 +1268,12 @@ def train3(
             / unitL
             * torch.mean((model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2)
         )
+
+        if block.size < 2:
+            # If block contains only single frame. Then, we ignore continuity_loss and length_loss
+            continuity_loss *= 0.0
+            length_loss *= 0.0
+
         loss = (
             image_loss + continuity_loss + smoothness_loss + length_loss + center_loss
         )
@@ -1336,6 +1345,12 @@ def train3(
             * length_loss_weight
             * torch.mean((model.unitLength[:-1] - model.unitLength[1:]) ** 2)
         )
+
+        if block.size < 2:
+            # If block contains only single frame. Then, we ignore continuity_loss and length_loss
+            continuity_loss *= 0.0
+            length_loss *= 0.0
+
         loss = image_loss + continuity_loss + smoothness_loss + length_loss
         loss.backward()
         early_stopping(loss.item(), model)
@@ -1371,15 +1386,34 @@ def train3(
 
     with torch.no_grad():
         # Calculate the loss for display, this part does not require grad.
+        image_loss = torch.mean((model_image - real_image) ** 2, axis=(1, 2))
+
+        continuity_loss = continuity_loss_weight * torch.mean(
+            (model.theta[:-1, :] - model.theta[1:, :]) ** 2,
+            axis=1,
+        )
+
+        smoothness_loss = smoothness_loss_weight * torch.mean(
+            (model.theta[:, :-1] - model.theta[:, 1:]) ** 2,
+            axis=1,
+        )
+        length_loss = length_loss_weight * (
+            (model.unitLength[:-1] - model.unitLength[1:]) ** 2
+        )
+        center_loss = center_loss_weight * (
+            (model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2
+        )
+        if block.size < 2:
+            # If block contains only single frame. Then, we ignore continuity_loss and length_loss
+            continuity_loss *= 0.0
+            length_loss *= 0.0
+
         losses = [
-            torch.mean((model_image - real_image) ** 2, axis=(1, 2)),
-            continuity_loss_weight
-            * torch.mean((model.theta[:-1, :] - model.theta[1:, :]) ** 2, axis=1),
-            smoothness_loss_weight
-            * torch.mean((model.theta[:, :-1] - model.theta[:, 1:]) ** 2, axis=1),
-            length_loss_weight * ((model.unitLength[:-1] - model.unitLength[1:]) ** 2),
-            center_loss_weight
-            * ((model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2),
+            image_loss,
+            continuity_loss,
+            smoothness_loss,
+            length_loss,
+            center_loss,
         ]
         for i in range(len(losses)):
             losses[i] = losses[i].clone().detach().cpu().numpy()

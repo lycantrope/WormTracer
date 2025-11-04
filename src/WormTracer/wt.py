@@ -587,7 +587,7 @@ center loss : {np.mean(losses[4])}
     # revise areas which have too large loss
     losslarge_area = find_losslarge_area(losses_all)
     logger.info(
-        "STEP3 :　re-optimization for unsuccessful blocks with complex postures\n"
+        "STEP3 : re-optimization for unsuccessful blocks with complex postures\n"
     )
 
     padding = 3
