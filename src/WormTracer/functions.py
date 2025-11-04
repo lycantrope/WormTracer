@@ -144,9 +144,9 @@ def get_property(filenames, rescale):
             raise ValueError(err_msg.format(e))
     else:
         _, ims = cv2.imreadmulti(filename=filenames[0], mats=[], flags=0)
-        ims = np.asarray(ims)
-    im = ims[0]
-    if np.all((0 == np.asarray(im)) | (np.asarray(im) == 255)):
+
+    im = np.asarray(ims[0])
+    if not np.all((0 == im) | (im == 255)):
         logger.warning("Warning! : Input images seem not to be binary.")
     if not math.isclose(rescale, 1.0, rel_tol=1e4):
         im = cv2.resize(
@@ -465,7 +465,9 @@ def calc_cap_span(image_shape, plot_n):
         allocated_mem = torch.cuda.memory_allocated(0)
         # GB
         free_memory = (reserved_mem - allocated_mem) / GB
-        cap_span = max(int(free_memory / mem_used_per_stack), 1)
+        print(reserved_mem, allocated_mem, free_memory, mem_used_per_stack)
+        # Since the continuity and center loss require two consecutive frames, the cap_span must be greater than 1.
+        cap_span = max(int(free_memory / mem_used_per_stack), 2)
     except Exception as _:
         cap_span = T
     return cap_span
@@ -900,7 +902,9 @@ def set_init_xy(imstack):
     # init_cx = (init_cx * 2).astype("f4") / scale - 1.0
     # init_cy = (init_cy * 2).astype("f4") / scale - 1.0
 
-    return torch.from_numpy(init_cx), torch.from_numpy(init_cy)
+    return torch.from_numpy(init_cx.astype("f4")), torch.from_numpy(
+        init_cy.astype("f4")
+    )
 
 
 def find_theta(theta, pretheta, plus=1):
