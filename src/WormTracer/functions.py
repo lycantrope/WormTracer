@@ -460,9 +460,10 @@ def calc_cap_span(image_shape, plot_n):
 
     # bytes used per stack under float32 and multiple by 8 for some margin case.
     mem_used_per_stack = 8 * 4 * dim_size * (plot_n - 1) / GB
+    device = torch.accelerator.current_accelerator()
     try:
-        reserved_mem = torch.cuda.memory_reserved(0)
-        allocated_mem = torch.cuda.memory_allocated(0)
+        reserved_mem = torch.cuda.memory_reserved(device)
+        allocated_mem = torch.cuda.memory_allocated(device)
         # GB
         free_memory = (reserved_mem - allocated_mem) / GB
         print(reserved_mem, allocated_mem, free_memory, mem_used_per_stack)
