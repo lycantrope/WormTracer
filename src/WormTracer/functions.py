@@ -1271,12 +1271,15 @@ def train3(
 
         if block.size < 2:
             # If block contains only single frame. Then, we ignore continuity_loss and length_loss
-            continuity_loss *= 0.0
-            length_loss *= 0.0
-
-        loss = (
-            image_loss + continuity_loss + smoothness_loss + length_loss + center_loss
-        )
+            loss = image_loss + smoothness_loss + center_loss
+        else:
+            loss = (
+                image_loss
+                + continuity_loss
+                + smoothness_loss
+                + length_loss
+                + center_loss
+            )
         loss.backward()
         if torch.min(annealing_weight) > 0.99:
             early_stopping(loss.item(), model)
@@ -1348,10 +1351,10 @@ def train3(
 
         if block.size < 2:
             # If block contains only single frame. Then, we ignore continuity_loss and length_loss
-            continuity_loss *= 0.0
-            length_loss *= 0.0
+            loss = image_loss + smoothness_loss
+        else:
+            loss = image_loss + continuity_loss + smoothness_loss + length_loss
 
-        loss = image_loss + continuity_loss + smoothness_loss + length_loss
         loss.backward()
         early_stopping(loss.item(), model)
         del loss
@@ -1404,9 +1407,9 @@ def train3(
             (model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2
         )
         if block.size < 2:
-            # If block contains only single frame. Then, we ignore continuity_loss and length_loss
-            continuity_loss *= 0.0
-            length_loss *= 0.0
+            # If block contains only single frame. Then, we ignore continuity_loss and length_loss by filled it to zeros
+            continuity_loss = torch.nan_to_num(continuity_loss)
+            length_loss = torch.nan_to_num(length_loss)
 
         losses = [
             image_loss,
