@@ -536,7 +536,7 @@ center loss : {np.mean(losses[4])}
         x_model, y_model = make_plot(theta_model, unitL_model, x_cent, y_cent)
 
         l_pad = block.start - start
-        r_pad = block.end - end
+        r_pad = l_pad + block.size
         x_model = x_model[l_pad:r_pad]
         y_model = y_model[l_pad:r_pad]
 
@@ -708,7 +708,7 @@ center loss : {np.mean(losses[4])}
 
             # reconstruct plots from model results
             l_pad = block.start - start
-            r_pad = block.end - end
+            r_pad = l_pad + block.size
             x_model = x_model[l_pad:r_pad]
             y_model = y_model[l_pad:r_pad]
 
