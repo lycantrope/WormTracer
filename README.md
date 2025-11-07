@@ -176,3 +176,16 @@ If True, saves input images with estimated centerline as a movie full_line_image
 SaveCenterlinedWormsMultitiff (True or False):
 If True, saves input images with estimated centerline as a multipage tiff full_line_images.tif
 ```
+
+## Optional GUI plugin (napari-wormtracer)
+
+WormTracer provide an optional napari-based GUI for manually inspecting and revising the centerlins.
+To install the GUI tools:
+```bash
+pip install "wormtracer[gui]"
+```
+Launch the GUI with:
+```bash
+napari
+```
+For further details, see https://github.com/lycantrope/napari-wormtracer

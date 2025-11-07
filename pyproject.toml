@@ -9,7 +9,8 @@ authors = [
     { name = "Yu Toyoshima" },
     { name = "Yuichi Iino", email = "iino@bs.s.u-tokyo.ac.jp" },
 ]
-dynamic = [ "version", "readme" ]
+dynamic = ["version", "readme"]
+license = { file = "LICENSE" }
 requires-python = ">=3.9"
 dependencies = [
     "numpy<2",
@@ -23,19 +24,27 @@ dependencies = [
     "torch",
     "torchvision",
 ]
-license = { file = "LICENSE" }
 
 [project.scripts]
 wormtracer = "WormTracer.__main__:main_wrapper"
 
+[project.optional-dependencies]
+gui = ["imageio[ffmpeg]>=2.37.2", "napari-wormtracer", "napari[all]>=0.5.6"]
+
 [build-system]
-requires = [ "setuptools", "wheel" ]
+requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.dynamic]
 version = { attr = "WormTracer.__version__" }
-readme = { file = [ "README.md" ] }
+readme = { file = ["README.md"] }
 
 [tool.ruff.lint]
-extend-select = [ "I001" ]
-ignore = [ "F401", "F405" ]
+extend-select = ["I001"]
+ignore = ["F401", "F405"]
+
+[tool.uv.sources]
+napari-wormtracer = { git = "https://github.com/lycantrope/napari-wormtracer" }
+
+[dependency-groups]
+dev = []
