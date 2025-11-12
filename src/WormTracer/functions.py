@@ -16,6 +16,7 @@ import cv2
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
+import roifile
 import tifffile
 import torch
 import torch.nn as nn
@@ -1777,3 +1778,47 @@ def straigthen(
     )
 
     return straigthen_dst
+
+
+def centerline_to_roi_iter(x, y, head_idx=0):
+    # (A,R,G,B)
+    RED = b"\xff\xff\x00\x00"
+    YELLOW = b"\xff\xff\xff\x00"
+    n_digit = len(str(x.shape[0]))
+
+    for pos, skel in enumerate(zip(x, y)):
+        # (2, plot_n) => (plot_n, 2)
+        centerline = np.asarray(skel).T
+        name = str(pos + 1).zfill(n_digit)
+        head_roi = roifile.ImagejRoi.frompoints(
+            [centerline[head_idx]],
+            name=name + "-Head",
+            position=pos,
+        )
+
+        head_roi.roitype = roifile.ROI_TYPE.POINT
+        head_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
+        head_roi.arrow_style_or_aspect_ratio = 3
+        head_roi.stroke_width = 5
+        head_roi.stroke_color = RED
+
+        yield head_roi
+
+        skel_roi = roifile.ImagejRoi.frompoints(
+            centerline,
+            name=name,
+            position=pos,
+        )
+        skel_roi.roitype = roifile.ROI_TYPE.POLYLINE
+        skel_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
+        skel_roi.stroke_color = YELLOW
+        skel_roi.stroke_width = 2
+        yield skel_roi
+
+
+def save_centerline_to_roi(outputpath, x, y, head_idx=0):
+    roifile.roiwrite(
+        outputpath,
+        centerline_to_roi_iter(x, y, head_idx),
+        mode="w",
+    )

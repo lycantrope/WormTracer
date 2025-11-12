@@ -1,9 +1,20 @@
 # from __future__ import annotations
 
 import os
-from typing import Generator, List, NamedTuple, Optional, Sequence, Set, Tuple, Union
+from typing import (
+    Generator,
+    Iterator,
+    List,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 import numpy as np
+import roifile
 import torch
 
 def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0): ...
@@ -260,3 +271,8 @@ def get_use_blocks(
     image_loss_max: float,
 ) -> TrainingBlocks:
     """Judge frames complex or not and get span for training."""
+
+def centerline_to_roi_iter(x, y, head_idx=0) -> Iterator[roifile.ImagejRoi]: ...
+def save_centerline_to_roi(
+    outputpath: str, x: np.ndarray, y: np.ndarray, head_idx: int = 0
+) -> None: ...

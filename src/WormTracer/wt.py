@@ -8,6 +8,7 @@ import sys
 from pathlib import Path, PurePath
 
 import cv2
+import h5py
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -39,6 +40,7 @@ from .functions import (
     make_theta_cand,
     make_theta_from_xy,
     remove_progress,
+    save_centerline_to_roi,
     save_progress,
     set_init_xy,
     set_output_path,
@@ -790,6 +792,7 @@ center loss : {np.mean(losses_all[i][4])}
         json.dump(params_for_save, f)
     with open(os.path.join(output_path, output_name + "_params.yaml"), "w") as f:
         yaml.safe_dump(params_for_save, f, sort_keys=False)
+
     np.savetxt(
         os.path.join(output_path, output_name + "_x.csv"),
         x / params["rescale"],
@@ -811,71 +814,24 @@ center loss : {np.mean(losses_all[i][4])}
         delimiter=",",
     )
 
-    rois = []
-    n_digit = len(str(x.shape[0]))
-    for pos, skel in enumerate(zip(x, y)):
-        centerline = np.asarray(skel).T
-        name = str(pos + 1).rjust(n_digit, "0")
-        head_roi = roifile.ImagejRoi.frompoints(
-            [centerline[0]],
-            name=name + "-Head",
-            position=pos,
-        )
+    with h5py.File(
+        os.path.join(output_path, output_name + "_skel.h5"),
+        "w",
+    ) as handler:
+        handler.create_dataset("x", data=x)
+        handler.create_dataset("y", data=y)
+        handler.create_dataset("x_rev", data=x_rev)
+        handler.create_dataset("y_rev", data=y_rev)
 
-        head_roi.roitype = roifile.ROI_TYPE.POINT
-        head_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
-        head_roi.arrow_style_or_aspect_ratio = 3
-        head_roi.stroke_width = 5
-        head_roi.stroke_color = b"\xff\xff\x00\x00"
-
-        skel_roi = roifile.ImagejRoi.frompoints(
-            centerline,
-            name=name,
-            position=pos,
-        )
-        skel_roi.roitype = roifile.ROI_TYPE.POLYLINE
-        skel_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
-        skel_roi.stroke_color = b"\xff\xff\xff\x00"
-        skel_roi.stroke_width = 2
-        rois.extend((head_roi, skel_roi))
-
-    roifile.roiwrite(
-        os.path.join(output_path, output_name + "_RoiSet.zip"),
-        rois,
-        mode="w",
+    save_centerline_to_roi(
+        outputpath=os.path.join(output_path, output_name + "_RoiSet.zip"),
+        x=x,
+        y=y,
     )
-
-    rois = []
-    for pos, skel in enumerate(zip(x_rev, y_rev)):
-        centerline = np.asarray(skel).T
-        name = str(pos + 1).rjust(n_digit, "0")
-        head_roi = roifile.ImagejRoi.frompoints(
-            [centerline[0]],
-            name=name + "-Head",
-            position=pos,
-        )
-
-        head_roi.roitype = roifile.ROI_TYPE.POINT
-        head_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
-        head_roi.arrow_style_or_aspect_ratio = 3
-        head_roi.stroke_width = 5
-        head_roi.stroke_color = b"\xff\xff\x00\x00"
-
-        skel_roi = roifile.ImagejRoi.frompoints(
-            centerline,
-            name=name,
-            position=pos,
-        )
-        skel_roi.roitype = roifile.ROI_TYPE.POLYLINE
-        skel_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
-        skel_roi.stroke_color = b"\xff\xff\xff\x00"
-        skel_roi.stroke_width = 2
-        rois.extend((head_roi, skel_roi))
-
-    roifile.roiwrite(
-        os.path.join(output_path, output_name + "_RoiSet_rev.zip"),
-        rois,
-        mode="w",
+    save_centerline_to_roi(
+        outputpath=os.path.join(output_path, output_name + "_RoiSet_rev.zip"),
+        x=x_rev,
+        y=y_rev,
     )
 
     logger.info("Params and plots are successfully saved.\n")
