@@ -184,8 +184,14 @@ To install the GUI tools:
 ```bash
 pip install "wormtracer[gui]"
 ```
+or
+```bash
+pip install "wormtracer[gui] @ git+https://github.com/lycantrope/wormtracer.git"
+```
+
 Launch the GUI with:
 ```bash
 napari
 ```
 For further details, see https://github.com/lycantrope/napari-wormtracer
+
