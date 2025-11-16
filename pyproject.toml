@@ -9,7 +9,7 @@ authors = [
     { name = "Yu Toyoshima" },
     { name = "Yuichi Iino", email = "iino@bs.s.u-tokyo.ac.jp" },
 ]
-dynamic = [ "version", "readme" ]
+dynamic = ["version", "readme"]
 license = { file = "LICENSE" }
 requires-python = ">=3.9"
 dependencies = [
@@ -37,19 +37,18 @@ gui = [
 ]
 
 [build-system]
-requires = [ "setuptools", "wheel" ]
+requires = ["setuptools>=80", "wheel", "setuptools_scm[simple]>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.dynamic]
-version = { attr = "WormTracer.__version__" }
-readme = { file = [ "README.md" ] }
+readme = { file = ["README.md"] }
 
 [tool.ruff.lint]
-extend-select = [ "I001" ]
-ignore = [ "F401", "F405" ]
+extend-select = ["I001"]
+ignore = ["F401", "F405"]
 
 [tool.uv.sources]
 napari-wormtracer = { git = "https://github.com/lycantrope/napari-wormtracer" }
 
 [dependency-groups]
-dev = [  ]
+dev = []
