@@ -251,7 +251,7 @@ class TrainingBlocks:
     class Block(NamedTuple):
         start: int
         end: int
-        index: int
+        idx: int
         is_complex: bool
 
         @property

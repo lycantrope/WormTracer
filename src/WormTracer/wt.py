@@ -385,7 +385,7 @@ def run(
         )
 
         # get trace information
-        losses_all[block.index] = losses
+        losses_all[block.idx] = losses
         theta_model = model.theta.detach().cpu().numpy()
         unitL_model = model.unitLength.detach().cpu().numpy().reshape(-1, 1)
         x_cent, y_cent = (
@@ -409,19 +409,21 @@ def run(
         y[block.start : block.end + 1, :] = y_model
 
         # log
-        logger.info(f"""{str(block)}
+        logger.info(
+            f"""{str(block)}
 image loss : {np.mean(losses[0])}
 continuity loss : {np.mean(losses[1])}
 smoothing loss : {np.mean(losses[2])}
 length loss : {np.mean(losses[3])}
 center loss : {np.mean(losses[4])}
-""")
+"""
+        )
         if __debug__:
             # Only compute the model_image, if we want to show the result.
             model_image = model(batch=T, width=W, height=H)
             show_image(real_image, params["num_t"], title="real image")
             show_image(model_image, params["num_t"], title="model image")
-            show_loss_plot(losses_all[block.index], title="losses of model")
+            show_loss_plot(losses_all[block.idx], title="losses of model")
 
     time_now = datetime.datetime.now()
     logger.info(f"STEP1 finished at {time_now}\n")
@@ -482,7 +484,7 @@ center loss : {np.mean(losses[4])}
         )
         optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
         params["id"] = 0
-        losses_all[block.index] = train3(
+        losses_all[block.idx] = train3(
             model,
             real_image,
             optimizer,
@@ -526,7 +528,7 @@ center loss : {np.mean(losses[4])}
         )
 
         # get trace information if loss is smaller
-        select_ind = loss_compare([losses_all[block.index], losses])
+        select_ind = loss_compare([losses_all[block.idx], losses])
         if select_ind:
             theta_model = model.theta.detach().cpu().numpy()
             unitL_model = model.unitLength.detach().cpu().numpy().reshape(-1, 1)
@@ -535,7 +537,7 @@ center loss : {np.mean(losses[4])}
                 model.cy.detach().cpu().numpy(),
             )
             model_image = model(batch=T, width=W, height=H)
-            losses_all[block.index] = losses
+            losses_all[block.idx] = losses
 
         # Add x_st, y_st to restore original position before reconstruction.
         x_cent += x_st
@@ -570,18 +572,20 @@ center loss : {np.mean(losses[4])}
             show_image(real_image, params["num_t"], title="real image")
             show_image(model_image, params["num_t"], title="model image")
             show_loss_plot(
-                losses_all[block.index], title="losses of model{}".format(select_ind)
+                losses_all[block.idx], title="losses of model{}".format(select_ind)
             )
 
         # log
-        logger.info(f"""{str((start, end))}
+        logger.info(
+            f"""{str((start, end))}
 image loss : {np.mean(losses[0])}
 continuity loss : {np.mean(losses[1])}
 smoothing loss : {np.mean(losses[2])}
 length loss : {np.mean(losses[3])}
 center loss : {np.mean(losses[4])}
 
-""")
+"""
+        )
 
     time_now = datetime.datetime.now()
     logger.info(f"STEP2 finished at {time_now}\n")
@@ -726,14 +730,16 @@ center loss : {np.mean(losses[4])}
             y[block.start : block.end + 1, :] = y_model
 
             # log
-            logger.info(f"""{str((start, end))} updated
+            logger.info(
+                f"""{str((start, end))} updated
 image loss : {np.mean(losses_all[i][0])}
 continuity loss : {np.mean(losses_all[i][1])}
 smoothing loss : {np.mean(losses_all[i][2])}
 length loss : {np.mean(losses_all[i][3])}
 center loss : {np.mean(losses_all[i][4])}
 
-""")
+"""
+            )
 
     time_now = datetime.datetime.now()
     logger.info(f"STEP3 finished at {time_now}\n")

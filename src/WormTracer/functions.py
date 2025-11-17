@@ -81,14 +81,17 @@ def set_output_path(dataset_path, output_directory):
     Path(output_directory).mkdir(exist_ok=True)
 
     dataset_prefix = Path(dataset_path).stem
-
-    for i in range(int(1e32)):
-        output_path = output_directory.joinpath(
-            "{}_output_{:d}".format(dataset_prefix, i + 1)
-        )
+    output_path = output_directory.joinpath(f"{dataset_prefix}_output_001")
+    # If the output folder with the same name already exists, the series number is incremented by 1 from 001 to 999.
+    for i in range(2, 1001):
         if not output_path.is_dir():
             break
-
+        output_path = output_directory.joinpath(f"{dataset_prefix}_output_{i:0>3d}")
+    else:
+        # If the series number is incremented to 1000, it will throw an error to notify the user clearup the output folder.
+        raise FileExistsError(
+            "The output folder exists, please delete or move the previous output folder."
+        )
     Path(output_path).mkdir()
     return dataset_prefix, output_path, Path(output_path).stem
 
@@ -332,6 +335,7 @@ def get_skeleton_networkx(im: np.ndarray, plot_n: int):
     """
     # skeletonize image
     im_filled = ndi.binary_fill_holes(im)
+    assert im_filled is not None, "Err after binary_fill_holes"
     im_skeleton = morphology.skeletonize(im_filled)
     point_list = np.argwhere(im_skeleton == 1)
 
@@ -348,6 +352,7 @@ def get_skeleton_networkx(im: np.ndarray, plot_n: int):
     adj_mtx[adj_mtx > 1.5] = 0  # delete distance between isolated points
 
     G = nx.from_numpy_array(adj_mtx)
+    assert not isinstance(G.degree, int), "G.degree must be a list here"
     # Obtain end from 1 degree node.
     ends = [node for node, deg in G.degree if deg == 1]
     # Calculate the shortest path of all ends pairing
@@ -370,6 +375,7 @@ def get_skeleton_networkx(im: np.ndarray, plot_n: int):
 def get_width(im, x, y):
     """Get width of the object by measure distance of centerline to the object's surface."""
     im_filled = ndi.binary_fill_holes(im)
+    assert im_filled is not None, "Err after binary_fill_holes"
     x = x.reshape([-1, 1, 1])
     y = y.reshape([-1, 1, 1])
     y_3d = np.arange(im_filled.shape[0]).reshape([1, -1, 1])
@@ -597,7 +603,7 @@ class TrainingBlocks:
     class Block(NamedTuple):
         start: int
         end: int
-        index: int
+        idx: int
         is_complex: bool
 
         @property
@@ -652,7 +658,7 @@ class TrainingBlocks:
                 yield TrainingBlocks.Block(
                     start=st,
                     end=min(st + batchsize - 1, end),
-                    index=next(counter),
+                    idx=next(counter),
                     is_complex=is_complex,
                 )
 
@@ -757,14 +763,18 @@ def get_use_points(
         Warning! This task uses large memory.
         If CUDA run out of memory, please go back to setting hyperparameters and set rescale as {:.2f}, Tscale as {}.
         The result may be not precise enough.
-        """.format(rescale_rec, Tscale_rec)
+        """.format(
+                        rescale_rec, Tscale_rec
+                    )
                 )
             else:
                 logger.warning(
                     """
         Warning! This task uses large memory.
         If CUDA run out of memory, please go back to setting hyperparameters and set rescale as {:.2f}, Tscale as {}.
-        """.format(rescale_rec, Tscale_rec)
+        """.format(
+                        rescale_rec, Tscale_rec
+                    )
                 )
 
     except IndexError:
@@ -1210,7 +1220,8 @@ def train3(
 ):
     T, H, W = real_image.shape
     speed = params["speed"]
-    epochs = int(T / (2 * speed) + params["epoch_plus"])
+    # Make sure at least 1 epochs will be executed
+    epochs = max(int(T / (2 * speed) + params["epoch_plus"]), 1)
     block = params["use_area"]
     # Loss Weight
     continuity_loss_weight = params["continuity_loss_weight"]
