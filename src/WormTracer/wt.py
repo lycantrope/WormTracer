@@ -164,7 +164,7 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
 def timer(fn):
-    @functools.wraps
+    @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         tic = datetime.datetime.now()
         logger.info(f"Code started at {tic}")
