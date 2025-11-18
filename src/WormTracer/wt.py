@@ -159,19 +159,18 @@ If True, saves input images with estimated centerline as a multipage tiff full_l
 
 """
 
+logging.basicConfig(format="%(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
-def timer(fn):
+def timer(fn, *, logger: logging.Logger = logger):
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         tic = datetime.datetime.now()
-        logger.info(f"Code started at {tic}")
         ret = fn(*args, **kwargs)
         toc = datetime.datetime.now()
         dt = toc - tic
-        logger.info(f"Code ended at {tic}")
         logger.info(f"Elapse time: {dt.total_seconds():.1f} (sec)")
         return ret
 
@@ -185,7 +184,7 @@ def run(
     matplotlib.use("Agg")
 
     with open(parameter_file, "r") as yml:
-        params = yaml.safe_load(yml)
+        params = dict(yaml.safe_load(yml))
 
     params.update(kwargs)
 
@@ -201,13 +200,12 @@ def run(
     if params["SaveProgress"]:
         clear_dir(output_path, output_name + "_progress_image")
 
-    # setup logger
-    logging.basicConfig(
-        filename=output_path.joinpath(f"{output_name}.log"),
-        format="%(message)s",
-        level=logging.INFO,
+    file_handler = logging.FileHandler(
+        output_path.joinpath(f"{output_name}.log"),
     )
+    logger.addHandler(file_handler)
     # log
+    logger.info(f"Code started at {datetime.datetime.now()}")
     logger.info(f"Python: {sys.version_info}")
     logger.info("WormTracer:" + __version__)
     logger.info(f"Params : {params}")
@@ -782,7 +780,7 @@ center loss : {np.mean(losses_all[i][4])}
     )
 
     # check which side is head or tail
-    judge_head_method = params("judge_head_method", "amplitude")
+    judge_head_method = params.get("judge_head_method", "amplitude")
     if judge_head_method == "frequency":
         is_reversed = judge_head_frequency(x, y)
     else:
