@@ -1516,13 +1516,7 @@ def judge_head_amplitude(x, y):
     curve_mean1 = curve_rate_var[idx15per : idx20per + 1].mean()
     curve_mean2 = curve_rate_var[-idx20per - 1 : -idx15per].mean()
 
-    x_rev, y_rev = x[:, ::-1], y[:, ::-1]
-    # Reversed
-    if curve_mean1 < curve_mean2:
-        x, x_rev = x_rev, x
-        y, y_rev = y_rev, y
-
-    return x, y, x_rev, y_rev
+    return curve_mean1 < curve_mean2
 
 
 def judge_head_frequency(x, y):
@@ -1572,12 +1566,7 @@ def judge_head_frequency(x, y):
         ax.set_title(f"Correlation = {cor:.3g}")
         # plt.show()
 
-    x_rev, y_rev = x[:, ::-1], y[:, ::-1]
-    # Reversed
-    if cor > 0:
-        x, x_rev = x_rev, x
-        y, y_rev = y_rev, y
-    return x, y, x_rev, y_rev
+    return cor > 0
 
 
 def clear_dir(output_path, foldername):
