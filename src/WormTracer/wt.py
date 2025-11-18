@@ -1,7 +1,6 @@
 ### WormTracer main package wt.py ###
 
 import datetime
-import functools
 import logging
 import os
 import sys
@@ -163,23 +162,10 @@ logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
-def timer(fn):
-    @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
-        tic = datetime.datetime.now()
-        ret = fn(*args, **kwargs)
-        toc = datetime.datetime.now()
-        elapsed_time = toc - tic
-        print(f"Elapse time: {elapsed_time.total_seconds():.1f} (sec)")
-        return ret
-
-    return wrapper
-
-
-@timer
 def run(
     parameter_file, dataset_path, output_directory=None, **kwargs
 ):  # execute the whole WormTracer process, kwargs are optional parameter=value pairs
+    tic = datetime.datetime.now()
     matplotlib.use("Agg")
 
     with open(parameter_file, "r") as yml:
@@ -833,6 +819,9 @@ center loss : {np.mean(losses_all[i][4])}
     ):
         logger.info("Params and plots are successfully saved.")
         logger.info(f"Code finished at {datetime.datetime.now()}")
+        toc = datetime.datetime.now()
+        elapsed_time = toc - tic
+        logger.info(f"Elapse time: {elapsed_time.total_seconds():.1f} (sec)")
         return
 
     # save full of real_image and centerline as png images
@@ -945,3 +934,6 @@ center loss : {np.mean(losses_all[i][4])}
 
     logger.info("Params and plots are successfully saved.")
     logger.info(f"Code finished at {datetime.datetime.now()}")
+    toc = datetime.datetime.now()
+    elapsed_time = toc - tic
+    logger.info(f"Elapse time: {elapsed_time.total_seconds():.1f} (sec)")
