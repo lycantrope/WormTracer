@@ -1,7 +1,7 @@
 ### WormTracer main package wt.py ###
 
 import datetime
-import json
+import functools
 import logging
 import os
 import sys
@@ -12,7 +12,6 @@ import h5py
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-import roifile
 import tifffile
 import torch
 import yaml
@@ -164,6 +163,22 @@ logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
+def timer(fn):
+    @functools.wraps
+    def wrapper(*args, **kwargs):
+        tic = datetime.datetime.now()
+        logger.info(f"Code started at {tic}")
+        ret = fn(*args, **kwargs)
+        toc = datetime.datetime.now()
+        dt = toc - tic
+        logger.info(f"Code ended at {tic}")
+        logger.info(f"Elapse time: {dt.total_seconds():.1f} (sec)")
+        return ret
+
+    return wrapper
+
+
+@timer
 def run(
     parameter_file, dataset_path, output_directory=None, **kwargs
 ):  # execute the whole WormTracer process, kwargs are optional parameter=value pairs
@@ -193,8 +208,6 @@ def run(
         level=logging.INFO,
     )
     # log
-    time_now = datetime.datetime.now()
-    logger.info(f"Code executed at {time_now}")
     logger.info(f"Python: {sys.version_info}")
     logger.info("WormTracer:" + __version__)
     logger.info(f"Params : {params}")
@@ -756,19 +769,8 @@ center loss : {np.mean(losses_all[i][4])}
     # check flipping
     x, y = flip_check(x, y)
 
-    # check which side is head or tail
-    if (
-        "judge_head_method" not in params.keys()
-        or params["judge_head_method"] == "amplitude"
-    ):
-        x, y, x_rev, y_rev = judge_head_amplitude(x, y)
-    elif params["judge_head_method"] == "frequency":
-        x, y, x_rev, y_rev = judge_head_frequency(x, y)
-
     # cancel reduction
     # T_read_all = params['end_T'] - params['start_T'] if params['end_T'] else len(filenames_all) - params['start_T']
-    # x, y = cancel_reduction(x, y, T_read_all, len(filenames), params['plot_n'])
-    # x, y = cancel_reduction(x, y, n_input_images, len(Tscaled_ind), params['plot_n'])
     x, y = cancel_reduction(
         x,
         y,
@@ -779,23 +781,25 @@ center loss : {np.mean(losses_all[i][4])}
         params["plot_n"],
     )
 
-    # x_rev, y_rev = cancel_reduction(x_rev, y_rev, T_read_all, len(filenames), params['plot_n'])
-    x_rev, y_rev = cancel_reduction(
-        x_rev,
-        y_rev,
-        n_input_images,
-        params["start_T"],
-        params["end_T"],
-        Tscaled_ind,
-        params["plot_n"],
-    )
+    # check which side is head or tail
+    judge_head_method = params("judge_head_method", "amplitude")
+    if judge_head_method == "frequency":
+        is_reversed = judge_head_frequency(x, y)
+    else:
+        if judge_head_method != "amplitude":
+            logger.warning(
+                "judge_head_method only supported: frequency or amplitute (default)"
+            )
+        is_reversed = judge_head_amplitude(x, y)
+
+    if is_reversed:
+        x, y = x[:, :, ::-1], y[:, :, ::-1]
 
     tz = datetime.timezone(datetime.timedelta(hours=params["local_time_difference"]))
     time_now = datetime.datetime.now(tz).strftime("%Y-%m-%d_%H:%M:%S.%f")
     # if not os.path.isdir(os.path.join(output_path, 'results')):
     #  os.mkdir(os.path.join(output_path, 'results'))
-    with open(os.path.join(output_path, output_name + "_params.json"), "w") as f:
-        json.dump(params_for_save, f)
+
     with open(os.path.join(output_path, output_name + "_params.yaml"), "w") as f:
         yaml.safe_dump(params_for_save, f, sort_keys=False)
 
@@ -809,16 +813,6 @@ center loss : {np.mean(losses_all[i][4])}
         y / params["rescale"],
         delimiter=",",
     )
-    np.savetxt(
-        os.path.join(output_path, output_name + "_x_rev.csv"),
-        x_rev / params["rescale"],
-        delimiter=",",
-    )
-    np.savetxt(
-        os.path.join(output_path, output_name + "_y_rev.csv"),
-        y_rev / params["rescale"],
-        delimiter=",",
-    )
 
     with h5py.File(
         os.path.join(output_path, output_name + "_skel.h5"),
@@ -826,27 +820,19 @@ center loss : {np.mean(losses_all[i][4])}
     ) as handler:
         handler.create_dataset("x", data=x)
         handler.create_dataset("y", data=y)
-        handler.create_dataset("x_rev", data=x_rev)
-        handler.create_dataset("y_rev", data=y_rev)
 
     save_centerline_to_roi(
         outputpath=os.path.join(output_path, output_name + "_RoiSet.zip"),
         x=x,
         y=y,
     )
-    save_centerline_to_roi(
-        outputpath=os.path.join(output_path, output_name + "_RoiSet_rev.zip"),
-        x=x_rev,
-        y=y_rev,
-    )
-
-    logger.info("Params and plots are successfully saved.\n")
 
     if not (
         params["SaveCenterlinedWormsSerial"]
         | params["SaveCenterlinedWormsMovie"]
         | params["SaveCenterlinedWormsMultitiff"]
     ):
+        logger.info("Params and plots are successfully saved. \n")
         return
 
     # save full of real_image and centerline as png images
@@ -860,22 +846,31 @@ center loss : {np.mean(losses_all[i][4])}
     )
 
     if params["SaveCenterlinedWormsSerial"]:
+        output_folder = output_name + "_png"
         clear_dir(output_path, output_name + "_png")
         # for t in range(len(filenames_full)):
         end_T = n_input_images - 1 if params["end_T"] == 0 else params["end_T"]
-        fig, ax = plt.subplots()
+        # Draw the first figure as template
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+        img = ax.imshow(real_image[0], cmap="gray")
+        (line,) = ax.plot([x[0] - org_x_st, y[0] - org_y_st], c="r", lw=3)
+
+        fig.canvas.draw()
         for i, t in enumerate(range(params["start_T"], end_T + 1)):
+            # set data
+            img.set_data(real_image[t])
+            line.set_data(x[i] - org_x_st, y[i] - org_y_st)
+            # redraw
+            fig.canvas.draw()
             filename = os.path.join(
                 output_path,
-                output_name + "_png",
+                output_folder,
                 "image" + str(t).zfill(len(str(n_input_images))) + ".png",
             )
-            ax.imshow(real_image[t], cmap="gray")
-            ax.plot(x[i] - org_x_st, y[i] - org_y_st, c="r", lw=3)
-            plt.savefig(filename)
-            plt.cla()
-        plt.close()
-        print("\npng images saved to " + filename + " etc.")
+            fig.savefig(filename)
+        plt.close(fig)
+        logger.info("png images saved to " + output_folder + " etc.")
 
     # save full of real_image and centerline as mp4 movie
     if params["SaveCenterlinedWormsMovie"]:
@@ -906,7 +901,7 @@ center loss : {np.mean(losses_all[i][4])}
         ################# ani
         filename = os.path.join(output_path, output_name + ".mp4")
         ani.save(filename)
-        print("\nMovie saved to " + filename)
+        logger.info("Movie saved to " + filename)
 
     # save full of real_image and centerline as multipage tiff
     if params["SaveCenterlinedWormsMultitiff"]:
@@ -947,3 +942,5 @@ center loss : {np.mean(losses_all[i][4])}
             stack[i] = np.transpose(im_lines, (2, 0, 1)).astype("u1")
             stack.flush()
         logger.info("Multipage Tiff saved to " + filename)
+
+    logger.info("Params and plots are successfully saved. \n")

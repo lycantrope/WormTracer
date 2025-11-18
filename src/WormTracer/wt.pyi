@@ -1,6 +1,7 @@
 import os
-from typing import Optional
+from typing import Callable, Optional
 
+def timer(fn: Callable) -> Callable: ...
 def run(
     parameter_file: os.PathLike,
     dataset_path: os.PathLike,
