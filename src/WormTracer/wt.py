@@ -425,7 +425,7 @@ center loss : {np.mean(losses[4])}
 
     time_now = datetime.datetime.now()
     logger.info(f"STEP1 finished at {time_now}\n")
-    print(shape_params)
+
     shape_params = np.array(shape_params)
     # Calculating weighted average parameters
     weighted_params = np.average(
@@ -450,7 +450,7 @@ center loss : {np.mean(losses[4])}
             max(block.start - padding, 0),
             min(block.end + padding, training_block.nframe - 1),
         )
-
+        # This is only for saving the output during training
         params["use_area"] = block
         # filenames_ = filenames[use_area[0]:use_area[1]+1]
         theta_ = theta[start : end + 1, :].copy()
@@ -575,7 +575,7 @@ center loss : {np.mean(losses[4])}
 
         # log
         logger.info(
-            f"""{str((start, end))}
+            f"""{str(block)}
 image loss : {np.mean(losses[0])}
 continuity loss : {np.mean(losses[1])}
 smoothing loss : {np.mean(losses[2])}
@@ -604,11 +604,10 @@ center loss : {np.mean(losses[4])}
             max(block.start - padding, 0),
             min(block.end + padding, training_block.nframe - 1),
         )
-        print(start, end)
 
-        print(start, ":", end, " too large loss! ")
+        # This is only for saving the output during training
         params["use_area"] = block
-        # filenames_ = filenames[use_area[0]:use_area[1]+1]
+        print(f"{str(block)}: too large loss!")
 
         theta_ = theta[start : end + 1, :].copy()
 
@@ -729,7 +728,7 @@ center loss : {np.mean(losses[4])}
 
             # log
             logger.info(
-                f"""{str((start, end))} updated
+                f"""{str(block)} updated
 image loss : {np.mean(losses_all[i][0])}
 continuity loss : {np.mean(losses_all[i][1])}
 smoothing loss : {np.mean(losses_all[i][2])}
@@ -889,7 +888,11 @@ center loss : {np.mean(losses_all[i][4])}
         plt.close()
         ################# ani
         filename = os.path.join(output_path, output_name + ".mp4")
-        ani.save(filename)
+        try:
+            # If matplotlib can not find the FFmpeg, a ValueError will be raised.
+            ani.save(filename)
+        except ValueError as e:
+            raise ValueError(f"FFmpeg was not found: {e}")
         logger.info("Movie saved to " + filename)
 
     # save full of real_image and centerline as multipage tiff
