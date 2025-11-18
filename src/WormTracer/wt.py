@@ -159,19 +159,18 @@ If True, saves input images with estimated centerline as a multipage tiff full_l
 
 """
 
-logging.basicConfig(format="%(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
-def timer(fn, *, logger: logging.Logger = logger):
+def timer(fn):
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         tic = datetime.datetime.now()
         ret = fn(*args, **kwargs)
         toc = datetime.datetime.now()
-        dt = toc - tic
-        logger.info(f"Elapse time: {dt.total_seconds():.1f} (sec)")
+        elapsed_time = toc - tic
+        print(f"Elapse time: {elapsed_time.total_seconds():.1f} (sec)")
         return ret
 
     return wrapper
@@ -184,7 +183,7 @@ def run(
     matplotlib.use("Agg")
 
     with open(parameter_file, "r") as yml:
-        params = dict(yaml.safe_load(yml))
+        params = yaml.safe_load(yml)
 
     params.update(kwargs)
 
@@ -200,12 +199,14 @@ def run(
     if params["SaveProgress"]:
         clear_dir(output_path, output_name + "_progress_image")
 
-    file_handler = logging.FileHandler(
-        output_path.joinpath(f"{output_name}.log"),
+    # setup logger
+    logging.basicConfig(
+        filename=output_path.joinpath(f"{output_name}.log"),
+        format="%(message)s",
+        level=logging.INFO,
     )
-    logger.addHandler(file_handler)
     # log
-    logger.info(f"Code started at {datetime.datetime.now()}")
+    logger.info(f"Code executed at {datetime.datetime.now()}")
     logger.info(f"Python: {sys.version_info}")
     logger.info("WormTracer:" + __version__)
     logger.info(f"Params : {params}")
@@ -830,7 +831,8 @@ center loss : {np.mean(losses_all[i][4])}
         | params["SaveCenterlinedWormsMovie"]
         | params["SaveCenterlinedWormsMultitiff"]
     ):
-        logger.info("Params and plots are successfully saved. \n")
+        logger.info("Params and plots are successfully saved.")
+        logger.info(f"Code finished at {datetime.datetime.now()}")
         return
 
     # save full of real_image and centerline as png images
@@ -852,7 +854,7 @@ center loss : {np.mean(losses_all[i][4])}
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
         img = ax.imshow(real_image[0], cmap="gray")
-        (line,) = ax.plot([x[0] - org_x_st, y[0] - org_y_st], c="r", lw=3)
+        line = ax.plot([x[0] - org_x_st, y[0] - org_y_st], c="r", lw=3)[0]
 
         fig.canvas.draw()
         for i, t in enumerate(range(params["start_T"], end_T + 1)):
@@ -941,4 +943,5 @@ center loss : {np.mean(losses_all[i][4])}
             stack.flush()
         logger.info("Multipage Tiff saved to " + filename)
 
-    logger.info("Params and plots are successfully saved. \n")
+    logger.info("Params and plots are successfully saved.")
+    logger.info(f"Code finished at {datetime.datetime.now()}")
