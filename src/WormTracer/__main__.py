@@ -41,20 +41,11 @@ def main_wrapper():
     # To run script mode with optimized flag.
     # Equivalent to uv run python -O -m WormTracer ...
     command = [sys.executable, "-O", "-m", "WormTracer"] + sys.argv[1:]
-
-    proc = subprocess.Popen(
+    ret = subprocess.run(
         command,
         env=os.environ.copy(),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
     )
-    if proc.stdout is not None:
-        for line in proc.stdout:
-            print(line, end="")
-    proc.wait()
-    return proc.returncode
+    return ret.returncode
 
 
 if __name__ == "__main__":
