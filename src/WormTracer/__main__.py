@@ -44,8 +44,6 @@ def main_wrapper():
     ret = subprocess.run(
         command,
         env=os.environ.copy(),
-        stdout=subprocess.STDOUT,
-        stderr=subprocess.STDOUT,
     )
     return ret.returncode
 
