@@ -409,9 +409,9 @@ def trim_image(image, *, padding=5):
     thresh = np.bitwise_or.reduce(image > 0, axis=0)
 
     (ys, xs) = np.nonzero(thresh)
-    assert (
-        ys.size > 0
-    ), "the image has no signal. Please confirm your image is properly loaded"
+    assert ys.size > 0, (
+        "Image has no signal, please confirm your image is properly loaded"
+    )
     max_h, max_w = thresh.shape
 
     x1 = max(xs.min() - padding, 0)
@@ -763,18 +763,14 @@ def get_use_points(
         Warning! This task uses large memory.
         If CUDA run out of memory, please go back to setting hyperparameters and set rescale as {:.2f}, Tscale as {}.
         The result may be not precise enough.
-        """.format(
-                        rescale_rec, Tscale_rec
-                    )
+        """.format(rescale_rec, Tscale_rec)
                 )
             else:
                 logger.warning(
                     """
         Warning! This task uses large memory.
         If CUDA run out of memory, please go back to setting hyperparameters and set rescale as {:.2f}, Tscale as {}.
-        """.format(
-                        rescale_rec, Tscale_rec
-                    )
+        """.format(rescale_rec, Tscale_rec)
                 )
 
     except IndexError:
@@ -954,7 +950,7 @@ def make_theta_cand(theta):
 
 
 def body_axis_function(body_ratio, plot_n, base=0.5):
-    x = torch.arange(-0.5 * plot_n + 2, 0.5 * plot_n) - 0.5
+    x = torch.arange(2, plot_n) - (plot_n + 1) * 0.5
     n = 1 / base - 1
     body_axis_weight = (
         n
@@ -1181,6 +1177,44 @@ class Model(torch.nn.Module):
         image = make_worm(x, y, im_width, im_height, worm_wid)
         return image
 
+    def zero_masked_gradients(self, mask: torch.Tensor):
+        assert mask.ndim == 1, "Input mask must be a 1D tensor."
+        assert mask.shape[0] == self.cx.shape[0], (
+            "The length of mask is not equal to the first dimension of cx."
+        )
+
+        # Ensure the mask is a float tensor for multiplication
+        if mask.dtype != self.cx.dtype:
+            mask = mask.to(dtype=self.cx.dtype)
+
+        if not Model._is_binary_mask(mask):
+            raise ValueError(
+                "Mask must contain only 0s and 1s for selective gradient zeroing."
+            )
+
+        for param in (self.cx, self.cy, self.theta, self.unitLength):
+            if param.grad is not None:
+                num_dims = param.ndim
+                reshaped_mask = mask
+                # Add necessary dimensions of size 1 for broadcasting
+                while reshaped_mask.ndim < num_dims:
+                    reshaped_mask = reshaped_mask.unsqueeze(-1)
+
+                # Apply the adjusted mask
+                param.grad.mul_(reshaped_mask)
+
+    @staticmethod
+    def _is_binary_mask(mask: torch.Tensor) -> bool:
+        """Checks if the mask tensor contains only 0s and 1s."""
+        with torch.no_grad():
+            float_mask = mask.to(torch.float32)
+            # Check: x * (1 - x) == 0 only when x is 0 or 1.
+            check_tensor = float_mask * (1.0 - float_mask)
+            zero_tensor = torch.zeros(
+                1, device=float_mask.device, dtype=float_mask.dtype
+            )
+            return torch.allclose(check_tensor.sum(), zero_tensor)
+
 
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
@@ -1217,6 +1251,7 @@ def train3(
     output_path,
     output_name,
     is_nont=True,
+    gradient_mask=None,
 ):
     T, H, W = real_image.shape
     speed = params["speed"]
@@ -1247,6 +1282,21 @@ def train3(
     if not torch.is_tensor(real_image):
         real_image = torch.tensor(real_image).to(device)
 
+    if gradient_mask is None:
+        mask = torch.ones(T, dtype=model.cx.dtype, device=device)
+
+    elif isinstance(gradient_mask, torch.Tensor):
+        mask = gradient_mask.to(device)
+    else:
+        raise TypeError("loss_mask must be a torch.Tensor or None.")
+
+    if torch.allclose(
+        mask.sum(), torch.tensor(0.0, device=mask.device, dtype=mask.dtype)
+    ):
+        # Skip the main optimization if all parts are masked (fully frozen).
+        epochs = 0
+        logger.info("Mask is all zeros. Setting epochs to 0 to skip main optimization.")
+
     # main optimization
     for e in range(epochs):
         model_image = model(batch=T, width=W, height=H).to(device)
@@ -1254,44 +1304,54 @@ def train3(
 
         if is_nont:
             annealing_weight = annealing_function(e, T, speed).to(device)
-        image_loss = torch.mean(
-            ((model_image - real_image) ** 2) * annealing_weight.reshape([T, 1, 1])
-        )
-
-        continuity_loss = continuity_loss_weight * torch.mean(
-            (model.theta[:-1, :] - model.theta[1:, :]) ** 2
-        )
-
-        smoothness_loss = smoothness_loss_weight * torch.mean(
-            (
-                (model.theta[:, :-1] - model.theta[:, 1:])
-                * body_axis_weight
-                * annealing_weight.reshape([T, 1])
+        image_loss = (
+            torch.mean(
+                ((model_image - real_image) ** 2),
+                dim=(1, 2),
             )
-            ** 2
+            * annealing_weight
+        )  # (T, W, H) => (T, )
+
+        image_loss = torch.mean(image_loss)
+
+        smoothness_loss = (
+            torch.mean(
+                ((model.theta[:, :-1] - model.theta[:, 1:]) * body_axis_weight) ** 2,
+                dim=1,
+            )
+            * annealing_weight
         )
-        length_loss = (
-            10000
-            * length_loss_weight
-            * torch.mean((model.unitLength[:-1] - model.unitLength[1:]) ** 2)
-        )
+
+        smoothness_loss = smoothness_loss_weight * torch.mean(smoothness_loss)
+
         center_loss = (
             center_loss_weight
             / unitL
-            * torch.mean((model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2)
+            * torch.mean(((model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2))
         )
 
         if T < 2:
-            # If training block contains only single frame. Then, we ignore continuity_loss and length_loss
-            loss = image_loss + smoothness_loss + center_loss
+            # If training block contains only single frame. Then, we assigned continuity_loss and length_loss to zeros.
+            continuity_loss = torch.zeros(1, device=model.theta.device)
+            length_loss = torch.zeros(1, device=model.unitLength.device)
         else:
-            loss = (
-                image_loss
-                + continuity_loss
-                + smoothness_loss
-                + length_loss
-                + center_loss
+            continuity_loss = torch.mean(
+                (model.theta[:-1, :] - model.theta[1:, :]) ** 2,
+                dim=1,
             )
+            continuity_loss = continuity_loss_weight * torch.mean(continuity_loss)
+
+            length_loss = (
+                10000
+                * length_loss_weight
+                * torch.mean((model.unitLength[:-1] - model.unitLength[1:]) ** 2)
+            )
+
+        loss = (
+            image_loss + continuity_loss + smoothness_loss + length_loss + center_loss
+        )
+
+        model.zero_masked_gradients(mask)
         loss.backward()
         if torch.min(annealing_weight) > 0.99:
             early_stopping(loss.item(), model)
@@ -1349,24 +1409,29 @@ def train3(
         optimizer.zero_grad()
 
         image_loss = torch.mean((model_image - real_image) ** 2)
-        continuity_loss = continuity_loss_weight * torch.mean(
-            (model.theta[:-1, :] - model.theta[1:, :]) ** 2
-        )
+
         smoothness_loss = smoothness_loss_weight * torch.mean(
             ((model.theta[:, :-1] - model.theta[:, 1:]) * body_axis_weight) ** 2
         )
-        length_loss = (
-            10000
-            * length_loss_weight
-            * torch.mean((model.unitLength[:-1] - model.unitLength[1:]) ** 2)
-        )
 
         if T < 2:
-            # If training block contains only single frame. Then, we ignore continuity_loss and length_loss
-            loss = image_loss + smoothness_loss
+            # If training block contains only single frame. Then, we assigned continuity_loss and length_loss to zeros.
+            continuity_loss = torch.zeros(1, device=model.theta.device)
+            length_loss = torch.zeros(1, device=model.unitLength.device)
         else:
-            loss = image_loss + continuity_loss + smoothness_loss + length_loss
+            continuity_loss = continuity_loss_weight * torch.mean(
+                (model.theta[:-1, :] - model.theta[1:, :]) ** 2
+            )
 
+            length_loss = (
+                10000
+                * length_loss_weight
+                * torch.mean((model.unitLength[:-1] - model.unitLength[1:]) ** 2)
+            )
+
+        loss = image_loss + continuity_loss + smoothness_loss + length_loss
+
+        model.zero_masked_gradients(mask)
         loss.backward()
         early_stopping(loss.item(), model)
         del loss
@@ -1376,30 +1441,8 @@ def train3(
             break
         optimizer.step()
 
-    if show_flag:
-        logger.info(
-            "{:.2f} {:.2f} {:.2f} {:.2f}".format(
-                image_loss.item(),
-                continuity_loss.item(),
-                smoothness_loss.item(),
-                length_loss.item(),
-            )
-        )
-        if __debug__:
-            show_image(model_image, params["num_t"], title="final")
-
-    if save_flag:
-        save_progress(
-            real_image,
-            output_path,
-            output_name,
-            block.start,
-            block.end,
-            params["save_progress_num"],
-            txt="id{}_{}".format(params["id"], "final"),
-        )
-
     with torch.no_grad():
+        model_image = model(batch=T, width=W, height=H).to(device)
         # Calculate the loss for display, this part does not require grad.
         image_loss = torch.mean((model_image - real_image) ** 2, axis=(1, 2))
 
@@ -1433,6 +1476,29 @@ def train3(
         ]
         for i in range(len(losses)):
             losses[i] = losses[i].clone().detach().cpu().numpy()
+
+    if show_flag:
+        logger.info(
+            "{:.2f} {:.2f} {:.2f} {:.2f}".format(
+                image_loss.item(),
+                continuity_loss.item(),
+                smoothness_loss.item(),
+                length_loss.item(),
+            )
+        )
+        if __debug__:
+            show_image(model_image, params["num_t"], title="final")
+
+    if save_flag:
+        save_progress(
+            real_image,
+            output_path,
+            output_name,
+            block.start,
+            block.end,
+            params["save_progress_num"],
+            txt="id{}_{}".format(params["id"], "final"),
+        )
     torch.cuda.empty_cache()
     return losses
 
@@ -1618,9 +1684,9 @@ def straigthen_multi(
     assert src.ndim == 3, "The shape of source images is not (number, height, width)"
     assert x.shape == y.shape, "The coordinates of x and y have different shape."
     N, H, W = src.shape
-    assert (
-        x.shape[0] == N
-    ), "The number of frames to be straightened is different from given coordinates."
+    assert x.shape[0] == N, (
+        "The number of frames to be straightened is different from given coordinates."
+    )
 
     dist = np.zeros_like(x)
     dist[:, 1:] = np.sqrt((x[:, 1:] - x[:, :-1]) ** 2 + (y[:, 1:] - y[:, :-1]) ** 2)
