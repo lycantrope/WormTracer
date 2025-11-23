@@ -474,6 +474,10 @@ center loss : {np.mean(losses[4])}
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
         init_data = [init_cx, init_cy, unitLength]
 
+        # lost_mask for simple area
+        mask = training_block.complex_area[start : end + 1].astype("f4")
+        loss_mask = torch.from_numpy(mask).to(device)
+
         # make model instance and training
         model = (
             Model(init_cx, init_cy, init_theta, init_unitLength, params)
@@ -491,6 +495,7 @@ center loss : {np.mean(losses[4])}
             init_data,
             output_path,
             output_name,
+            loss_mask=loss_mask,
         )
 
         # get trace information
@@ -523,6 +528,7 @@ center loss : {np.mean(losses[4])}
             init_data,
             output_path,
             output_name,
+            loss_mask=loss_mask,
         )
 
         # get trace information if loss is smaller
@@ -631,6 +637,10 @@ center loss : {np.mean(losses[4])}
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
         init_data = [init_cx, init_cy, unitLength]
 
+        # lost_mask for simple area
+        mask = training_block.complex_area[start : end + 1].astype("f4")
+        loss_mask = torch.from_numpy(mask).to(device)
+
         # make model instance and training
         update = 0
         model = (
@@ -649,6 +659,7 @@ center loss : {np.mean(losses[4])}
             init_data,
             output_path,
             output_name,
+            loss_mask=loss_mask,
         )
 
         # get trace information if loss is smaller
