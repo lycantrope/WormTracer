@@ -1605,10 +1605,16 @@ def judge_head_frequency(x, y):
     cut = int(np.round(x.shape[1] / 20))  # cut end 5% of worm
     spat = spa[1 : (T2 + 1), cut : x.shape[1] - cut]
 
-    # cutoff high-freq area with values < peak/10
-    sp_sum = np.sum(spat, axis=1)
-    freq_cut = np.max(np.where(sp_sum > np.max(sp_sum) / 10)[0])
-    spat = spat[: freq_cut + 1, :]
+    try:
+        # cutoff high-freq area with values < peak/10
+        sp_sum = np.sum(spat, axis=1)
+        freq_cut = np.max(np.where(sp_sum > np.max(sp_sum) / 10)[0]) + 1
+    except ValueError as _:
+        # no high-freq area with values < peak/10
+        freq_cut = spat.shape[0]
+
+    spat = spat[:freq_cut, :]
+
     # logger.info('freq_cut =', freq_cut)
 
     # calculate correlation

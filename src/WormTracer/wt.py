@@ -596,13 +596,13 @@ center loss : {np.mean(losses[4])}
 
     time_now = datetime.datetime.now()
     logger.info(f"STEP2 finished at {time_now}\n")
-    print(f"{x.shape} {y.shape}")
+
     # revise areas which have too large loss
     losslarge_area = find_losslarge_area(losses_all)
     logger.info(
         "STEP3 : re-optimization for unsuccessful blocks with complex postures\n"
     )
-    print(f"{losslarge_area}")
+
     for i in losslarge_area:
         block = all_blocks[i]
         if not block.is_complex:
@@ -772,10 +772,8 @@ center loss : {np.mean(losses_all[i][4])}
             params_for_save[key] = os.fspath(value)
     del params_for_save["use_area"]
 
-    print(f"{x.shape} {y.shape}")
     # check flipping
     x, y = flip_check(x, y)
-    print(f"flip {x.shape} {y.shape}")
 
     # cancel reduction
     # T_read_all = params['end_T'] - params['start_T'] if params['end_T'] else len(filenames_all) - params['start_T']
@@ -788,7 +786,7 @@ center loss : {np.mean(losses_all[i][4])}
         Tscaled_ind,
         params["plot_n"],
     )
-    print(f"cancel {x.shape} {y.shape}")
+
     # check which side is head or tail
     judge_head_method = params.get("judge_head_method", "amplitude")
     if judge_head_method == "frequency":
