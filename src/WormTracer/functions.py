@@ -389,18 +389,19 @@ def get_width(im, x, y):
 
 def flip_check(x, y):
     """Check if plots of head and tail is flipping."""
+    assert x.shape == y.shape, "The coordinates of x and y have different shape."
     gap_headtail = np.mean(
         (x[1:, :] - x[:-1, :]) ** 2 + (y[1:, :] - y[:-1, :]) ** 2,
         axis=1,
     )
     gap_headtail_ex = np.mean(
-        (x[1:, :] - x[:, ::-1][:-1, :]) ** 2 + (y[1:, :] - y[:, ::-1][:-1, :]) ** 2,
+        (x[1:, :] - x[:-1, ::-1]) ** 2 + (y[1:, :] - y[:-1, ::-1]) ** 2,
         axis=1,
     )
     ex_t = gap_headtail > gap_headtail_ex
     ex_r = np.cumsum(ex_t) % 2 == 1
-    x[1:, :][ex_r] = x[:, ::-1][1:, :][ex_r]
-    y[1:, :][ex_r] = y[:, ::-1][1:, :][ex_r]
+    x[1:, :][ex_r] = x[1:, ::-1][ex_r]
+    y[1:, :][ex_r] = y[1:, ::-1][ex_r]
     return x, y
 
 
@@ -409,9 +410,9 @@ def trim_image(image, *, padding=5):
     thresh = np.bitwise_or.reduce(image > 0, axis=0)
 
     (ys, xs) = np.nonzero(thresh)
-    assert ys.size > 0, (
-        "Image has no signal, please confirm your image is properly loaded"
-    )
+    assert (
+        ys.size > 0
+    ), "Image has no signal, please confirm your image is properly loaded"
     max_h, max_w = thresh.shape
 
     x1 = max(xs.min() - padding, 0)
@@ -1179,9 +1180,9 @@ class Model(torch.nn.Module):
 
     def zero_masked_gradients(self, mask: torch.Tensor):
         assert mask.ndim == 1, "Input mask must be a 1D tensor."
-        assert mask.shape[0] == self.cx.shape[0], (
-            "The length of mask is not equal to the first dimension of cx."
-        )
+        assert (
+            mask.shape[0] == self.cx.shape[0]
+        ), "The length of mask is not equal to the first dimension of cx."
 
         # Ensure the mask is a float tensor for multiplication
         if mask.dtype != self.cx.dtype:
@@ -1563,6 +1564,7 @@ def find_losslarge_area(losses_all):
 
 def judge_head_amplitude(x, y):
     """Judge which tip is head based on variance of body curve rate."""
+    assert x.shape == y.shape, "The coordinates of x and y have different shape."
     dx = x[:, 1:] - x[:, :-1]
     dy = y[:, 1:] - y[:, :-1]
     theta = np.arctan2(dy, dx)
@@ -1587,7 +1589,7 @@ def judge_head_amplitude(x, y):
 
 def judge_head_frequency(x, y):
     """Judge which tip is head based on frequency of body curve rate."""
-
+    assert x.shape == y.shape, "The coordinates of x and y have different shape."
     dx = x[:, 1:] - x[:, :-1]
     dy = y[:, 1:] - y[:, :-1]
     theta = np.arctan2(dy, dx)
@@ -1684,9 +1686,9 @@ def straigthen_multi(
     assert src.ndim == 3, "The shape of source images is not (number, height, width)"
     assert x.shape == y.shape, "The coordinates of x and y have different shape."
     N, H, W = src.shape
-    assert x.shape[0] == N, (
-        "The number of frames to be straightened is different from given coordinates."
-    )
+    assert (
+        x.shape[0] == N
+    ), "The number of frames to be straightened is different from given coordinates."
 
     dist = np.zeros_like(x)
     dist[:, 1:] = np.sqrt((x[:, 1:] - x[:, :-1]) ** 2 + (y[:, 1:] - y[:, :-1]) ** 2)
