@@ -476,7 +476,7 @@ center loss : {np.mean(losses[4])}
 
         # lost_mask for simple area
         mask = training_block.complex_area[start : end + 1].astype("f4")
-        loss_mask = torch.from_numpy(mask).to(device)
+        gradient_mask = torch.from_numpy(mask).to(device)
 
         # make model instance and training
         model = (
@@ -495,7 +495,7 @@ center loss : {np.mean(losses[4])}
             init_data,
             output_path,
             output_name,
-            loss_mask=loss_mask,
+            gradient_mask=gradient_mask,
         )
 
         # get trace information
@@ -528,7 +528,7 @@ center loss : {np.mean(losses[4])}
             init_data,
             output_path,
             output_name,
-            loss_mask=loss_mask,
+            gradient_mask=gradient_mask,
         )
 
         # get trace information if loss is smaller
@@ -639,7 +639,7 @@ center loss : {np.mean(losses[4])}
 
         # lost_mask for simple area
         mask = training_block.complex_area[start : end + 1].astype("f4")
-        loss_mask = torch.from_numpy(mask).to(device)
+        gradient_mask = torch.from_numpy(mask).to(device)
 
         # make model instance and training
         update = 0
@@ -659,7 +659,7 @@ center loss : {np.mean(losses[4])}
             init_data,
             output_path,
             output_name,
-            loss_mask=loss_mask,
+            gradient_mask=gradient_mask,
         )
 
         # get trace information if loss is smaller
@@ -699,6 +699,7 @@ center loss : {np.mean(losses[4])}
             init_data,
             output_path,
             output_name,
+            gradient_mask=gradient_mask,
         )
 
         # get trace information if loss is smaller
