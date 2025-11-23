@@ -439,13 +439,14 @@ center loss : {np.mean(losses[4])}
 
     logger.info("STEP2 : optimization for complex posture blocks\n")
 
-    padding = 3
     # main loop 2
     for block in all_blocks:
         if not block.is_complex:
             continue
 
-        # Inclusive both end [Start-3, end+3]
+        # padding the complex block of 1/5 length, minimal to 5
+        padding = max((block.size) // 5, 5)
+        # Inclusive both end [Start-padding, end+padding]
         start, end = (
             max(block.start - padding, 0),
             min(block.end + padding, training_block.nframe - 1),
@@ -474,7 +475,7 @@ center loss : {np.mean(losses[4])}
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
         init_data = [init_cx, init_cy, unitLength]
 
-        # lost_mask for simple area
+        # gradient_mask for simple area
         mask = training_block.complex_area[start : end + 1].astype("f4")
         gradient_mask = torch.from_numpy(mask).to(device)
 
@@ -600,11 +601,13 @@ center loss : {np.mean(losses[4])}
         "STEP3 : re-optimization for unsuccessful blocks with complex postures\n"
     )
 
-    padding = 3
     for i in losslarge_area:
         block = all_blocks[i]
         if not block.is_complex:
             continue
+
+        # padding the complex block of 1/5 length, minimal to 5
+        padding = max((block.size) // 5, 5)
 
         start, end = (
             max(block.start - padding, 0),
@@ -637,8 +640,9 @@ center loss : {np.mean(losses[4])}
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
         init_data = [init_cx, init_cy, unitLength]
 
-        # lost_mask for simple area
-        mask = training_block.complex_area[start : end + 1].astype("f4")
+        # The gradient mask will be all zeros except loss large area.
+        mask = np.zeros(T, dtype="f4")
+        mask[padding : padding + block.size] = 1.0
         gradient_mask = torch.from_numpy(mask).to(device)
 
         # make model instance and training
