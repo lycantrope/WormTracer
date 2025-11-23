@@ -444,8 +444,8 @@ center loss : {np.mean(losses[4])}
         if not block.is_complex:
             continue
 
-        # padding the complex block of 1/5 length, minimal to 5
-        padding = max(block.size // 5, 5)
+        # padding the complex block of 1/10 length, minimal to 3
+        padding = max(block.size // 10, 3)
         # Inclusive both end [Start-padding, end+padding]
         start, end = (
             max(block.start - padding, 0),
@@ -608,8 +608,8 @@ center loss : {np.mean(losses[4])}
         if not block.is_complex:
             continue
 
-        # padding the complex block of 1/5 length, minimal to 5
-        padding = max(block.size // 5, 5)
+        # padding the complex block of 1/10 length, minimal to 3
+        padding = max(block.size // 10, 3)
 
         start, end = (
             max(block.start - padding, 0),
