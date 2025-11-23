@@ -445,7 +445,7 @@ center loss : {np.mean(losses[4])}
             continue
 
         # padding the complex block of 1/5 length, minimal to 5
-        padding = max((block.size) // 5, 5)
+        padding = max(block.size // 5, 5)
         # Inclusive both end [Start-padding, end+padding]
         start, end = (
             max(block.start - padding, 0),
@@ -544,15 +544,17 @@ center loss : {np.mean(losses[4])}
             model_image = model(batch=T, width=W, height=H)
             losses_all[block.idx] = losses
 
+        l_pad = block.start - start
+        r_pad = l_pad + block.size
+
+        x_cent = x_cent[l_pad:r_pad]
+        y_cent = y_cent[l_pad:r_pad]
+        unitL_model = unitL_model[l_pad:r_pad]
+        theta_model = theta_model[l_pad:r_pad, :]
         # Add x_st, y_st to restore original position before reconstruction.
         x_cent += x_st
         y_cent += y_st
         x_model, y_model = make_plot(theta_model, unitL_model, x_cent, y_cent)
-
-        l_pad = block.start - start
-        r_pad = l_pad + block.size
-        x_model = x_model[l_pad:r_pad]
-        y_model = y_model[l_pad:r_pad]
 
         x[block.start : block.end + 1, :] = x_model
         y[block.start : block.end + 1, :] = y_model
@@ -607,7 +609,7 @@ center loss : {np.mean(losses[4])}
             continue
 
         # padding the complex block of 1/5 length, minimal to 5
-        padding = max((block.size) // 5, 5)
+        padding = max(block.size // 5, 5)
 
         start, end = (
             max(block.start - padding, 0),
@@ -642,7 +644,9 @@ center loss : {np.mean(losses[4])}
 
         # The gradient mask will be all zeros except loss large area.
         mask = np.zeros(T, dtype="f4")
-        mask[padding : padding + block.size] = 1.0
+        l_pad = block.start - start
+        r_pad = l_pad + block.size
+        mask[l_pad:r_pad] = 1.0
         gradient_mask = torch.from_numpy(mask).to(device)
 
         # make model instance and training
@@ -666,17 +670,17 @@ center loss : {np.mean(losses[4])}
             gradient_mask=gradient_mask,
         )
 
+        theta_model = model.theta.detach().cpu().numpy()
+        unitL_model = model.unitLength.detach().cpu().numpy().reshape(-1, 1)
+        x_cent, y_cent = (
+            model.cx.detach().cpu().numpy(),
+            model.cy.detach().cpu().numpy(),
+        )
+        model_image = model(batch=T, width=W, height=H)
         # get trace information if loss is smaller
         if loss_compare([losses_all[i], losses]):
             print("update")
             update = 2
-            theta_model = model.theta.detach().cpu().numpy()
-            unitL_model = model.unitLength.detach().cpu().numpy().reshape(-1, 1)
-            x_cent, y_cent = (
-                model.cx.detach().cpu().numpy(),
-                model.cy.detach().cpu().numpy(),
-            )
-            model_image = model(batch=T, width=W, height=H)
             losses_all[i] = losses
             remove_progress(output_path, "{}-{}_id[0-1]*.png".format(start, end))
         else:
@@ -724,20 +728,22 @@ center loss : {np.mean(losses[4])}
             remove_progress(output_path, "{}-{}_id3*.png".format(start, end))
 
         if update:
+            l_pad = block.start - start
+            r_pad = l_pad + block.size
+
+            x_cent = x_cent[l_pad:r_pad]
+            y_cent = y_cent[l_pad:r_pad]
+            unitL_model = unitL_model[l_pad:r_pad]
+            theta_model = theta_model[l_pad:r_pad, :]
             # Add x_st, y_st to restore original position before reconstruction.
             x_cent += x_st
             y_cent += y_st
             x_model, y_model = make_plot(theta_model, unitL_model, x_cent, y_cent)
+
             if __debug__:
                 show_image(real_image, params["num_t"], title="real image")
                 show_image(model_image, params["num_t"], title="model image")
                 show_loss_plot(losses_all[i], title="losses of new model")
-
-            # reconstruct plots from model results
-            l_pad = block.start - start
-            r_pad = l_pad + block.size
-            x_model = x_model[l_pad:r_pad]
-            y_model = y_model[l_pad:r_pad]
 
             x[block.start : block.end + 1, :] = x_model
             y[block.start : block.end + 1, :] = y_model
