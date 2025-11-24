@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import NamedTuple, Optional, Tuple, Union
 
 import cv2
+import h5py
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
@@ -118,9 +119,8 @@ def get_filenames(dataset_path):
 
     ext_files_map = collections.defaultdict(list)
     for name in dataset_path.glob("*.*"):
-        if name.suffix not in extensions_available:
-            continue
-        ext_files_map[name.suffix].append(os.fspath(name))
+        if name.suffix in extensions_available:
+            ext_files_map[name.suffix].append(os.fspath(name))
 
     if not ext_files_map:
         msg = "No extensions were found for openCV available. Please check if image files with the following extensions exist in the specified path"
@@ -136,6 +136,34 @@ def get_filenames(dataset_path):
             f"In this case, we loaded a {ext} file, but if you want to load a file with a different extension, delete the unrelated file."
         )
     return sorted(files)
+
+
+def get_guide_points(guide_files):
+    guide_file_ext = {".csv", ".h5"}
+    guide_file_map = collections.defaultdict(list)
+
+    for file in guide_files:
+        file = Path(file)
+        if file.suffix not in guide_file_ext:
+            raise ValueError("guide_files must be two csv files or one hdf file")
+        guide_file_map[file.suffix].append(file)
+
+    if len(guide_file_map[".csv"]) == 2:
+        fx, fy = guide_file_map[".csv"]
+        if "_y" in fx.name:
+            fx, fy = fy, fx
+        guide_x = np.loadtxt(fx, delimiter=",")
+        guide_y = np.loadtxt(fy, delimiter=",")
+    elif len(guide_file_map[".h5"]) == 1:
+        f = guide_file_map[".h5"]
+        with h5py.File(f, "r") as handler:
+            guide_x = np.asarray(handler["x"])
+            guide_y = np.asarray(handler["y"])
+    else:
+        raise ValueError("guide_files must be two csv files or one hdf file")
+
+    guide_idx = np.where(np.all(np.isfinite(guide_x), axis=1))[0]
+    return guide_x, guide_y, guide_idx
 
 
 def get_property(filenames, rescale):

@@ -26,6 +26,7 @@ from .functions import (
     find_losslarge_area,
     flip_check,
     get_filenames,
+    get_guide_points,
     get_image_loss_max,
     get_property,
     get_use_blocks,
@@ -163,7 +164,7 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
 def run(
-    parameter_file, dataset_path, output_directory=None, **kwargs
+    parameter_file, dataset_path, output_directory=None, guide_files=None, **kwargs
 ):  # execute the whole WormTracer process, kwargs are optional parameter=value pairs
     tic = datetime.datetime.now()
     matplotlib.use("Agg")
@@ -175,7 +176,9 @@ def run(
 
     # Check filenames
     filenames_all = get_filenames(dataset_path)
-
+    guide_x, guide_y, guide_idx = None, None, None
+    if isinstance(guide_files, list):
+        guide_x, guide_y, guide_idx = get_guide_points(guide_files)
     # After check dataset set_output_path
     # output_path is created in output_directory
     dataset_name, output_path, output_name = set_output_path(
@@ -240,6 +243,14 @@ def run(
         x_st,
         y_st,
     )
+
+    if isinstance(guide_idx, np.ndarray):
+        assert guide_x is not None, "get_guide_points should return array"
+        assert guide_y is not None, "get_guide_points should return array"
+        # We assumed that non-nan in guide_x is served as guide, we overwrite the x, y by guide_x, guide_y
+        x[guide_idx] = guide_x[guide_idx]
+        y[guide_idx] = guide_y[guide_idx]
+
     theta = make_theta_from_xy(x, y)
 
     # log
@@ -281,6 +292,10 @@ def run(
     # Since dataset will be loaded during each training block, the entire dataset can be drop here.
     del real_image
     del model_image
+
+    if guide_idx is not None:
+        # we assigned loss in the guide_idx to be zeros (ground truth)
+        image_losses[guide_idx] = 0.0
 
     training_block = get_use_blocks(image_losses, image_loss_max)
 

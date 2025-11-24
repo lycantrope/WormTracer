@@ -28,6 +28,14 @@ def get_parser():
         help="Path to a directory to save the output results. Defaults to the input folder if not specified.",
     )
 
+    parser.add_argument(
+        "-g",
+        "--guide_files",
+        dest="guide_files",
+        nargs="+",
+        type=pathlib.Path,
+        help="Path to guided centerline. (*_x.csv, *_y.csv or *_skel.h5)",
+    )
     return parser
 
 
