@@ -152,10 +152,12 @@ def get_guide_points(guide_files):
         fx, fy = guide_file_map[".csv"]
         if "_y" in fx.name:
             fx, fy = fy, fx
+        logger.info(f"guide_x = {os.fspath(fx)}\nguide_y = {os.fspath(fy)}")
         guide_x = np.loadtxt(fx, delimiter=",")
         guide_y = np.loadtxt(fy, delimiter=",")
     elif len(guide_file_map[".h5"]) == 1:
-        f = guide_file_map[".h5"]
+        f = guide_file_map[".h5"][0]
+        logger.info(f"guide_hdf = {os.fspath(f)}")
         with h5py.File(f, "r") as handler:
             guide_x = np.asarray(handler["x"])
             guide_y = np.asarray(handler["y"])
@@ -437,9 +439,9 @@ def trim_image(image, *, padding=5):
     thresh = np.bitwise_or.reduce(image > 0, axis=0)
 
     (ys, xs) = np.nonzero(thresh)
-    assert (
-        ys.size > 0
-    ), "Image has no signal, please confirm your image is properly loaded"
+    assert ys.size > 0, (
+        "Image has no signal, please confirm your image is properly loaded"
+    )
     max_h, max_w = thresh.shape
 
     x1 = max(xs.min() - padding, 0)
@@ -1220,9 +1222,9 @@ class Model(torch.nn.Module):
 
     def zero_masked_gradients(self, mask: torch.Tensor):
         assert mask.ndim == 1, "Input mask must be a 1D tensor."
-        assert (
-            mask.shape[0] == self.cx.shape[0]
-        ), "The length of mask is not equal to the first dimension of cx."
+        assert mask.shape[0] == self.cx.shape[0], (
+            "The length of mask is not equal to the first dimension of cx."
+        )
 
         # Ensure the mask is a float tensor for multiplication
         if mask.dtype != self.cx.dtype:
@@ -1732,9 +1734,9 @@ def straigthen_multi(
     assert src.ndim == 3, "The shape of source images is not (number, height, width)"
     assert x.shape == y.shape, "The coordinates of x and y have different shape."
     N, H, W = src.shape
-    assert (
-        x.shape[0] == N
-    ), "The number of frames to be straightened is different from given coordinates."
+    assert x.shape[0] == N, (
+        "The number of frames to be straightened is different from given coordinates."
+    )
 
     dist = np.zeros_like(x)
     dist[:, 1:] = np.sqrt((x[:, 1:] - x[:, :-1]) ** 2 + (y[:, 1:] - y[:, :-1]) ** 2)

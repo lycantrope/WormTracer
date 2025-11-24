@@ -176,9 +176,6 @@ def run(
 
     # Check filenames
     filenames_all = get_filenames(dataset_path)
-    guide_x, guide_y, guide_idx = None, None, None
-    if isinstance(guide_files, list):
-        guide_x, guide_y, guide_idx = get_guide_points(guide_files)
     # After check dataset set_output_path
     # output_path is created in output_directory
     dataset_name, output_path, output_name = set_output_path(
@@ -244,12 +241,18 @@ def run(
         y_st,
     )
 
-    if isinstance(guide_idx, np.ndarray):
+    guide_idx = None
+    if isinstance(guide_files, list):
+        logger.info("Found guide_files")
+        guide_x, guide_y, guide_idx = get_guide_points(guide_files)
+
         assert guide_x is not None, "get_guide_points should return array"
         assert guide_y is not None, "get_guide_points should return array"
         # We assumed that non-nan in guide_x is served as guide, we overwrite the x, y by guide_x, guide_y
         x[guide_idx] = guide_x[guide_idx]
         y[guide_idx] = guide_y[guide_idx]
+        # After assignment, we can drop the guide_x and guide_y, here.
+        del guide_x, guide_y
 
     theta = make_theta_from_xy(x, y)
 
@@ -294,8 +297,8 @@ def run(
     del model_image
 
     if guide_idx is not None:
-        # we assigned loss in the guide_idx to be zeros (ground truth)
-        image_losses[guide_idx] = 0.0
+        # we assigned loss in the guide_idx to ensure the frame of guide_idx will be simple (non zero ground truth)
+        image_losses[guide_idx] = image_losses[best_frame_idx]
 
     training_block = get_use_blocks(image_losses, image_loss_max)
 
