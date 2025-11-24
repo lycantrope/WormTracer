@@ -426,8 +426,7 @@ def run(
 
         # log
         logger.info(
-            f"""{str(block)}
-image loss : {np.mean(losses[0])}
+            f"""image loss : {np.mean(losses[0])}
 continuity loss : {np.mean(losses[1])}
 smoothing loss : {np.mean(losses[2])}
 length loss : {np.mean(losses[3])}
@@ -458,17 +457,26 @@ center loss : {np.mean(losses[4])}
     logger.info("STEP2 : optimization for complex posture blocks\n")
 
     # main loop 2
-    for block in all_blocks:
+    for i, block in enumerate(all_blocks):
         if not block.is_complex:
             continue
 
+        logger.info(str(block))
         # padding the complex block of 1/10 length, minimal to 3
         padding = max(block.size // 10, 3)
-        # Inclusive both end [Start-padding, end+padding]
-        start, end = (
-            max(block.start - padding, 0),
-            min(block.end + padding, training_block.nframe - 1),
-        )
+
+        l_pad = 0
+        if i > 0:
+            l_pad = min(padding, all_blocks[i - 1].size)
+
+        r_pad = 0
+        if i + 1 < len(all_blocks):
+            r_pad = min(padding, all_blocks[i + 1].size)
+
+        # Inclusive both end [Start-l_pad, end+r_pad]
+        start = block.start - l_pad
+        end = block.end + r_pad
+
         # This is only for saving the output during training
         params["use_area"] = block
         # filenames_ = filenames[use_area[0]:use_area[1]+1]
@@ -484,6 +492,7 @@ center loss : {np.mean(losses[4])}
         )
 
         T, H, W = real_image.shape
+        logger.info(f"im_shape: {real_image.shape}")
         # make flipping theta candidate
         theta_cand, _ = make_theta_cand(theta_[0], theta_[-1])
 
@@ -562,13 +571,10 @@ center loss : {np.mean(losses[4])}
             model_image = model(batch=T, width=W, height=H)
             losses_all[block.idx] = losses
 
-        l_pad = block.start - start
-        r_pad = l_pad + block.size
-
-        x_cent = x_cent[l_pad:r_pad]
-        y_cent = y_cent[l_pad:r_pad]
-        unitL_model = unitL_model[l_pad:r_pad]
-        theta_model = theta_model[l_pad:r_pad, :]
+        x_cent = x_cent[l_pad : l_pad + block.size]
+        y_cent = y_cent[l_pad : l_pad + block.size]
+        unitL_model = unitL_model[l_pad : l_pad + block.size]
+        theta_model = theta_model[l_pad : l_pad + block.size, :]
         # Add x_st, y_st to restore original position before reconstruction.
         x_cent += x_st
         y_cent += y_st
@@ -629,10 +635,17 @@ center loss : {np.mean(losses[4])}
         # padding the complex block of 1/10 length, minimal to 3
         padding = max(block.size // 10, 3)
 
-        start, end = (
-            max(block.start - padding, 0),
-            min(block.end + padding, training_block.nframe - 1),
-        )
+        l_pad = 0
+        if i > 0:
+            l_pad = min(padding, all_blocks[i - 1].size)
+
+        r_pad = 0
+        if i + 1 < len(all_blocks):
+            r_pad = min(padding, all_blocks[i + 1].size)
+
+        # Inclusive both end [Start-l_pad, end+r_pad]
+        start = block.start - l_pad
+        end = block.end + r_pad
 
         # This is only for saving the output during training
         params["use_area"] = block
@@ -662,9 +675,7 @@ center loss : {np.mean(losses[4])}
 
         # The gradient mask will be all zeros except loss large area.
         mask = np.zeros(T, dtype="f4")
-        l_pad = block.start - start
-        r_pad = l_pad + block.size
-        mask[l_pad:r_pad] = 1.0
+        mask[l_pad : l_pad + block.size] = 1.0
         gradient_mask = torch.from_numpy(mask).to(device)
 
         # make model instance and training
@@ -746,13 +757,10 @@ center loss : {np.mean(losses[4])}
             remove_progress(output_path, "{}-{}_id3*.png".format(start, end))
 
         if update:
-            l_pad = block.start - start
-            r_pad = l_pad + block.size
-
-            x_cent = x_cent[l_pad:r_pad]
-            y_cent = y_cent[l_pad:r_pad]
-            unitL_model = unitL_model[l_pad:r_pad]
-            theta_model = theta_model[l_pad:r_pad, :]
+            x_cent = x_cent[l_pad : l_pad + block.size]
+            y_cent = y_cent[l_pad : l_pad + block.size]
+            unitL_model = unitL_model[l_pad : l_pad + block.size]
+            theta_model = theta_model[l_pad : l_pad + block.size, :]
             # Add x_st, y_st to restore original position before reconstruction.
             x_cent += x_st
             y_cent += y_st
