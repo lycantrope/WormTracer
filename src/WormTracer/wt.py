@@ -355,7 +355,7 @@ def run(
             )
 
         # set init value
-        theta_cand, _ = make_theta_cand(theta_)
+        theta_cand, _ = make_theta_cand(theta_[0], theta_[-1])
         theta_[-1, :] = theta_cand[0]
         init_cx, init_cy = set_init_xy(real_image)
         init_theta = torch.tensor(theta_)
@@ -467,7 +467,7 @@ center loss : {np.mean(losses[4])}
 
         T, H, W = real_image.shape
         # make flipping theta candidate
-        theta_cand, _ = make_theta_cand(theta_)
+        theta_cand, _ = make_theta_cand(theta_[0], theta_[-1])
 
         # set init value
         init_cx, init_cy = set_init_xy(real_image)
@@ -634,7 +634,7 @@ center loss : {np.mean(losses[4])}
         T, H, W = real_image.shape
 
         # make flipping candidate
-        _, theta_cand = make_theta_cand(theta_)
+        _, theta_cand = make_theta_cand(theta_[0], theta_[-1])
 
         # set init value
         init_cx, init_cy = set_init_xy(real_image)

@@ -8,7 +8,6 @@ import logging
 import math
 import os
 import shutil
-from math import pi
 from pathlib import Path
 from typing import NamedTuple, Optional, Tuple, Union
 
@@ -431,24 +430,23 @@ def make_theta_from_xy(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     theta = np.arctan2(dy, dx)
     # Arrange theta if the gap is larget than pi
     # Adjust the middle theta between time point
-    pi = np.pi
     mid = n_segs // 2
     t_gap = theta[1:, mid] - theta[:-1, mid]
-    t_adjust = np.sign(t_gap) * 2 * pi
-    t_adjust[np.abs(t_gap) < pi] = 0
+    t_adjust = np.sign(t_gap) * 2 * np.pi
+    t_adjust[np.abs(t_gap) < np.pi] = 0
     theta[1:, :] -= t_adjust.cumsum().reshape(-1, 1)
 
     gap = theta[:, 1:] - theta[:, :-1]
     # adjust right hand side of theta within same time points
     r_gap = gap[:, mid:]
-    r_adjust = np.sign(r_gap) * 2 * pi
-    r_adjust[np.abs(r_gap) < pi] = 0
+    r_adjust = np.sign(r_gap) * 2 * np.pi
+    r_adjust[np.abs(r_gap) < np.pi] = 0
     theta[:, mid + 1 :] -= r_adjust.cumsum(axis=1)
 
     # adjust left hand side
     l_gap = gap[:, :mid]
-    l_adjust = np.sign(l_gap * -1) * 2 * pi
-    l_adjust[np.abs(l_gap) < pi] = 0
+    l_adjust = np.sign(l_gap * -1) * 2 * np.pi
+    l_adjust[np.abs(l_gap) < np.pi] = 0
     l_adjust_rev = np.flip(l_adjust, axis=1)
     theta[:, :mid] -= np.flip(np.cumsum(l_adjust_rev, axis=1), axis=1)
     return theta
@@ -922,7 +920,7 @@ def find_theta(theta, pretheta, plus=1):
     i = plus
     mse_list = [np.sum((theta[0, :] - pretheta) ** 2)]
     while True:
-        theta_cand = pretheta + i * 2 * pi
+        theta_cand = pretheta + i * 2 * np.pi
         mse_0T = np.sum((theta[0, :] - theta_cand) ** 2)
         if mse_list[-1] < mse_0T:
             break
@@ -931,22 +929,36 @@ def find_theta(theta, pretheta, plus=1):
     return len(mse_list)
 
 
-def make_theta_cand(theta):
-    i_normal = find_theta(theta, theta[-1, :]) - find_theta(theta, theta[-1, :], -1)
-    pretheta = theta[-1, :][::-1] + pi
-    i_reverse = find_theta(theta, pretheta) - find_theta(theta, pretheta, -1)
-    theta_pair = (theta[-1, :] + i_normal * 2 * pi, pretheta + i_reverse * 2 * pi)
-    theta_cands_normal = [theta_pair[0] + 2 * pi, theta_pair[0] - 2 * pi]
-    loss_normal_p = np.sum((theta[0, :] - theta_cands_normal[0]) ** 2)
-    loss_normal_m = np.sum((theta[0, :] - theta_cands_normal[1]) ** 2)
-    theta_cands_reverse = [theta_pair[1] + 2 * pi, theta_pair[1] - 2 * pi]
-    loss_reverse_p = np.sum((theta[0, :] - theta_cands_reverse[0]) ** 2)
-    loss_reverse_m = np.sum((theta[0, :] - theta_cands_reverse[1]) ** 2)
-    theta_subpair = (
-        theta_cands_normal[int(loss_normal_p > loss_normal_m)],
-        theta_cands_reverse[int(loss_reverse_p > loss_reverse_m)],
-    )
-    return theta_pair, theta_subpair
+def find_minimal_winding_number(theta1: np.ndarray, theta2: np.ndarray) -> int:
+    # 1. Find the average numerical difference across all elements.
+    avg_diff = np.mean(theta1 - theta2)
+    # 2. Convert the average difference into a fractional number of 2*pi cycles.
+    frac_shift = avg_diff / (2 * np.pi)
+    # 3. Round to the nearest integer to find the optimal winding number (k).
+    return int(np.round(frac_shift))
+
+
+def make_theta_cand(theta_begin, theta_end):
+    k_normal = find_minimal_winding_number(theta_begin, theta_end)
+    shift_fw = (np.array([0, 1, -1]) + k_normal) * 2 * np.pi
+
+    theta_cands_normal = shift_fw[:, None] + theta_end
+    loss_normal = np.sum((theta_cands_normal - theta_begin) ** 2, axis=1)
+    sort_indices = np.argsort(loss_normal)
+    theta_cands_normal = theta_cands_normal[sort_indices]
+
+    theta_rev = theta_end[::-1] + np.pi
+    k_reverse = find_minimal_winding_number(theta_begin, theta_rev)
+    shift_rv = (np.array([0, 1, -1]) + k_reverse) * 2 * np.pi
+
+    theta_cands_reversal = shift_rv[:, None] + theta_rev
+    loss_reversal = np.sum((theta_cands_reversal - theta_begin) ** 2, axis=1)
+    sort_indices = np.argsort(loss_reversal)
+    theta_cands_reversal = theta_cands_reversal[sort_indices]
+
+    top_candidates = (theta_cands_normal[0], theta_cands_reversal[0])
+    next_candidates = (theta_cands_normal[1], theta_cands_reversal[1])
+    return top_candidates, next_candidates
 
 
 def body_axis_function(body_ratio, plot_n, base=0.5):
