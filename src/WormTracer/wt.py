@@ -784,7 +784,7 @@ center loss : {np.mean(losses_all[i][4])}
 
         # This is only for saving the output during training
         # filenames_ = filenames[use_area[0]:use_area[1]+1]
-        init_theta = theta[start : end + 1, :].copy()
+        init_theta = torch.tensor(theta[start : end + 1, :].copy(), device=device)
 
         # read and preprocess images
         real_image, y_st, x_st = load_image(
