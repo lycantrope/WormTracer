@@ -414,7 +414,7 @@ def run(
         )
         # Add x_st, y_st to restore original position before reconstruction.
         x_model = x_model.detach().cpu().numpy()
-        y_model = x_model.detach().cpu().numpy()
+        y_model = y_model.detach().cpu().numpy()
         # Trim padding
         # Add x_st, y_st to restore original position before reconstruction.
         x_model += x_st
@@ -527,7 +527,7 @@ center loss : {np.mean(losses[4])}
             x_model, y_model, model_image = model(batch=T, width=W, height=H)
 
         x_model = x_model.detach().cpu().numpy()
-        y_model = x_model.detach().cpu().numpy()
+        y_model = y_model.detach().cpu().numpy()
         theta_model = model.theta.detach().cpu().numpy()
 
         # flip final theta to trace again
@@ -558,7 +558,7 @@ center loss : {np.mean(losses[4])}
                 x_model, y_model, model_image = model(batch=T, width=W, height=H)
 
             x_model = x_model.detach().cpu().numpy()
-            y_model = x_model.detach().cpu().numpy()
+            y_model = y_model.detach().cpu().numpy()
             theta_model = model.theta.detach().cpu().numpy()
 
             losses_all[block.idx] = losses
@@ -691,7 +691,7 @@ center loss : {np.mean(losses[4])}
             x_model, y_model, model_image = model(batch=T, width=W, height=H)
 
         x_model = x_model.detach().cpu().numpy()
-        y_model = x_model.detach().cpu().numpy()
+        y_model = y_model.detach().cpu().numpy()
         theta_model = model.theta.detach().cpu().numpy()
         # get trace information if loss is smaller
         if loss_compare([losses_all[i], losses]):
@@ -731,7 +731,7 @@ center loss : {np.mean(losses[4])}
             with torch.no_grad():
                 x_model, y_model, model_image = model(batch=T, width=W, height=H)
             x_model = x_model.detach().cpu().numpy()
-            y_model = x_model.detach().cpu().numpy()
+            y_model = y_model.detach().cpu().numpy()
             theta_model = model.theta.detach().cpu().numpy()
             losses_all[i] = losses
             remove_progress(output_path, "{}-{}_id[0-2]*.png".format(start, end))
