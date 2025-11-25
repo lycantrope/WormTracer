@@ -778,67 +778,65 @@ center loss : {np.mean(losses_all[i][4])}
             params_for_save[key] = os.fspath(value)
     del params_for_save["use_area"]
 
-    logger.info("STEP4 : re-optimization entire block to ensure smoothness\n")
-    # check flipping
-    x, y = flip_check(x, y)
-    # update unitlength from updated centerline
-    unitLength = float(np.sqrt(np.mean(np.sum(np.diff((x, y)) ** 2, axis=0))))
-    theta = make_theta_from_xy(x, y)
-    # main loop 4
-    window = 32
-    for start in range(0, training_block.nframe - window + 1, window):
-        end = min(start + window - 1, training_block.nframe - 1)
+    # logger.info("STEP4 : re-optimization entire block to ensure smoothness\n")
+    # # check flipping
+    # x, y = flip_check(x, y)
+    # # update unitlength from updated centerline
+    # unitLength = float(np.sqrt(np.mean(np.sum(np.diff((x, y)) ** 2, axis=0))))
+    # theta = make_theta_from_xy(x, y)
+    # # main loop 4
+    # window = 32
+    # for start in range(0, training_block.nframe - window + 1, window):
+    #     end = min(start + window - 1, training_block.nframe - 1)
 
-        # This is only for saving the output during training
-        # filenames_ = filenames[use_area[0]:use_area[1]+1]
-        init_theta = torch.tensor(theta[start : end + 1, :].copy(), device=device)
+    #     # read and preprocess images
+    #     real_image, y_st, x_st = load_image(
+    #         filenames_all,
+    #         params["rescale"],
+    #         Worm_is_black,
+    #         multi_flag,
+    #         Tscaled_ind[start : end + 1],
+    #     )
 
-        # read and preprocess images
-        real_image, y_st, x_st = load_image(
-            filenames_all,
-            params["rescale"],
-            Worm_is_black,
-            multi_flag,
-            Tscaled_ind[start : end + 1],
-        )
+    #     T, H, W = real_image.shape
+    #     # set init value
+    #     init_cx, init_cy = set_init_xy(real_image)
+    #     init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
+    #     init_theta = torch.tensor(theta[start : end + 1, :].copy(), device=device)
 
-        T, H, W = real_image.shape
-        # set init value
-        init_cx, init_cy = set_init_xy(real_image)
-        init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
+    #     # make model instance and training
+    #     model = (
+    #         Model(init_cx, init_cy, init_theta, init_unitLength, params)
+    #         .to(torch.float32)
+    #         .to(device)
+    #     )
+    #     optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
+    #     train3(
+    #         model,
+    #         real_image,
+    #         optimizer,
+    #         params,
+    #         output_path,
+    #         output_name,
+    #         gradient_mask=gradient_mask,
+    #     )
 
-        # make model instance and training
-        model = (
-            Model(init_cx, init_cy, init_theta, init_unitLength, params)
-            .to(torch.float32)
-            .to(device)
-        )
-        optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
-        train3(
-            model,
-            real_image,
-            optimizer,
-            params,
-            output_path,
-            output_name,
-        )
+    #     # get trace information
+    #     with torch.no_grad():
+    #         x_model, y_model, _ = model(batch=T, width=W, height=H)
 
-        # get trace information
-        with torch.no_grad():
-            x_model, y_model, _ = model(batch=T, width=W, height=H)
+    #     x_model = x_model.detach().cpu().numpy()
+    #     y_model = y_model.detach().cpu().numpy()
 
-        x_model = x_model.detach().cpu().numpy()
-        y_model = y_model.detach().cpu().numpy()
+    #     # Add x_st, y_st to restore original position before reconstruction.
+    #     x_model += x_st
+    #     y_model += y_st
 
-        # Add x_st, y_st to restore original position before reconstruction.
-        x_model += x_st
-        y_model += y_st
+    #     x[start : end + 1, :] = x_model
+    #     y[start : end + 1, :] = y_model
 
-        x[start : end + 1, :] = x_model
-        y[start : end + 1, :] = y_model
-
-    time_now = datetime.datetime.now()
-    logger.info(f"STEP4 finished at {time_now}\n")
+    # time_now = datetime.datetime.now()
+    # logger.info(f"STEP4 finished at {time_now}\n")
 
     # cancel reduction
     # T_read_all = params['end_T'] - params['start_T'] if params['end_T'] else len(filenames_all) - params['start_T']
