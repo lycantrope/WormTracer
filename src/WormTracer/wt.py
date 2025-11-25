@@ -778,7 +778,7 @@ center loss : {np.mean(losses_all[i][4])}
     unitLength = float(np.sqrt(np.mean(np.sum(np.diff((x, y)) ** 2, axis=0))))
 
     # main loop 4
-    for block1, block2 in zip(all_blocks[:-1], all_blocks[:-1]):
+    for block1, block2 in zip(all_blocks[:-1], all_blocks[1:]):
         start = block1.start + block1.size // 2
         end = block2.end - block2.size // 2
 

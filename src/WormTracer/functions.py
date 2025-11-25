@@ -1175,14 +1175,8 @@ class Model(torch.nn.Module):
 
     def forward(self, batch, width, height):
         device = self.alpha.device
-        T, im_height, im_width = batch, height, width
         plot_n = self.params["plot_n"]
-        worm_wid = worm_width_all(
-            plot_n,
-            self.alpha,
-            self.gamma,
-            self.delta,
-        )
+        worm_wid = worm_width_all(plot_n, self.alpha, self.gamma, self.delta)
         # worm_wid_max = worm_wid.max().long().item() + 15
         # distance_matrix = make_distance_matrix(worm_wid_max).to(device)
 
@@ -1191,33 +1185,19 @@ class Model(torch.nn.Module):
         # ) - distance_matrix.unsqueeze(0)
         # pixel_matrix = pixel_value_from_dist_max(distance_matrix_3d)
 
-        x = torch.cat(
-            (
-                torch.zeros((batch, 1)).to(device),
-                torch.cumsum(
-                    self.unitLength.reshape((T, 1)).to(device) * torch.cos(self.theta),
-                    dim=1,
-                ),
-            ),
-            dim=1,
-        )
-        x = (
-            x - torch.mean(x, dim=1).reshape((T, 1)) + self.cx.reshape((T, 1))
-        )  # length plot size +1
-        y = torch.cat(
-            (
-                torch.zeros((T, 1)).to(device),
-                torch.cumsum(
-                    self.unitLength.reshape((T, 1)).to(device) * torch.sin(self.theta),
-                    dim=1,
-                ),
-            ),
-            dim=1,
-        )
-        y = (
-            y - torch.mean(y, dim=1).reshape((T, 1)) + self.cy.reshape((T, 1))
-        )  # length plot size +1
-        image = make_worm(x, y, im_width, im_height, worm_wid)
+        x = torch.cumsum(torch.cos(self.theta), dim=1)
+        x = torch.cat((torch.zeros((batch, 1), device=device), x), dim=1)
+        x = self.unitLength.reshape((batch, 1)).to(device) * x
+        x_mean = torch.mean(x, dim=1, keepdim=True)
+        x = x - x_mean + self.cx.reshape((batch, 1))
+
+        y = torch.cumsum(torch.sin(self.theta), dim=1)
+        y = torch.cat((torch.zeros((batch, 1), device=device), y), dim=1)
+        y = self.unitLength.reshape((batch, 1)).to(device) * y
+        y_mean = torch.mean(y, dim=1, keepdim=True)
+        y = y - y_mean + self.cy.reshape((batch, 1))
+
+        image = make_worm(x, y, width=width, height=height, worm_wid=worm_wid)
         return x, y, image
 
     def zero_masked_gradients(self, mask: torch.Tensor):
