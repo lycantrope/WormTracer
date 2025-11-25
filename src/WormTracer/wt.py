@@ -399,12 +399,11 @@ def run(
 
         # get trace information
         losses_all[block.idx] = losses
+        with torch.no_grad():
+            x_model, y_model, model_image = model(batch=T, width=W, height=H)
+
         theta_model = model.theta.detach().cpu().numpy()
-        unitL_model = model.unitLength.detach().cpu().numpy().reshape(-1, 1)
-        x_cent, y_cent = (
-            model.cx.detach().cpu().numpy(),
-            model.cy.detach().cpu().numpy(),
-        )
+
         shape_params.append(
             (
                 block.size,
@@ -414,12 +413,16 @@ def run(
             )
         )
         # Add x_st, y_st to restore original position before reconstruction.
-        x_cent += x_st
-        y_cent += y_st
-        x_model, y_model = make_plot(theta_model, unitL_model, x_cent, y_cent)
+        x_model = x_model.detach().cpu().numpy()
+        y_model = x_model.detach().cpu().numpy()
+        # Trim padding
+        # Add x_st, y_st to restore original position before reconstruction.
+        x_model += x_st
+        y_model += y_st
 
         x[block.start : block.end + 1, :] = x_model
         y[block.start : block.end + 1, :] = y_model
+        theta[block.start : block.end + 1, :] = theta_model
 
         # log
         logger.info(
@@ -432,7 +435,6 @@ center loss : {np.mean(losses[4])}
         )
         if __debug__:
             # Only compute the model_image, if we want to show the result.
-            model_image = model(batch=T, width=W, height=H)
             show_image(real_image, params["num_t"], title="real image")
             show_image(model_image, params["num_t"], title="model image")
             show_loss_plot(losses_all[block.idx], title="losses of model")
@@ -521,14 +523,12 @@ center loss : {np.mean(losses[4])}
         )
 
         # get trace information
-        theta_model = model.theta.detach().cpu().numpy()
-        unitL_model = model.unitLength.detach().cpu().numpy().reshape(-1, 1)
-        x_cent, y_cent = (
-            model.cx.detach().cpu().numpy(),
-            model.cy.detach().cpu().numpy(),
-        )
+        with torch.no_grad():
+            x_model, y_model, model_image = model(batch=T, width=W, height=H)
 
-        model_image = model(batch=T, width=W, height=H)
+        x_model = x_model.detach().cpu().numpy()
+        y_model = x_model.detach().cpu().numpy()
+        theta_model = model.theta.detach().cpu().numpy()
 
         # flip final theta to trace again
         init_theta = torch.from_numpy(np.linspace(theta_[0, :], theta_cand[1], T))
@@ -554,26 +554,26 @@ center loss : {np.mean(losses[4])}
         # get trace information if loss is smaller
         select_ind = loss_compare([losses_all[block.idx], losses])
         if select_ind:
+            with torch.no_grad():
+                x_model, y_model, model_image = model(batch=T, width=W, height=H)
+
+            x_model = x_model.detach().cpu().numpy()
+            y_model = x_model.detach().cpu().numpy()
             theta_model = model.theta.detach().cpu().numpy()
-            unitL_model = model.unitLength.detach().cpu().numpy().reshape(-1, 1)
-            x_cent, y_cent = (
-                model.cx.detach().cpu().numpy(),
-                model.cy.detach().cpu().numpy(),
-            )
-            model_image = model(batch=T, width=W, height=H)
+
             losses_all[block.idx] = losses
 
-        x_cent = x_cent[l_pad : l_pad + block.size]
-        y_cent = y_cent[l_pad : l_pad + block.size]
-        unitL_model = unitL_model[l_pad : l_pad + block.size]
+        # Trim padding
+        x_model = x_model[l_pad : l_pad + block.size]
+        y_model = y_model[l_pad : l_pad + block.size]
         theta_model = theta_model[l_pad : l_pad + block.size, :]
         # Add x_st, y_st to restore original position before reconstruction.
-        x_cent += x_st
-        y_cent += y_st
-        x_model, y_model = make_plot(theta_model, unitL_model, x_cent, y_cent)
+        x_model += x_st
+        y_model += y_st
 
         x[block.start : block.end + 1, :] = x_model
         y[block.start : block.end + 1, :] = y_model
+        theta[block.start : block.end + 1, :] = theta_model
 
         # (scale, y_t, x_t)
         if params.get("SaveProgress"):
@@ -687,13 +687,12 @@ center loss : {np.mean(losses[4])}
             gradient_mask=gradient_mask,
         )
 
+        with torch.no_grad():
+            x_model, y_model, model_image = model(batch=T, width=W, height=H)
+
+        x_model = x_model.detach().cpu().numpy()
+        y_model = x_model.detach().cpu().numpy()
         theta_model = model.theta.detach().cpu().numpy()
-        unitL_model = model.unitLength.detach().cpu().numpy().reshape(-1, 1)
-        x_cent, y_cent = (
-            model.cx.detach().cpu().numpy(),
-            model.cy.detach().cpu().numpy(),
-        )
-        model_image = model(batch=T, width=W, height=H)
         # get trace information if loss is smaller
         if loss_compare([losses_all[i], losses]):
             print("update")
@@ -729,13 +728,11 @@ center loss : {np.mean(losses[4])}
         if loss_compare([losses_all[i], losses]):
             print("update")
             update = 3
+            with torch.no_grad():
+                x_model, y_model, model_image = model(batch=T, width=W, height=H)
+            x_model = x_model.detach().cpu().numpy()
+            y_model = x_model.detach().cpu().numpy()
             theta_model = model.theta.detach().cpu().numpy()
-            unitL_model = model.unitLength.detach().cpu().numpy().reshape(-1, 1)
-            x_cent, y_cent = (
-                model.cx.detach().cpu().numpy(),
-                model.cy.detach().cpu().numpy(),
-            )
-            model_image = model(batch=T, width=W, height=H)
             losses_all[i] = losses
             remove_progress(output_path, "{}-{}_id[0-2]*.png".format(start, end))
         else:
@@ -743,14 +740,13 @@ center loss : {np.mean(losses[4])}
             remove_progress(output_path, "{}-{}_id3*.png".format(start, end))
 
         if update:
-            x_cent = x_cent[l_pad : l_pad + block.size]
-            y_cent = y_cent[l_pad : l_pad + block.size]
-            unitL_model = unitL_model[l_pad : l_pad + block.size]
+            # Trim padding
+            x_model = x_model[l_pad : l_pad + block.size]
+            y_model = y_model[l_pad : l_pad + block.size]
             theta_model = theta_model[l_pad : l_pad + block.size, :]
             # Add x_st, y_st to restore original position before reconstruction.
-            x_cent += x_st
-            y_cent += y_st
-            x_model, y_model = make_plot(theta_model, unitL_model, x_cent, y_cent)
+            x_model += x_st
+            y_model += y_st
 
             if __debug__:
                 show_image(real_image, params["num_t"], title="real image")
@@ -759,6 +755,7 @@ center loss : {np.mean(losses[4])}
 
             x[block.start : block.end + 1, :] = x_model
             y[block.start : block.end + 1, :] = y_model
+            theta[block.start : block.end + 1, :] = theta_model
 
             # log
             logger.info(
@@ -774,6 +771,69 @@ center loss : {np.mean(losses_all[i][4])}
 
     time_now = datetime.datetime.now()
     logger.info(f"STEP3 finished at {time_now}\n")
+
+    logger.info("STEP4 : re-optimization entire block to ensure smoothness\n")
+
+    # update unitlength from updated centerline
+    unitLength = float(np.sqrt(np.mean(np.sum(np.diff((x, y)) ** 2, axis=0))))
+
+    # main loop 4
+    for block1, block2 in zip(all_blocks[:-1], all_blocks[:-1]):
+        start = block1.start + block1.size // 2
+        end = block2.end - block2.size // 2
+
+        # This is only for saving the output during training
+        # filenames_ = filenames[use_area[0]:use_area[1]+1]
+        init_theta = theta[start : end + 1, :].copy()
+
+        # read and preprocess images
+        real_image, y_st, x_st = load_image(
+            filenames_all,
+            params["rescale"],
+            Worm_is_black,
+            multi_flag,
+            Tscaled_ind[start : end + 1],
+        )
+
+        T, H, W = real_image.shape
+        logger.info(f"im_shape: {real_image.shape}")
+
+        # set init value
+        init_cx, init_cy = set_init_xy(real_image)
+        init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
+
+        # make model instance and training
+        model = (
+            Model(init_cx, init_cy, init_theta, init_unitLength, params)
+            .to(torch.float32)
+            .to(device)
+        )
+        optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
+        train3(
+            model,
+            real_image,
+            optimizer,
+            params,
+            output_path,
+            output_name,
+        )
+
+        # get trace information
+        with torch.no_grad():
+            x_model, y_model, _ = model(batch=T, width=W, height=H)
+
+        x_model = x_model.detach().cpu().numpy()
+        y_model = y_model.detach().cpu().numpy()
+
+        # Add x_st, y_st to restore original position before reconstruction.
+        x_model += x_st
+        y_model += y_st
+
+        x[start : end + 1, :] = (x[start : end + 1, :] + x_model) / 2
+        y[start : end + 1, :] = (y[start : end + 1, :] + y_model) / 2
+
+    time_now = datetime.datetime.now()
+    logger.info(f"STEP4 finished at {time_now}\n")
 
     # save params and plots
     params_for_save = params.copy()

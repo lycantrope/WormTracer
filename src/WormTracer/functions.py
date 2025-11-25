@@ -1218,7 +1218,7 @@ class Model(torch.nn.Module):
             y - torch.mean(y, dim=1).reshape((T, 1)) + self.cy.reshape((T, 1))
         )  # length plot size +1
         image = make_worm(x, y, im_width, im_height, worm_wid)
-        return image
+        return x, y, image
 
     def zero_masked_gradients(self, mask: torch.Tensor):
         assert mask.ndim == 1, "Input mask must be a 1D tensor."
@@ -1341,8 +1341,9 @@ def train3(
 
     # main optimization
     for e in range(epochs):
-        model_image = model(batch=T, width=W, height=H).to(device)
         optimizer.zero_grad()
+        _, _, model_image = model(batch=T, width=W, height=H)
+        model_image = model_image.to(device)
 
         if is_nont:
             annealing_weight = annealing_function(e, T, speed).to(device)
@@ -1366,9 +1367,10 @@ def train3(
 
         smoothness_loss = smoothness_loss_weight * torch.mean(smoothness_loss)
 
+        unitL = torch.mean(model.unitLength)
         center_loss = (
             center_loss_weight
-            / torch.mean(model.unitLength)
+            / unitL
             * torch.mean(((model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2))
         )
 
@@ -1447,8 +1449,9 @@ def train3(
 
     # minor adjustment
     for e in range(params["epoch_plus"]):
-        model_image = model(batch=T, width=W, height=H).to(device)
         optimizer.zero_grad()
+        _, _, model_image = model(batch=T, width=W, height=H)
+        model_image = model_image.to(device)
 
         image_loss = torch.mean((model_image - real_image) ** 2)
 
@@ -1484,7 +1487,7 @@ def train3(
         optimizer.step()
 
     with torch.no_grad():
-        model_image = model(batch=T, width=W, height=H).to(device)
+        _, _, model_image = model(batch=T, width=W, height=H)
         # Calculate the loss for display, this part does not require grad.
         image_loss = torch.mean((model_image - real_image) ** 2, axis=(1, 2))
 
