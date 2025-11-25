@@ -796,8 +796,6 @@ center loss : {np.mean(losses_all[i][4])}
         )
 
         T, H, W = real_image.shape
-        logger.info(f"im_shape: {real_image.shape}")
-
         # set init value
         init_cx, init_cy = set_init_xy(real_image)
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
@@ -829,8 +827,8 @@ center loss : {np.mean(losses_all[i][4])}
         x_model += x_st
         y_model += y_st
 
-        x[start : end + 1, :] = (x[start : end + 1, :] + x_model) / 2
-        y[start : end + 1, :] = (y[start : end + 1, :] + y_model) / 2
+        x[start : end + 1, :] = x_model
+        y[start : end + 1, :] = y_model
 
     time_now = datetime.datetime.now()
     logger.info(f"STEP4 finished at {time_now}\n")
@@ -871,7 +869,7 @@ center loss : {np.mean(losses_all[i][4])}
         is_reversed = judge_head_amplitude(x, y)
 
     if is_reversed:
-        x, y = x[:, :, ::-1], y[:, :, ::-1]
+        x, y = x[:, ::-1], y[:, ::-1]
 
     tz = datetime.timezone(datetime.timedelta(hours=params["local_time_difference"]))
     time_now = datetime.datetime.now(tz).strftime("%Y-%m-%d_%H:%M:%S.%f")
