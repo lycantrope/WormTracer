@@ -243,7 +243,7 @@ def run(
 
     guide_idx = None
     if isinstance(guide_files, list):
-        logger.info("Found guide_files")
+        logger.info(f"Found guide_files: {guide_files}")
         guide_x, guide_y, guide_idx = get_guide_points(guide_files)
 
         assert guide_x is not None, "get_guide_points should return array"
@@ -692,7 +692,6 @@ center loss : {np.mean(losses[4])}
 
         x_model = x_model.detach().cpu().numpy()
         y_model = y_model.detach().cpu().numpy()
-        theta_model = model.theta.detach().cpu().numpy()
         # get trace information if loss is smaller
         if loss_compare([losses_all[i], losses]):
             print("update")
@@ -732,7 +731,6 @@ center loss : {np.mean(losses[4])}
                 x_model, y_model, model_image = model(batch=T, width=W, height=H)
             x_model = x_model.detach().cpu().numpy()
             y_model = y_model.detach().cpu().numpy()
-            theta_model = model.theta.detach().cpu().numpy()
             losses_all[i] = losses
             remove_progress(output_path, "{}-{}_id[0-2]*.png".format(start, end))
         else:
@@ -755,7 +753,6 @@ center loss : {np.mean(losses[4])}
 
             x[block.start : block.end + 1, :] = x_model
             y[block.start : block.end + 1, :] = y_model
-            theta[block.start : block.end + 1, :] = theta_model
 
             # log
             logger.info(
@@ -772,15 +769,25 @@ center loss : {np.mean(losses_all[i][4])}
     time_now = datetime.datetime.now()
     logger.info(f"STEP3 finished at {time_now}\n")
 
-    logger.info("STEP4 : re-optimization entire block to ensure smoothness\n")
+    # save params and plots
+    params_for_save = params.copy()
+    for key, value in params_for_save.items():
+        if torch.is_tensor(value):
+            params_for_save[key] = params_for_save[key].item()
+        if isinstance(value, Path):
+            params_for_save[key] = os.fspath(value)
+    del params_for_save["use_area"]
 
+    logger.info("STEP4 : re-optimization entire block to ensure smoothness\n")
+    # check flipping
+    x, y = flip_check(x, y)
     # update unitlength from updated centerline
     unitLength = float(np.sqrt(np.mean(np.sum(np.diff((x, y)) ** 2, axis=0))))
-
+    theta = make_theta_from_xy(x, y)
     # main loop 4
-    for block1, block2 in zip(all_blocks[:-1], all_blocks[1:]):
-        start = block1.start + block1.size // 2
-        end = block2.end - block2.size // 2
+    window = 32
+    for start in range(0, training_block.nframe - window + 1, window):
+        end = min(start + window - 1, training_block.nframe - 1)
 
         # This is only for saving the output during training
         # filenames_ = filenames[use_area[0]:use_area[1]+1]
@@ -833,20 +840,9 @@ center loss : {np.mean(losses_all[i][4])}
     time_now = datetime.datetime.now()
     logger.info(f"STEP4 finished at {time_now}\n")
 
-    # save params and plots
-    params_for_save = params.copy()
-    for key, value in params_for_save.items():
-        if torch.is_tensor(value):
-            params_for_save[key] = params_for_save[key].item()
-        if isinstance(value, Path):
-            params_for_save[key] = os.fspath(value)
-    del params_for_save["use_area"]
-
-    # check flipping
-    x, y = flip_check(x, y)
-
     # cancel reduction
     # T_read_all = params['end_T'] - params['start_T'] if params['end_T'] else len(filenames_all) - params['start_T']
+    x, y = flip_check(x, y)
     x, y = cancel_reduction(
         x,
         y,

@@ -436,12 +436,15 @@ def flip_check(x, y):
 
 def trim_image(image, *, padding=5):
     """Cut images to minimum size."""
-    thresh = np.bitwise_or.reduce(image > 0, axis=0)
+    assert image.ndim in (2, 3), "Only support 2D (Y, X) or 3D (Z, Y, X)"
+    thresh = image > 0
+    if image.ndim > 2:
+        thresh = np.bitwise_or.reduce(thresh, axis=0)
 
-    (ys, xs) = np.nonzero(thresh)
-    assert ys.size > 0, (
+    assert thresh.sum() > 0, (
         "Image has no signal, please confirm your image is properly loaded"
     )
+    (ys, xs) = np.nonzero(thresh)
     max_h, max_w = thresh.shape
 
     x1 = max(xs.min() - padding, 0)
@@ -449,7 +452,10 @@ def trim_image(image, *, padding=5):
     y1 = max(ys.min() - padding, 0)
     y2 = min(ys.max() + padding, max_h)
 
-    return image[:, y1:y2, x1:x2], y1, x1
+    if image.ndim == 2:
+        return image[y1:y2, x1:x2], y1, x1
+    else:
+        return image[:, y1:y2, x1:x2], y1, x1
 
 
 def make_theta_from_xy(x: np.ndarray, y: np.ndarray) -> np.ndarray:
