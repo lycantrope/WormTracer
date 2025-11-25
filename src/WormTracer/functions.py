@@ -1274,7 +1274,7 @@ class EarlyStopping:
         self.early_stop = False
         self.delta = delta
 
-    def __call__(self, loss, model):
+    def __call__(self, loss):
         if loss > self.best_loss + self.delta:
             self.counter += 1
             if self.counter >= self.patience:
@@ -1289,32 +1289,31 @@ def train3(
     real_image,
     optimizer,
     params,
-    device,
-    init_data,
     output_path,
     output_name,
     is_nont=True,
     gradient_mask=None,
 ):
+    device = next(model.parameters()).device
     T, H, W = real_image.shape
     speed = params["speed"]
     # Make sure at least 1 epochs will be executed
     epochs = max(int(T / (2 * speed) + params["epoch_plus"]), 1)
     block = params["use_area"]
     # Loss Weight
-    continuity_loss_weight = params["continuity_loss_weight"]
-    smoothness_loss_weight = params["smoothness_loss_weight"]
-    length_loss_weight = params["length_loss_weight"]
-    center_loss_weight = params["center_loss_weight"]
+    continuity_loss_weight = float(params["continuity_loss_weight"])
+    smoothness_loss_weight = float(params["smoothness_loss_weight"])
+    length_loss_weight = float(params["length_loss_weight"])
+    center_loss_weight = float(params["center_loss_weight"])
     # Progress setup
     save_progress_freq = params["save_progress_freq"]
     save_flag = params.get("SaveProgress", False)
     show_flag = params.get("ShowProgress", False)
 
-    init_cx = init_data[0].to(device)
-    init_cy = init_data[1].to(device)
-    unitL = init_data[2]
-    annealing_weight = torch.ones(T).to(device)
+    init_cx = model.cx.clone().detach()
+    init_cy = model.cy.clone().detach()
+
+    annealing_weight = torch.ones(T, device=device)
     body_axis_weight = body_axis_function(params["body_ratio"], params["plot_n"]).to(
         device
     )
@@ -1323,7 +1322,7 @@ def train3(
     model.delta.requires_grad = False
     early_stopping = EarlyStopping()
     if not torch.is_tensor(real_image):
-        real_image = torch.tensor(real_image).to(device)
+        real_image = torch.tensor(real_image, device=device)
 
     if gradient_mask is None:
         mask = torch.ones(T, dtype=model.cx.dtype, device=device)
@@ -1369,14 +1368,14 @@ def train3(
 
         center_loss = (
             center_loss_weight
-            / unitL
+            / torch.mean(model.unitLength)
             * torch.mean(((model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2))
         )
 
         if T < 2:
             # If training block contains only single frame. Then, we assigned continuity_loss and length_loss to zeros.
-            continuity_loss = torch.zeros(1, device=model.theta.device)
-            length_loss = torch.zeros(1, device=model.unitLength.device)
+            continuity_loss = torch.zeros(1, device=device)
+            length_loss = torch.zeros(1, device=device)
         else:
             continuity_loss = torch.mean(
                 (model.theta[:-1, :] - model.theta[1:, :]) ** 2,
@@ -1397,7 +1396,7 @@ def train3(
         model.zero_masked_gradients(mask)
         loss.backward()
         if torch.min(annealing_weight) > 0.99:
-            early_stopping(loss.item(), model)
+            early_stopping(loss.item())
         del loss
         if early_stopping.early_stop:
             if params["ShowProgress"]:
@@ -1459,8 +1458,8 @@ def train3(
 
         if T < 2:
             # If training block contains only single frame. Then, we assigned continuity_loss and length_loss to zeros.
-            continuity_loss = torch.zeros(1, device=model.theta.device)
-            length_loss = torch.zeros(1, device=model.unitLength.device)
+            continuity_loss = torch.zeros(1, device=device)
+            length_loss = torch.zeros(1, device=device)
         else:
             continuity_loss = continuity_loss_weight * torch.mean(
                 (model.theta[:-1, :] - model.theta[1:, :]) ** 2
@@ -1476,7 +1475,7 @@ def train3(
 
         model.zero_masked_gradients(mask)
         loss.backward()
-        early_stopping(loss.item(), model)
+        early_stopping(loss.item())
         del loss
         if early_stopping.early_stop:
             if params["ShowProgress"]:

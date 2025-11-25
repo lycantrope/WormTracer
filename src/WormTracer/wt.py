@@ -332,8 +332,8 @@ def run(
     params["init_gamma"] = torch.tensor(0.0)
     params["init_delta"] = torch.tensor(0.0)
 
-    unitLength = np.sqrt(
-        np.median(np.sum(np.diff((x[simple_area], y[simple_area])) ** 2, axis=0))
+    unitLength = float(
+        np.sqrt(np.mean(np.sum(np.diff((x[simple_area], y[simple_area])) ** 2, axis=0)))
     )
 
     logger.info("STEP1 : optimization for simple posture blocks\n")
@@ -378,7 +378,6 @@ def run(
         init_cx, init_cy = set_init_xy(real_image)
         init_theta = torch.tensor(theta_)
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
-        init_data = [init_cx, init_cy, unitLength]
 
         # make model instance and training
         model = (
@@ -393,8 +392,6 @@ def run(
             real_image,
             optimizer,
             params,
-            device,
-            init_data,
             output_path,
             output_name,
             is_nont=False,
@@ -500,7 +497,6 @@ center loss : {np.mean(losses[4])}
         init_cx, init_cy = set_init_xy(real_image)
         init_theta = torch.from_numpy(np.linspace(theta_[0, :], theta_cand[0], T))
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
-        init_data = [init_cx, init_cy, unitLength]
 
         # gradient_mask for simple area
         mask = training_block.complex_area[start : end + 1].astype("f4")
@@ -519,8 +515,6 @@ center loss : {np.mean(losses[4])}
             real_image,
             optimizer,
             params,
-            device,
-            init_data,
             output_path,
             output_name,
             gradient_mask=gradient_mask,
@@ -552,8 +546,6 @@ center loss : {np.mean(losses[4])}
             real_image,
             optimizer,
             params,
-            device,
-            init_data,
             output_path,
             output_name,
             gradient_mask=gradient_mask,
@@ -608,8 +600,7 @@ center loss : {np.mean(losses[4])}
 
         # log
         logger.info(
-            f"""{str(block)}
-image loss : {np.mean(losses[0])}
+            f"""image loss : {np.mean(losses[0])}
 continuity loss : {np.mean(losses[1])}
 smoothing loss : {np.mean(losses[2])}
 length loss : {np.mean(losses[3])}
@@ -649,7 +640,7 @@ center loss : {np.mean(losses[4])}
 
         # This is only for saving the output during training
         params["use_area"] = block
-        print(f"{str(block)}: too large loss!")
+        logger.info(f"{str(block)}: too large loss!")
 
         theta_ = theta[start : end + 1, :].copy()
 
@@ -671,7 +662,6 @@ center loss : {np.mean(losses[4])}
         init_cx, init_cy = set_init_xy(real_image)
         init_theta = torch.from_numpy(np.linspace(theta_[0, :], theta_cand[0], T))
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
-        init_data = [init_cx, init_cy, unitLength]
 
         # The gradient mask will be all zeros except loss large area.
         mask = np.zeros(T, dtype="f4")
@@ -692,8 +682,6 @@ center loss : {np.mean(losses[4])}
             real_image,
             optimizer,
             params,
-            device,
-            init_data,
             output_path,
             output_name,
             gradient_mask=gradient_mask,
@@ -732,8 +720,6 @@ center loss : {np.mean(losses[4])}
             real_image,
             optimizer,
             params,
-            device,
-            init_data,
             output_path,
             output_name,
             gradient_mask=gradient_mask,

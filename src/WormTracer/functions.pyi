@@ -177,8 +177,6 @@ def train3(
     real_image,
     optimizer,
     params,
-    device,
-    init_data,
     output_path,
     output_name,
     is_nont=True,
