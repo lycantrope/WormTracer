@@ -138,7 +138,12 @@ def get_filenames(dataset_path):
     return sorted(files)
 
 
-def get_guide_points(guide_files):
+def get_guide_points(
+    guide_files,
+    TScale_ind,
+    plot_n,
+    n_frame,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     guide_file_ext = {".csv", ".h5"}
     guide_file_map = collections.defaultdict(list)
 
@@ -164,7 +169,22 @@ def get_guide_points(guide_files):
     else:
         raise ValueError("guide_files must be two csv files or one hdf file")
 
+    assert guide_x.shape == guide_y.shape, "guide_x and guide_y have different shape."
+    assert guide_x.shape[0] == n_frame, (
+        "guide_x and guide_y have different length from input images"
+    )
+    guide_x = guide_x[TScale_ind]
+    guide_y = guide_y[TScale_ind]
     guide_idx = np.where(np.all(np.isfinite(guide_x), axis=1))[0]
+
+    guide_x = np.nan_to_num(guide_x, copy=False)
+    guide_y = np.nan_to_num(guide_y, copy=False)
+    # Interpolate the guide points if required.
+    if guide_x.shape[1] != plot_n:
+        arc = np.linspace(0, 1, guide_x.shape[1])
+        xy_func = CubicSpline(arc, (guide_x, guide_y), axis=2)
+        guide_x, guide_y = xy_func(np.linspace(0.0, 1.0, plot_n))
+
     return guide_x, guide_y, guide_idx
 
 
@@ -177,6 +197,7 @@ def get_property(filenames, rescale):
             raise ValueError(err_msg.format(e))
     else:
         _, ims = cv2.imreadmulti(filename=filenames[0], mats=[], flags=0)
+        ims = np.asarray(ims)
 
     im = np.asarray(ims[0])
     if not np.all((0 == im) | (im == 255)):

@@ -244,13 +244,17 @@ def run(
     guide_idx = None
     if isinstance(guide_files, list):
         logger.info(f"Found guide_files: {guide_files}")
-        guide_x, guide_y, guide_idx = get_guide_points(guide_files)
+        guide_x, guide_y, guide_idx = get_guide_points(
+            guide_files,
+            Tscaled_ind,
+            params["plot_n"],
+            n_input_images,
+        )
 
-        assert guide_x is not None, "get_guide_points should return array"
-        assert guide_y is not None, "get_guide_points should return array"
         # We assumed that non-nan in guide_x is served as guide, we overwrite the x, y by guide_x, guide_y
         x[guide_idx] = guide_x[guide_idx]
         y[guide_idx] = guide_y[guide_idx]
+
         # After assignment, we can drop the guide_x and guide_y, here.
         del guide_x, guide_y
 
@@ -299,6 +303,7 @@ def run(
     if guide_idx is not None:
         # we assigned loss in the guide_idx to ensure the frame of guide_idx will be simple (non zero ground truth)
         image_losses[guide_idx] = image_losses[best_frame_idx]
+        del guide_idx
 
     training_block = get_use_blocks(image_losses, image_loss_max)
 
