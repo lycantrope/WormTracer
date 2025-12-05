@@ -612,7 +612,7 @@ def make_single_image(
     return pad_image[radius : radius + height, radius : radius + width]
 
 
-def make_image(x, y, x_st, y_st, params, image_info):
+def make_image(x, y, x_st, y_st, width, height, params):
     """Create Model imaging using precalculated mask"""
     T = x.shape[0]
     worm_wid = worm_width_all_np(
@@ -626,16 +626,15 @@ def make_image(x, y, x_st, y_st, params, image_info):
 
     distance_matrix_3d = worm_wid[:, None, None] - distance_matrix[None, :, :]
     pixel_matrix = pixel_value_from_dist_max_np(distance_matrix_3d)
-    im_height = image_info["image_shape"][1]
-    im_width = image_info["image_shape"][2]
-    image = np.zeros((T, im_height, im_width))
+
+    image = np.zeros((T, height, width))
 
     for i in range(T):
         image[i, :, :] = make_single_image(
             x[i] - x_st,
             y[i] - y_st,
-            width=im_width,
-            height=im_height,
+            width=width,
+            height=height,
             pixel_matrix=pixel_matrix,
         )
 

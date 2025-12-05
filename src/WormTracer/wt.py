@@ -252,8 +252,9 @@ def run(
         )
 
         # We assumed that non-nan in guide_x is served as guide, we overwrite the x, y by guide_x, guide_y
-        x[guide_idx] = guide_x[guide_idx]
-        y[guide_idx] = guide_y[guide_idx]
+        # Since the guide points were made after restoring the resacle, we need to multiple the rescale to guide_x and guide_y
+        x[guide_idx] = guide_x[guide_idx] * params["rescale"]
+        y[guide_idx] = guide_y[guide_idx] * params["rescale"]
 
         # After assignment, we can drop the guide_x and guide_y, here.
         del guide_x, guide_y
@@ -274,7 +275,15 @@ def run(
     params["delta"] = 0.0
     image_info = {"image_shape": real_image.shape, "device": device}
     cap_span = calc_cap_span(image_info["image_shape"], params["plot_n"])
-    model_image = make_image(x, y, x_st, y_st, params, image_info)
+    model_image = make_image(
+        x,
+        y,
+        x_st,
+        y_st,
+        width=real_image.shape[2],
+        height=real_image.shape[1],
+        params=params,
+    )
 
     # get points for trace blocks
     image_losses = np.mean((model_image - real_image) ** 2, axis=(1, 2))
@@ -893,8 +902,8 @@ center loss : {np.mean(losses_all[i][4])}
         os.path.join(output_path, output_name + "_skel.h5"),
         "w",
     ) as handler:
-        handler.create_dataset("x", data=x)
-        handler.create_dataset("y", data=y)
+        handler.create_dataset("x", data=x / params["rescale"])
+        handler.create_dataset("y", data=y / params["rescale"])
 
     save_centerline_to_roi(
         outputpath=os.path.join(output_path, output_name + "_RoiSet.zip"),

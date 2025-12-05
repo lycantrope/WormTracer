@@ -101,7 +101,7 @@ def make_single_image(
     height: int,
     pixel_matrix: np.ndarray,
 ) -> np.ndarray: ...
-def make_image(x, y, x_st, y_st, params, image_info):
+def make_image(x, y, x_st, y_st, width, height, params):
     """Create model image by dividing them to avoid CUDA memory error."""
 
 def get_image_loss_max(best_fit_image, cx, cy, x_st, y_st, params, image_info) -> float:
