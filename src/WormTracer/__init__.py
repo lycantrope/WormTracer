@@ -1,7 +1,5 @@
-from importlib.metadata import PackageNotFoundError, version
-
 try:
-    __version__ = version("wormtracer")
-except PackageNotFoundError:
-    # package is not installed
+    from ._version import __version__
+
+except ImportError:
     pass

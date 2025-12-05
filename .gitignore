@@ -81,3 +81,5 @@ segWorm
 data/
 
 WormTracer_dev
+
+_version.py
