@@ -45,6 +45,7 @@ readme = { file = ["README.md"] }
 
 [tool.setuptools_scm]
 version_file = "src/WormTracer/_version.py"
+fallback_version = "0.0.1+nogit"
 
 
 [tool.ruff.lint]
