@@ -907,8 +907,8 @@ center loss : {np.mean(losses_all[i][4])}
 
     save_centerline_to_roi(
         outputpath=os.path.join(output_path, output_name + "_RoiSet.zip"),
-        x=x,
-        y=y,
+        x=x / params["rescale"],
+        y=y / params["rescale"],
     )
 
     if not (
