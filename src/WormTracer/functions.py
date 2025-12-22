@@ -9,7 +9,7 @@ import math
 import os
 import shutil
 from pathlib import Path
-from typing import NamedTuple, Optional, Tuple, Union
+from typing import NamedTuple, Optional, Tuple
 
 import cv2
 import h5py

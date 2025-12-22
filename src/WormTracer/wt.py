@@ -706,6 +706,7 @@ center loss : {np.mean(losses[4])}
 
         x_model = x_model.detach().cpu().numpy()
         y_model = y_model.detach().cpu().numpy()
+        theta_model = model.theta.detach().cpu().numpy()
         # get trace information if loss is smaller
         if loss_compare([losses_all[i], losses]):
             print("update")
@@ -745,6 +746,7 @@ center loss : {np.mean(losses[4])}
                 x_model, y_model, model_image = model(batch=T, width=W, height=H)
             x_model = x_model.detach().cpu().numpy()
             y_model = y_model.detach().cpu().numpy()
+            theta_model = model.theta.detach().cpu().numpy()
             losses_all[i] = losses
             remove_progress(output_path, "{}-{}_id[0-2]*.png".format(start, end))
         else:
@@ -767,6 +769,7 @@ center loss : {np.mean(losses[4])}
 
             x[block.start : block.end + 1, :] = x_model
             y[block.start : block.end + 1, :] = y_model
+            theta[block.start : block.end + 1, :] = theta_model
 
             # log
             logger.info(
