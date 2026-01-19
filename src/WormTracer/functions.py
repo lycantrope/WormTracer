@@ -728,8 +728,8 @@ def get_use_blocks(
     """
     # the criteria to filter complex area
     image_losses_min = np.min(image_losses)
-    rigid = 0.3 * image_loss_max + 0.7 * image_losses_min
-    relaxed = 0.1 * image_loss_max + 0.9 * image_losses_min
+    rigid = 0.4 * image_loss_max + 0.6 * image_losses_min
+    relaxed = 0.2 * image_loss_max + 0.8 * image_losses_min
     return TrainingBlocks(losses=image_losses, relaxed=relaxed, rigid=rigid)
 
 
