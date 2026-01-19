@@ -298,7 +298,6 @@ def run(
         x_st=x_st,
         y_st=y_st,
         params=params,
-        image_info=image_info,
     )
 
     if __debug__:

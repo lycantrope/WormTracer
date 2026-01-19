@@ -641,14 +641,15 @@ def make_image(x, y, x_st, y_st, width, height, params):
     return image
 
 
-def get_image_loss_max(best_fit_image, cx, cy, x_st, y_st, params, image_info) -> float:
+def get_image_loss_max(best_fit_image, cx, cy, x_st, y_st, params) -> float:
     """Create bad image and get bad image_loss to judge complex area."""
     # Create a straigthen line to make a bad image that maximize the loss.
     x0 = np.ones(params["plot_n"]) * cx
     y0 = np.ones(params["plot_n"]) * cy
     x0 = x0.reshape(1, -1)
     y0 = y0.reshape(1, -1)
-    im0 = make_image(x0, y0, x_st, y_st, params, image_info)
+    height, width = best_fit_image.shape
+    im0 = make_image(x0, y0, x_st, y_st, width, height, params)
     im0 = im0[0]
     image_loss_max = float(np.mean((best_fit_image - im0) ** 2))
     return image_loss_max
