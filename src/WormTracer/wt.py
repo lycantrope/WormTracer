@@ -537,7 +537,7 @@ center loss : {np.mean(losses[4])}
         )
 
         # Trim the padding losses
-        losses_all[(2, block.idx)] = losses[l_pad : l_pad + block.size]
+        losses_all[(2, block.idx)] = losses[:, l_pad : l_pad + block.size]
         # get trace information
         with torch.no_grad():
             x_model, y_model, model_image = model(batch=T, width=W, height=H)
@@ -567,7 +567,7 @@ center loss : {np.mean(losses[4])}
             gradient_mask=gradient_mask,
         )
         # Trim the padding losses
-        losses = losses[l_pad : l_pad + block.size]
+        losses = losses[:, l_pad : l_pad + block.size]
         # get trace information if loss is smaller
         select_ind = loss_compare([losses_all[(2, block.idx)], losses])
         if select_ind:
@@ -705,7 +705,7 @@ center loss : {np.mean(losses[4])}
         )
 
         # Trim the padding losses
-        losses = losses[l_pad : l_pad + block.size]
+        losses = losses[:, l_pad : l_pad + block.size]
 
         with torch.no_grad():
             x_model, y_model, model_image = model(batch=T, width=W, height=H)
@@ -746,7 +746,7 @@ center loss : {np.mean(losses[4])}
             gradient_mask=gradient_mask,
         )
         # Trim the padding losses
-        losses = losses[l_pad : l_pad + block.size]
+        losses = losses[:, l_pad : l_pad + block.size]
 
         # get trace information if loss is smaller
         if loss_compare([losses_all[(3, i)], losses]):
