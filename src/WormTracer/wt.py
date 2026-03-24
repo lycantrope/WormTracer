@@ -411,7 +411,7 @@ def run(
         )
 
         # get trace information
-        losses_all[block.idx] = losses
+        losses_all[(1, block.idx)] = losses
         with torch.no_grad():
             x_model, y_model, model_image = model(batch=T, width=W, height=H)
 
@@ -446,11 +446,12 @@ length loss : {np.mean(losses[3])}
 center loss : {np.mean(losses[4])}
 """
         )
+
         if __debug__:
             # Only compute the model_image, if we want to show the result.
             show_image(real_image, params["num_t"], title="real image")
             show_image(model_image, params["num_t"], title="model image")
-            show_loss_plot(losses_all[block.idx], title="losses of model")
+            show_loss_plot(losses_all[(1, block.idx)], title="losses of model")
 
     time_now = datetime.datetime.now()
     logger.info(f"STEP1 finished at {time_now}\n")
@@ -525,7 +526,7 @@ center loss : {np.mean(losses[4])}
         )
         optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
         params["id"] = 0
-        losses_all[block.idx] = train3(
+        losses = train3(
             model,
             real_image,
             optimizer,
@@ -535,6 +536,8 @@ center loss : {np.mean(losses[4])}
             gradient_mask=gradient_mask,
         )
 
+        # Trim the padding losses
+        losses_all[(2, block.idx)] = losses[l_pad : l_pad + block.size]
         # get trace information
         with torch.no_grad():
             x_model, y_model, model_image = model(batch=T, width=W, height=H)
@@ -563,9 +566,10 @@ center loss : {np.mean(losses[4])}
             output_name,
             gradient_mask=gradient_mask,
         )
-
+        # Trim the padding losses
+        losses = losses[l_pad : l_pad + block.size]
         # get trace information if loss is smaller
-        select_ind = loss_compare([losses_all[block.idx], losses])
+        select_ind = loss_compare([losses_all[(2, block.idx)], losses])
         if select_ind:
             with torch.no_grad():
                 x_model, y_model, model_image = model(batch=T, width=W, height=H)
@@ -574,7 +578,7 @@ center loss : {np.mean(losses[4])}
             y_model = y_model.detach().cpu().numpy()
             theta_model = model.theta.detach().cpu().numpy()
 
-            losses_all[block.idx] = losses
+            losses_all[(2, block.idx)] = losses
 
         # Trim padding
         x_model = x_model[l_pad : l_pad + block.size]
@@ -608,7 +612,7 @@ center loss : {np.mean(losses[4])}
             show_image(real_image, params["num_t"], title="real image")
             show_image(model_image, params["num_t"], title="model image")
             show_loss_plot(
-                losses_all[block.idx], title="losses of model{}".format(select_ind)
+                losses_all[(2, block.idx)], title="losses of model{}".format(select_ind)
             )
 
         # log
@@ -700,6 +704,9 @@ center loss : {np.mean(losses[4])}
             gradient_mask=gradient_mask,
         )
 
+        # Trim the padding losses
+        losses = losses[l_pad : l_pad + block.size]
+
         with torch.no_grad():
             x_model, y_model, model_image = model(batch=T, width=W, height=H)
 
@@ -707,10 +714,12 @@ center loss : {np.mean(losses[4])}
         y_model = y_model.detach().cpu().numpy()
         theta_model = model.theta.detach().cpu().numpy()
         # get trace information if loss is smaller
-        if loss_compare([losses_all[i], losses]):
+        # Here, the losses was compared with step2 loss
+        if loss_compare([losses_all[(2, i)], losses]):
             print("update")
             update = 2
-            losses_all[i] = losses
+            # We stored the losses in (step3, i)
+            losses_all[(3, i)] = losses
             remove_progress(output_path, "{}-{}_id[0-1]*.png".format(start, end))
         else:
             print("no update")
@@ -736,9 +745,11 @@ center loss : {np.mean(losses[4])}
             output_name,
             gradient_mask=gradient_mask,
         )
+        # Trim the padding losses
+        losses = losses[l_pad : l_pad + block.size]
 
         # get trace information if loss is smaller
-        if loss_compare([losses_all[i], losses]):
+        if loss_compare([losses_all[(3, i)], losses]):
             print("update")
             update = 3
             with torch.no_grad():
@@ -746,7 +757,7 @@ center loss : {np.mean(losses[4])}
             x_model = x_model.detach().cpu().numpy()
             y_model = y_model.detach().cpu().numpy()
             theta_model = model.theta.detach().cpu().numpy()
-            losses_all[i] = losses
+            losses_all[(3, i)] = losses
             remove_progress(output_path, "{}-{}_id[0-2]*.png".format(start, end))
         else:
             print("no update")
@@ -764,7 +775,7 @@ center loss : {np.mean(losses[4])}
             if __debug__:
                 show_image(real_image, params["num_t"], title="real image")
                 show_image(model_image, params["num_t"], title="model image")
-                show_loss_plot(losses_all[i], title="losses of new model")
+                show_loss_plot(losses_all[(3, i)], title="losses of new model")
 
             x[block.start : block.end + 1, :] = x_model
             y[block.start : block.end + 1, :] = y_model
@@ -773,11 +784,11 @@ center loss : {np.mean(losses[4])}
             # log
             logger.info(
                 f"""{str(block)} updated
-image loss : {np.mean(losses_all[i][0])}
-continuity loss : {np.mean(losses_all[i][1])}
-smoothing loss : {np.mean(losses_all[i][2])}
-length loss : {np.mean(losses_all[i][3])}
-center loss : {np.mean(losses_all[i][4])}
+image loss : {np.mean(losses_all[(3, i)][0])}
+continuity loss : {np.mean(losses_all[(3, i)][1])}
+smoothing loss : {np.mean(losses_all[(3, i)][2])}
+length loss : {np.mean(losses_all[(3, i)][3])}
+center loss : {np.mean(losses_all[(3, i)][4])}
 
 """
             )
@@ -853,6 +864,49 @@ center loss : {np.mean(losses_all[i][4])}
 
     # time_now = datetime.datetime.now()
     # logger.info(f"STEP4 finished at {time_now}\n")
+
+    # Save all losses into csv files
+    dtype = np.dtype(
+        [
+            ("step", "i4"),
+            ("block", "i4"),
+            ("index", "i4"),
+            ("is_complex", "?"),
+            ("image_loss", "f8"),
+            ("continuity_loss", "f8"),
+            ("smoothing_loss", "f8"),
+            ("length_loss", "f8"),
+            ("center_loss", "f8"),
+        ]
+    )
+
+    losses_all_tmp = []
+    for (stage, idx), loss in losses_all.items():
+        T = loss.shape[1]
+        arr = np.zeros(T, dtype=dtype)
+        block = all_blocks[idx]
+
+        arr["step"] = stage
+        arr["block"] = block.idx
+        arr["index"] = np.arange(block.start, block.end + 1)
+        arr["is_complex"] = block.is_complex
+        arr["image_loss"] = loss[0]
+        arr["continuity_loss"] = loss[1]
+        arr["smoothing_loss"] = loss[2]
+        arr["length_loss"] = loss[3]
+        arr["center_loss"] = loss[4]
+        losses_all_tmp.append(arr)
+
+    header = "step,block,index,is_complex,image_loss,continuity_lsos,smoothing_loss,length_loss,center_loss"
+    fmt = ["%i", "%i", "%i", "%i", "%f", "%f", "%f", "%f", "%f"]
+    losses_arr = np.concatenate(losses_all_tmp)
+    np.savetxt(
+        os.path.join(output_path, output_name + "_losses.csv"),
+        losses_arr,
+        fmt=fmt,
+        header=header,
+        delimiter=",",
+    )
 
     # cancel reduction
     # T_read_all = params['end_T'] - params['start_T'] if params['end_T'] else len(filenames_all) - params['start_T']

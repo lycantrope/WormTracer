@@ -1518,6 +1518,9 @@ def train3(
             length_loss = length_loss_weight * (
                 (model.unitLength[:-1] - model.unitLength[1:]) ** 2
             )
+            # We padding the loss to make it has same length as other loss
+            continuity_loss = F.pad(continuity_loss, (1, 0), mode="constant", value=0.0)
+            length_loss = F.pad(length_loss, (1, 0), mode="constant", value=0.0)
 
         losses = [
             image_loss,
@@ -1529,6 +1532,8 @@ def train3(
         for i in range(len(losses)):
             losses[i] = losses[i].clone().detach().cpu().numpy()
 
+        # (5, T)
+        losses = np.asarray(losses)
     if show_flag:
         logger.info(
             "{:.2f} {:.2f} {:.2f} {:.2f}".format(
@@ -1604,9 +1609,15 @@ def find_losslarge_area(losses_all):
     for i in range(3):
         lossi = np.concatenate([loss[i] for loss in losses_all.values()], axis=None)
         q75, q50, q25 = np.percentile(lossi, [75, 50, 25])
-        for idx, loss in losses_all.items():
+        for (step, idx), loss in losses_all.items():
             if np.max(loss[i]) - q50 > (q75 - q25) * 4:
                 losslarge_area.add(idx)
+            elif idx in losslarge_area:
+                # Assume that loss in step2 is lower than step1
+                # If the loss in the step2 passed the criteria
+                # removing the idx from losslarge_area
+                losslarge_area.remove(idx)
+
     return losslarge_area
 
 
