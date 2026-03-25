@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 from pathlib import Path, PurePath
+from typing import TYPE_CHECKING
 
 import cv2
 import h5py
@@ -51,6 +52,10 @@ from WormTracer.utils import (
     set_output_path,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -59,7 +64,7 @@ def run(
     parameter_file: str | os.PathLike,
     dataset_path: str | os.PathLike,
     output_directory: os.PathLike | None = None,
-    guide_files: os.PathLike | None = None,
+    guide_files: Sequence[os.PathLike | str] | None = None,
     **kwargs,
 ):
     # execute the whole WormTracer process, kwargs are optional parameter=value pairs

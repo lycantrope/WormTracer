@@ -84,7 +84,7 @@ def show_image(
 
 
 def get_guide_points(
-    guide_files: Sequence[pathlib.Path],
+    guide_files: Sequence[str | os.PathLike],
     TScale_ind: Sequence[int],
     plot_n: int,
     n_frame: int,
@@ -1222,7 +1222,7 @@ def train3(
     with torch.no_grad():
         _, _, model_image = model(batch=T, width=W, height=H)
         # Calculate the loss for display, this part does not require grad.
-        image_loss = torch.mean((model_image - real_image), dim=(1, 2))
+        image_loss = torch.mean((model_image - real_image) ** 2, dim=(1, 2))
 
         smoothness_loss = smoothness_loss_weight * torch.mean(
             (model.theta[:, :-1] - model.theta[:, 1:]) ** 2,
