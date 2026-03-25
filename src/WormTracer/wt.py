@@ -136,10 +136,15 @@ def run(
     if params["SaveProgress"]:
         clear_dir(output_path, output_name + "_progress_image")
 
+    logger.remove()
+    logger.add(sys.stderr, level="INFO")
     logger.add(
-        output_path.joinpath(f"{output_name}.log").open("a", encoding="utf8"),
+        output_path.joinpath(f"{output_name}.log"),
         format="{message}",
         level="DEBUG",
+        delay=False,  # Create the file the instant 'add' is called
+        enqueue=False,  # Don't use background threads (Safer for Colab)
+        catch=True,  # If the file fails to open, Loguru will print why to your cell
     )
 
     # log
