@@ -39,20 +39,23 @@ def set_output_path(
     else:
         output_dir_p = Path(output_directory)
 
-    Path(output_dir_p).mkdir(exist_ok=True)
+    Path(output_dir_p).mkdir(exist_ok=True, parents=True)
 
     dataset_prefix = Path(dataset_path).stem
     # If the output folder with the same name already exists, the series number is incremented by 1 from 001 to 999.
     for i in range(1, 1001):
-        output_path = output_dir_p.joinpath(f"{dataset_prefix}_output_{i:0>3d}")
-        if not output_path.exists():
+        try:
+            output_path = output_dir_p.joinpath(f"{dataset_prefix}_output_{i:0>3d}")
+            output_path.mkdir()
             break
+        except FileExistsError:
+            # If output_path existed we pass
+            pass
     else:
         # If the series number is incremented to 1000, it will throw an error to notify the user clearup the output folder.
         raise FileExistsError(
             "The output folder exists, please delete or move the previous output folder."
         )
-    Path(output_path).mkdir()
     return dataset_prefix, output_path, Path(output_path).stem
 
 
