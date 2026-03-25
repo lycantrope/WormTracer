@@ -56,6 +56,8 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.propagate = False
 
 
 # 2. Setup your specific logger
@@ -113,8 +115,6 @@ def run(
         clear_dir(output_path, output_name + "_progress_image")
 
     # setup logger
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
     fh = logging.FileHandler(
         filename=output_path.joinpath(f"{output_name}.log"),
         mode="w",
