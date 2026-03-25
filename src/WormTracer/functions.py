@@ -186,7 +186,7 @@ def load_image(
     Worm_is_black: bool,
     multi_flag: bool,
     Tscaled_ind: Sequence[int],
-) -> tuple[npt.NDArray, float, float]:
+) -> tuple[npt.NDArray, int, int]:
     """read images and get skeletonized plots"""
     if multi_flag:
         # multipage tiff file
@@ -498,15 +498,18 @@ def make_single_image(
     return pad_image[radius : radius + height, radius : radius + width]
 
 
-def make_image(x, y, x_st, y_st, width, height, params):
+def make_image(
+    x: npt.NDArray,
+    y: npt.NDArray,
+    x_st: int,
+    y_st: int,
+    width: int,
+    height: int,
+    worm_wid: npt.NDArray,
+) -> npt.NDArray:
     """Create Model imaging using precalculated mask"""
     T = x.shape[0]
-    worm_wid = worm_width_all_np(
-        plot_n=params["plot_n"],
-        alpha=params["alpha"],
-        gamma=params["gamma"],
-        delta=params["delta"],
-    )
+
     max_radius = int(np.ceil(worm_wid.max())) + 2
     distance_matrix = make_distance_matrix_np(max_radius)
 
@@ -619,21 +622,6 @@ def get_use_blocks(
     rigid = 0.4 * image_loss_max + 0.6 * image_losses_min
     relaxed = 0.2 * image_loss_max + 0.8 * image_losses_min
     return TrainingBlocks(losses=image_losses, relaxed=relaxed, rigid=rigid)
-
-
-def prepare_for_train(pre_width, simple_area, x, y, params):
-    params["init_alpha"] = torch.tensor(pre_width[simple_area].mean())
-    params["init_gamma"] = torch.tensor(0.0)
-    params["init_delta"] = torch.tensor(0.0)
-    unitLength = np.sqrt(
-        np.median(
-            (
-                (x[simple_area, :-1] - x[simple_area, 1:]) ** 2
-                + (y[simple_area, :-1] - y[simple_area, 1:]) ** 2
-            )
-        )
-    )
-    return unitLength
 
 
 ### training ###
@@ -916,9 +904,9 @@ class Model(torch.nn.Module):
         self.cy = nn.parameter.Parameter(init_cy)
         self.theta = nn.parameter.Parameter(init_theta)
         self.unitLength = nn.parameter.Parameter(init_unitLength)
-        self.alpha = nn.parameter.Parameter(params["init_alpha"])
-        self.gamma = nn.parameter.Parameter(params["init_gamma"])
-        self.delta = nn.parameter.Parameter(params["init_delta"])
+        self.alpha = nn.parameter.Parameter(torch.tensor(params["init_alpha"]))
+        self.gamma = nn.parameter.Parameter(torch.tensor(params["init_gamma"]))
+        self.delta = nn.parameter.Parameter(torch.tensor(params["init_delta"]))
         params["alpha"] = self.alpha
         params["gamma"] = self.gamma
         params["delta"] = self.delta
@@ -1293,22 +1281,51 @@ def make_plot(theta, unitLength, x_cent, y_cent):
     return x, y
 
 
-def loss_compare(loss_pair):
+def loss_compare(loss_pair) -> bool:
     im_select = int(max(loss_pair[0][0]) > max(loss_pair[1][0]))
     con_select = int(max(loss_pair[0][1]) > max(loss_pair[1][1]))
     smo_select = int(max(loss_pair[0][2]) > max(loss_pair[1][2]))
     if im_select + con_select + smo_select == 3:
-        return 1
+        return True
     if im_select + con_select + smo_select == 0:
-        return 0
-    q75, q50, q25 = np.percentile(loss_pair[im_select][0], [75, 50, 25])
-    im_exrate = (max(loss_pair[1 - im_select][0]) - q50) / (q75 - q25)
-    q75, q50, q25 = np.percentile(loss_pair[im_select][1], [75, 50, 25])
-    con_exrate = (max(loss_pair[1 - con_select][1]) - q50) / (q75 - q25)
-    q75, q50, q25 = np.percentile(loss_pair[im_select][2], [75, 50, 25])
-    smo_exrate = (max(loss_pair[1 - smo_select][2]) - q50) / (q75 - q25)
-    exrate_loss = np.argmax(np.array([im_exrate, con_exrate, smo_exrate]))
-    return [im_select, con_select, smo_select][exrate_loss]
+        return False
+
+    if len(loss_pair[im_select][0]) > 2:
+        q75, q50, q25 = np.percentile(loss_pair[im_select][0], [75, 50, 25])
+        im_exrate = (max(loss_pair[1 - im_select][0]) - q50) / (q75 - q25 + 1e-8)
+    else:
+        im_exrate = max(loss_pair[1 - im_select][0]) / max(
+            loss_pair[im_select][0], 1e-8
+        )
+
+    if len(loss_pair[con_select][1]) > 2:
+        q75, q50, q25 = np.percentile(loss_pair[con_select][1], [75, 50, 25])
+        con_exrate = (max(loss_pair[1 - con_select][1]) - q50) / (q75 - q25 + 1e-8)
+    else:
+        con_exrate = max(loss_pair[1 - con_select][1]) / max(
+            loss_pair[con_select][1], 1e-8
+        )
+
+    if len(loss_pair[smo_select][2]) > 2:
+        q75, q50, q25 = np.percentile(loss_pair[smo_select][2], [75, 50, 25])
+        smo_exrate = (max(loss_pair[1 - smo_select][2]) - q50) / (q75 - q25 + 1e-8)
+    else:
+        smo_exrate = max(loss_pair[1 - smo_select][2]) / max(
+            loss_pair[smo_select][2], 1e-8
+        )
+
+    # Choossing most significant loss to do comparison
+    # (boolean, exrate)
+    return bool(
+        max(
+            [
+                (im_select, im_exrate),
+                (con_select, con_exrate),
+                (smo_select, smo_exrate),
+            ],
+            key=lambda x: x[1],
+        )
+    )
 
 
 def show_loss_plot(losses, title=""):

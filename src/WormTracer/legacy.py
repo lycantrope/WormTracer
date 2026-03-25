@@ -7,6 +7,7 @@ import typing
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
+import torch
 from scipy import ndimage as ndi
 from scipy.spatial import distance_matrix
 from skimage import morphology
@@ -30,6 +31,21 @@ def find_theta(theta: npt.NDArray, pretheta: npt.NDArray, plus: int = 1) -> int:
         mse_list.append(mse_0T)
         i += plus
     return len(mse_list)
+
+
+def prepare_for_train(pre_width, simple_area, x, y, params):
+    params["init_alpha"] = torch.tensor(pre_width[simple_area].mean())
+    params["init_gamma"] = torch.tensor(0.0)
+    params["init_delta"] = torch.tensor(0.0)
+    unitLength = np.sqrt(
+        np.median(
+            (
+                (x[simple_area, :-1] - x[simple_area, 1:]) ** 2
+                + (y[simple_area, :-1] - y[simple_area, 1:]) ** 2
+            )
+        )
+    )
+    return unitLength
 
 
 def get_skeleton_networkx(

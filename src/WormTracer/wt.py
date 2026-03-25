@@ -40,6 +40,7 @@ from WormTracer.functions import (
     show_image,
     show_loss_plot,
     train3,
+    worm_width_all_np,
 )
 from WormTracer.utils import (
     calc_cap_span,
@@ -176,11 +177,16 @@ def run(
     )
 
     # make worm model image from plots
-    params["alpha"] = pre_width.min()
-    params["gamma"] = 0.0
-    params["delta"] = 0.0
+
     image_info = {"image_shape": real_image.shape, "device": device}
     cap_span = calc_cap_span(image_info["image_shape"], params["plot_n"])
+
+    worm_wid = worm_width_all_np(
+        plot_n=params["plot_n"],
+        alpha=pre_width.min(),
+        gamma=0.0,
+        delta=0.0,
+    )
     model_image = make_image(
         x,
         y,
@@ -188,7 +194,7 @@ def run(
         y_st,
         width=real_image.shape[2],
         height=real_image.shape[1],
-        params=params,
+        worm_wid=worm_wid,
     )
 
     # get points for trace blocks
