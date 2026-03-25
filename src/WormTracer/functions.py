@@ -7,8 +7,8 @@ import math
 import os
 import pathlib
 import shutil
+import typing
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import cv2
 import h5py
@@ -31,13 +31,12 @@ from scipy.spatial import distance_matrix
 from scipy.special import expit as np_sigmoid
 from skimage import morphology
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from typing import (
         Any,
         Generator,
         Iterator,
         List,
-        NamedTuple,
         Optional,
         Sequence,
         Set,
@@ -676,7 +675,7 @@ def get_image_loss_max(best_fit_image, cx, cy, x_st, y_st, params) -> float:
 
 
 class TrainingBlocks:
-    class Block(NamedTuple):
+    class Block(typing.NamedTuple):
         start: int
         end: int
         idx: int
