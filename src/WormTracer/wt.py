@@ -56,9 +56,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-logger.handlers = []
-logger.propagate = False
 
 
 # 2. Setup your specific logger
@@ -67,6 +64,14 @@ def ensure_clearup(fn):
     def wrapper(*arg, **kwargs):
         tic = datetime.datetime.now()
         backend = matplotlib.get_backend()
+        original_level = logger.getEffectiveLevel()
+        original_handlers = logger.handlers[:]
+        for h in original_handlers:
+            logger.removeHandler(h)
+
+        logger.setLevel(logging.DEBUG)
+        logger.propagate = False
+
         try:
             # Run function
             ret = fn(*arg, **kwargs)
@@ -79,6 +84,11 @@ def ensure_clearup(fn):
             for h in handlers:
                 h.close()
                 logger.removeHandler(h)
+
+            for h in original_handlers:
+                logger.addHandler(h)
+
+            logger.setLevel(original_level)
             try:
                 matplotlib.use(backend)
             except Exception:
