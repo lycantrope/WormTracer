@@ -88,7 +88,7 @@ def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
 ### read, preprocess images and get information ###
 
 
-def set_output_path(dataset_path, output_directory):
+def set_output_path(dataset_path, output_directory) -> tuple[str, Path, str]:
     if not output_directory:
         if Path(dataset_path).is_dir():
             output_directory = Path(dataset_path)

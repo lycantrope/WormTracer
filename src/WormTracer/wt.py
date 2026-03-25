@@ -64,13 +64,6 @@ def ensure_clearup(fn):
     def wrapper(*arg, **kwargs):
         tic = datetime.datetime.now()
         backend = matplotlib.get_backend()
-        original_level = logger.getEffectiveLevel()
-        original_handlers = logger.handlers[:]
-        for h in original_handlers:
-            logger.removeHandler(h)
-
-        logger.setLevel(logging.DEBUG)
-        logger.propagate = False
 
         try:
             # Run function
@@ -84,11 +77,6 @@ def ensure_clearup(fn):
             for h in handlers:
                 h.close()
                 logger.removeHandler(h)
-
-            for h in original_handlers:
-                logger.addHandler(h)
-
-            logger.setLevel(original_level)
             try:
                 matplotlib.use(backend)
             except Exception:
@@ -125,11 +113,12 @@ def run(
         clear_dir(output_path, output_name + "_progress_image")
 
     # setup logger
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
     fh = logging.FileHandler(
         filename=output_path.joinpath(f"{output_name}.log"),
         mode="w",
         encoding="utf8",
-        delay=True,
     )
     fh.setFormatter(logging.Formatter("%(message)s"))
     # This make sure all information was recorded into file
