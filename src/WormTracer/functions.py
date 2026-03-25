@@ -1311,7 +1311,7 @@ def loss_compare(loss_pair) -> bool:
         im_exrate = (max(loss_pair[1 - im_select][0]) - q50) / (q75 - q25 + 1e-8)
     else:
         im_exrate = max(loss_pair[1 - im_select][0]) / max(
-            loss_pair[im_select][0], 1e-8
+            max(loss_pair[im_select][0]), 1e-8
         )
 
     if len(loss_pair[con_select][1]) > 2:
@@ -1319,7 +1319,7 @@ def loss_compare(loss_pair) -> bool:
         con_exrate = (max(loss_pair[1 - con_select][1]) - q50) / (q75 - q25 + 1e-8)
     else:
         con_exrate = max(loss_pair[1 - con_select][1]) / max(
-            loss_pair[con_select][1], 1e-8
+            max(loss_pair[con_select][1]), 1e-8
         )
 
     if len(loss_pair[smo_select][2]) > 2:
@@ -1327,7 +1327,7 @@ def loss_compare(loss_pair) -> bool:
         smo_exrate = (max(loss_pair[1 - smo_select][2]) - q50) / (q75 - q25 + 1e-8)
     else:
         smo_exrate = max(loss_pair[1 - smo_select][2]) / max(
-            loss_pair[smo_select][2], 1e-8
+            max(loss_pair[smo_select][2]), 1e-8
         )
 
     # Choossing most significant loss to do comparison
