@@ -60,9 +60,13 @@ logger = logging.getLogger("__name__")
 def ensure_clearup(fn):
     @functools.wraps(fn)
     def wrapper(*arg, **kwargs):
+        tic = datetime.datetime.now()
         backend = matplotlib.get_backend()
+        original_level = logger.getEffectiveLevel()
+
+        logger.setLevel(logging.DEBUG)
         try:
-            tic = datetime.datetime.now()
+            # Run function
             ret = fn(*arg, **kwargs)
             toc = datetime.datetime.now()
             elapsed_time = toc - tic
@@ -72,6 +76,8 @@ def ensure_clearup(fn):
             for h in logger.handlers:
                 h.close()
                 logger.removeHandler(h)
+
+            logger.setLevel(original_level)
             try:
                 matplotlib.use(backend)
             except Exception:
