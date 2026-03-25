@@ -26,6 +26,7 @@ from WormTracer.functions import (
     flip_check,
     get_guide_points,
     get_image_loss_max,
+    get_pixel_matrix,
     get_property,
     get_use_blocks,
     judge_head_amplitude,
@@ -40,7 +41,6 @@ from WormTracer.functions import (
     show_image,
     show_loss_plot,
     train3,
-    worm_width_all_np,
 )
 from WormTracer.utils import (
     calc_cap_span,
@@ -181,20 +181,18 @@ def run(
     image_info = {"image_shape": real_image.shape, "device": device}
     cap_span = calc_cap_span(image_info["image_shape"], params["plot_n"])
 
-    worm_wid = worm_width_all_np(
+    pixel_matrix = get_pixel_matrix(
         plot_n=params["plot_n"],
         alpha=pre_width.min(),
         gamma=0.0,
         delta=0.0,
     )
     model_image = make_image(
-        x,
-        y,
-        x_st,
-        y_st,
+        x - x_st,
+        y - y_st,
         width=real_image.shape[2],
         height=real_image.shape[1],
-        worm_wid=worm_wid,
+        pixel_matrix=pixel_matrix,
     )
 
     # get points for trace blocks
@@ -205,11 +203,9 @@ def run(
 
     image_loss_max = get_image_loss_max(
         best_fit_image=real_image[best_frame_idx],
-        cx=x[best_frame_idx, 0],
-        cy=y[best_frame_idx, 0],
-        x_st=x_st,
-        y_st=y_st,
-        params=params,
+        cx=x[best_frame_idx, 0] - x_st,
+        cy=y[best_frame_idx, 0] - y_st,
+        pixel_matrix=pixel_matrix,
     )
 
     if __debug__:

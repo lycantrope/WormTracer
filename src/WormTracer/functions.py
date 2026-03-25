@@ -487,7 +487,7 @@ def make_single_image(
     min_val = pixel_matrix.min()
 
     pad_image = np.full(
-        (height + diameter, width + diameter),
+        (height + radius * 2, width + radius * 2),
         fill_value=min_val,
     )
     for i, j, pix in zip(cent_x, cent_y, pixel_matrix):
@@ -498,30 +498,43 @@ def make_single_image(
     return pad_image[radius : radius + height, radius : radius + width]
 
 
-def make_image(
-    x: npt.NDArray,
-    y: npt.NDArray,
-    x_st: int,
-    y_st: int,
-    width: int,
-    height: int,
-    worm_wid: npt.NDArray,
-) -> npt.NDArray:
-    """Create Model imaging using precalculated mask"""
-    T = x.shape[0]
+def get_pixel_matrix(
+    *,
+    plot_n: int,
+    alpha: float,
+    gamma: float,
+    delta: float,
+):
 
+    worm_wid = worm_width_all_np(
+        plot_n=plot_n,
+        alpha=alpha,
+        gamma=gamma,
+        delta=delta,
+    )
     max_radius = int(np.ceil(worm_wid.max())) + 2
     distance_matrix = make_distance_matrix_np(max_radius)
 
     distance_matrix_3d = worm_wid[:, None, None] - distance_matrix[None, :, :]
-    pixel_matrix = pixel_value_from_dist_max_np(distance_matrix_3d)
+    return pixel_value_from_dist_max_np(distance_matrix_3d)
+
+
+def make_image(
+    x: npt.NDArray,
+    y: npt.NDArray,
+    width: int,
+    height: int,
+    pixel_matrix: npt.NDArray,
+) -> npt.NDArray:
+    """Create Model imaging using precalculated mask"""
+    T = x.shape[0]
 
     image = np.zeros((T, height, width))
 
     for i in range(T):
         image[i, :, :] = make_single_image(
-            x[i] - x_st,
-            y[i] - y_st,
+            x[i],
+            y[i],
             width=width,
             height=height,
             pixel_matrix=pixel_matrix,
@@ -530,16 +543,19 @@ def make_image(
     return image
 
 
-def get_image_loss_max(best_fit_image, cx, cy, x_st, y_st, params) -> float:
+def get_image_loss_max(
+    best_fit_image: npt.NDArray,
+    cx: float,
+    cy: float,
+    pixel_matrix: npt.NDArray,
+) -> float:
     """Create bad image and get bad image_loss to judge complex area."""
     # Create a straigthen line to make a bad image that maximize the loss.
-    x0 = np.ones(params["plot_n"]) * cx
-    y0 = np.ones(params["plot_n"]) * cy
-    x0 = x0.reshape(1, -1)
-    y0 = y0.reshape(1, -1)
+    plot_n = pixel_matrix.shape[0]
+    x0 = np.ones((plot_n)) * cx
+    y0 = np.ones((plot_n)) * cy
     height, width = best_fit_image.shape
-    im0 = make_image(x0, y0, x_st, y_st, width, height, params)
-    im0 = im0[0]
+    im0 = make_single_image(x0, y0, width, height, pixel_matrix)
     image_loss_max = float(np.mean((best_fit_image - im0) ** 2))
     return image_loss_max
 
