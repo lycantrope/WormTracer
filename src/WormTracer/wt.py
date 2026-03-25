@@ -745,6 +745,7 @@ center loss : {np.mean(losses_all[(3, i)][4])}
         fmt=fmt,
         header=header,
         delimiter=",",
+        comments="",
     )
 
     # cancel reduction
