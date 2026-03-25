@@ -3,7 +3,6 @@ from __future__ import annotations
 import collections
 import glob
 import itertools
-import logging
 import math
 import os
 import pathlib
@@ -21,6 +20,7 @@ import tifffile
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from loguru import logger
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 from scipy import ndimage as ndi
@@ -45,9 +45,6 @@ if TYPE_CHECKING:
     )
 
     import numpy.typing as npt
-
-
-logger = logging.getLogger()
 
 
 def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
