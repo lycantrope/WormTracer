@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import datetime
-import functools
+import logging
 import os
 import sys
 from pathlib import Path, PurePath
-from typing import TYPE_CHECKING
 
 import cv2
 import h5py
@@ -14,20 +13,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tifffile
 import torch
-from loguru import logger
 from matplotlib import animation, rc
 from ruamel.yaml import YAML
 
 from WormTracer import __version__
 from WormTracer.functions import (
     Model,
-    calc_cap_span,
     calc_xy_and_prewidth,
     cancel_reduction,
-    clear_dir,
     find_losslarge_area,
     flip_check,
-    get_filenames,
     get_guide_points,
     get_image_loss_max,
     get_property,
@@ -37,54 +32,34 @@ from WormTracer.functions import (
     load_image,
     loss_compare,
     make_image,
-    make_plot,
     make_theta_cand,
     make_theta_from_xy,
-    remove_progress,
-    save_centerline_to_roi,
-    save_params_into_commented_yaml,
     save_progress,
     set_init_xy,
-    set_output_path,
     show_image,
     show_loss_plot,
     train3,
 )
+from WormTracer.utils import (
+    calc_cap_span,
+    clear_dir,
+    ensure_clearup,
+    get_filenames,
+    remove_progress,
+    save_centerline_to_roi,
+    save_params_into_commented_yaml,
+    set_output_path,
+)
 
-if TYPE_CHECKING:
-    from typing import Optional
-
-
-# 2. Setup your specific logger
-def ensure_clearup(fn):
-    @functools.wraps(fn)
-    def wrapper(*arg, **kwargs):
-        tic = datetime.datetime.now()
-        backend = matplotlib.get_backend()
-        try:
-            # Run function
-            ret = fn(*arg, **kwargs)
-            toc = datetime.datetime.now()
-            elapsed_time = toc - tic
-            logger.info(f"Elapse time: {elapsed_time.total_seconds():.1f} (sec)")
-            return ret
-        finally:
-            logger.remove()
-            logger.add(sys.stderr, level="INFO")
-            try:
-                matplotlib.use(backend)
-            except Exception:
-                pass
-
-    return wrapper
+logger = logging.getLogger(__name__)
 
 
-@ensure_clearup
+@ensure_clearup(logger)
 def run(
-    parameter_file: os.PathLike,
-    dataset_path: os.PathLike,
-    output_directory: Optional[os.PathLike] = None,
-    guide_files: Optional[os.PathLike] = None,
+    parameter_file: str | os.PathLike,
+    dataset_path: str | os.PathLike,
+    output_directory: os.PathLike | None = None,
+    guide_files: os.PathLike | None = None,
     **kwargs,
 ):
     # execute the whole WormTracer process, kwargs are optional parameter=value pairs
@@ -106,16 +81,16 @@ def run(
     if params["SaveProgress"]:
         clear_dir(output_path, output_name + "_progress_image")
 
-    logger.remove()
-    logger.add(sys.stderr, level="INFO")
-    logger.add(
+    fh = logging.FileHandler(
         output_path.joinpath(f"{output_name}.log"),
-        format="{message}",
-        level="DEBUG",
-        delay=False,  # Create the file the instant 'add' is called
-        enqueue=False,  # Don't use background threads (Safer for Colab)
-        catch=True,  # If the file fails to open, Loguru will print why to your cell
+        mode="w",
+        encoding="utf8",
+        delay=True,
     )
+
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(logging.Formatter(fmt="%(message)s"))
+    logger.addHandler(fh)
 
     # log
     logger.info(f"Code executed at {datetime.datetime.now()}")

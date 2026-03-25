@@ -24,7 +24,6 @@ dependencies = [
     "torchvision",
     "h5py",
     "ruamel-yaml",
-    "loguru",
 ]
 
 [project.scripts]

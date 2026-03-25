@@ -1,28 +1,22 @@
 from __future__ import annotations
 
 import collections
-import glob
 import itertools
+import logging
 import math
 import os
 import pathlib
-import shutil
 import typing
 from pathlib import Path
 
 import cv2
 import h5py
 import matplotlib.pyplot as plt
-import networkx as nx
 import numpy as np
-import roifile
 import tifffile
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from loguru import logger
-from ruamel.yaml import YAML
-from ruamel.yaml.comments import CommentedMap
 from scipy import ndimage as ndi
 from scipy.interpolate import CubicSpline
 from scipy.sparse import csr_matrix
@@ -35,18 +29,26 @@ if typing.TYPE_CHECKING:
     from typing import (
         Any,
         Generator,
-        Iterator,
-        List,
         Optional,
         Sequence,
         Set,
-        Tuple,
     )
 
     import numpy.typing as npt
 
 
-def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
+logger = logging.getLogger(__name__)
+
+
+def show_image(
+    image: npt.NDArray | torch.Tensor,
+    num_t: int = 5,
+    title: str = "",
+    x: None | npt.NDArray = None,
+    y: None | npt.NDArray = None,
+    x2: None | npt.NDArray = None,
+    y2: None | npt.NDArray = None,
+):
     if not __debug__:
         return
 
@@ -81,83 +83,12 @@ def show_image(image, num_t=5, title="", x=0, y=0, x2=0, y2=0):
     plt.close(fig)
 
 
-### read, preprocess images and get information ###
-
-
-def set_output_path(dataset_path, output_directory) -> tuple[str, Path, str]:
-    if not output_directory:
-        if Path(dataset_path).is_dir():
-            output_directory = Path(dataset_path)
-        else:
-            output_directory = Path(dataset_path).parent
-    else:
-        output_directory = Path(output_directory)
-    Path(output_directory).mkdir(exist_ok=True)
-
-    dataset_prefix = Path(dataset_path).stem
-    output_path = output_directory.joinpath(f"{dataset_prefix}_output_001")
-    # If the output folder with the same name already exists, the series number is incremented by 1 from 001 to 999.
-    for i in range(2, 1001):
-        if not output_path.is_dir():
-            break
-        output_path = output_directory.joinpath(f"{dataset_prefix}_output_{i:0>3d}")
-    else:
-        # If the series number is incremented to 1000, it will throw an error to notify the user clearup the output folder.
-        raise FileExistsError(
-            "The output folder exists, please delete or move the previous output folder."
-        )
-    Path(output_path).mkdir()
-    return dataset_prefix, output_path, Path(output_path).stem
-
-
-def get_filenames(dataset_path: os.PathLike) -> Sequence[os.PathLike]:
-    extensions_available = {
-        ".bmp",
-        ".dib",
-        ".pbm",
-        ".pgm",
-        ".ppm",
-        ".pnm",
-        ".ras",
-        ".png",
-        ".tiff",
-        ".tif",
-        ".jp2",
-        ".jpeg",
-        ".jpg",
-        ".jpe",
-    }
-    dataset_path = Path(os.fspath(dataset_path))
-    if dataset_path.is_file() and dataset_path.suffix in extensions_available:
-        return [os.fspath(dataset_path)]
-
-    ext_files_map = collections.defaultdict(list)
-    for name in dataset_path.glob("*.*"):
-        if name.suffix in extensions_available:
-            ext_files_map[name.suffix].append(os.fspath(name))
-
-    if not ext_files_map:
-        msg = "No extensions were found for openCV available. Please check if image files with the following extensions exist in the specified path"
-        logger.error(msg)
-        logger.error(extensions_available)
-        raise FileNotFoundError(dataset_path)
-
-    ext, files = max(ext_files_map.items(), key=lambda x: len(x[1]))
-
-    if len(ext_files_map) > 1:
-        logger.error("We found several extensions available in openCV.")
-        logger.error(
-            f"In this case, we loaded a {ext} file, but if you want to load a file with a different extension, delete the unrelated file."
-        )
-    return sorted(files)
-
-
 def get_guide_points(
     guide_files: Sequence[pathlib.Path],
     TScale_ind: Sequence[int],
     plot_n: int,
     n_frame: int,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
     guide_file_ext = (".csv", ".h5")
     guide_file_map = collections.defaultdict(list)
 
@@ -204,15 +135,17 @@ def get_guide_points(
     return guide_x, guide_y, guide_idx
 
 
-def get_property(filenames, rescale) -> Tuple[Sequence[int], bool, bool, int]:
-    if filenames[0].lower().endswith((".tif", ".tiff")):
+def get_property(
+    filenames: Sequence[Path], rescale: float
+) -> tuple[Sequence[int], bool, bool, int]:
+    if filenames[0].name.lower().endswith((".tif", ".tiff")):
         try:
             ims = tifffile.memmap(filenames[0], mode="r")
         except ValueError as e:
             err_msg = "This file is not a valid ImageJ format. Please save your Tiff file using ImageJ: {}"
             raise ValueError(err_msg.format(e))
     else:
-        _, ims = cv2.imreadmulti(filename=filenames[0], mats=[], flags=0)
+        _, ims = cv2.imreadmulti(filename=os.fspath(filenames[0]), mats=[], flags=0)
         ims = np.asarray(ims)
 
     im = np.asarray(ims[0])
@@ -226,7 +159,7 @@ def get_property(filenames, rescale) -> Tuple[Sequence[int], bool, bool, int]:
             fx=rescale,
             interpolation=cv2.INTER_NEAREST,
         )
-    white_pixel = (
+    white_pixel = int(
         np.sum(im[0, :-1]) // 255
         + np.sum(im[-1, 1:]) // 255
         + np.sum(im[1:, 0]) // 255
@@ -240,24 +173,24 @@ def get_property(filenames, rescale) -> Tuple[Sequence[int], bool, bool, int]:
 
 
 def read_serial_images(
-    filenames,
-    Tscaled_ind: List[int],
+    filenames: Sequence[Path],
+    Tscaled_ind: Sequence[int],
 ):
     for ind in Tscaled_ind:
-        yield cv2.imread(filenames[ind], cv2.IMREAD_GRAYSCALE)
+        yield cv2.imread(os.fspath(filenames[ind]), cv2.IMREAD_GRAYSCALE)
 
 
 def load_image(
-    filenames,
-    rescale,
-    Worm_is_black,
-    multi_flag,
-    Tscaled_ind,
-) -> Tuple[np.ndarray, float, float]:
+    filenames: Sequence[Path],
+    rescale: float,
+    Worm_is_black: bool,
+    multi_flag: bool,
+    Tscaled_ind: Sequence[int],
+) -> tuple[npt.NDArray, float, float]:
     """read images and get skeletonized plots"""
     if multi_flag:
         # multipage tiff file
-        if filenames[0].lower().endswith((".tif", ".tiff")):
+        if filenames[0].name.lower().endswith((".tif", ".tiff")):
             try:
                 ims = tifffile.memmap(filenames[0], mode="r")
             except ValueError as e:
@@ -265,7 +198,7 @@ def load_image(
                 raise ValueError(err_msg.format(e))
         else:
             # Unknown Data Type
-            _, ims = cv2.imreadmulti(filenames[0], flags=0)
+            _, ims = cv2.imreadmulti(os.fspath(filenames[0]), flags=0)
         # Use generator instead of read image
         ims_gen = (ims[ind] for ind in Tscaled_ind)
     else:
@@ -273,7 +206,7 @@ def load_image(
             filenames, Tscaled_ind
         )  # serial-numbered image files
 
-    def preprocess(im):
+    def preprocess(im: npt.NDArray) -> npt.NDArray:
         im = im.astype("uint8")
         if Worm_is_black:
             im = cv2.bitwise_not(im)
@@ -297,11 +230,11 @@ def load_image(
 
 
 def calc_xy_and_prewidth(
-    imagestack: np.ndarray,
+    imagestack: npt.NDArray,
     plot_n: int,
     x_st: float,
     y_st: float,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, float]:
     """read images and get skeletonized plots"""
     T = imagestack.shape[0]
     assert T > 0, "Input is empty"
@@ -344,7 +277,7 @@ def calc_xy_and_prewidth(
     return x, y, pre_width, unitLength
 
 
-def get_skeleton(im: np.ndarray, plot_n: int) -> tuple[np.ndarray, np.ndarray]:
+def get_skeleton(im: npt.NDArray, plot_n: int) -> tuple[npt.NDArray, npt.NDArray]:
     """skeletonize image and get splined plots"""
 
     # skeletonize image
@@ -398,50 +331,7 @@ def get_skeleton(im: np.ndarray, plot_n: int) -> tuple[np.ndarray, np.ndarray]:
     return x_splined, y_splined
 
 
-def get_skeleton_networkx(im: np.ndarray, plot_n: int) -> Tuple[np.ndarray, np.ndarray]:
-    """skeletonize image and get splined plots
-    2024/10/01 Speed is same as previous implemenetation
-    """
-    # skeletonize image
-    im_filled = ndi.binary_fill_holes(im)
-    assert im_filled is not None, "Err after binary_fill_holes"
-    im_skeleton = morphology.skeletonize(im_filled)
-    point_list = np.argwhere(im_skeleton == 1)
-
-    if len(point_list) == 1:
-        x_splined = np.ones(plot_n) * point_list[0][1]
-        y_splined = np.ones(plot_n) * point_list[0][0]
-        return x_splined, y_splined
-
-    # make distance matrix
-    adj_mtx = distance_matrix(
-        point_list,
-        point_list,
-    )
-    adj_mtx[adj_mtx > 1.5] = 0  # delete distance between isolated points
-
-    G = nx.from_numpy_array(adj_mtx)
-    assert not isinstance(G.degree, int), "G.degree must be a list here"
-    # Obtain end from 1 degree node.
-    ends = [node for node, deg in G.degree if deg == 1]
-    # Calculate the shortest path of all ends pairing
-    pairs = itertools.combinations(ends, 2)
-    paths = [nx.dijkstra_path(G, st, end, weight="weight") for st, end in pairs]
-    # Obtain the maximum distance
-    skel_idx = max(paths, key=lambda x: adj_mtx[x[1:], x[:-1]].sum())
-    arclen = np.zeros_like(skel_idx, dtype="f8")
-    arclen[1:] = np.cumsum(adj_mtx[skel_idx[1:], skel_idx[:-1]])
-    plots = point_list[skel_idx]
-
-    # Interpolation
-    div_linespace = np.linspace(0, np.max(arclen), plot_n)
-    x_splined = np.interp(div_linespace, arclen, plots[:, 1])
-    y_splined = np.interp(div_linespace, arclen, plots[:, 0])
-
-    return x_splined, y_splined
-
-
-def get_width(im: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+def get_width(im: npt.NDArray, x: npt.NDArray, y: npt.NDArray) -> npt.NDArray:
     """Get width of the object by measure distance of centerline to the object's surface."""
     im_filled = ndi.binary_fill_holes(im)
     assert im_filled is not None, "Err after binary_fill_holes"
@@ -456,7 +346,7 @@ def get_width(im: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
     return wid
 
 
-def flip_check(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def flip_check(x: npt.NDArray, y: npt.NDArray) -> tuple[npt.NDArray, npt.NDArray]:
     """Check if plots of head and tail is flipping."""
     assert x.shape == y.shape, "The coordinates of x and y have different shape."
     gap_headtail = np.mean(
@@ -474,7 +364,7 @@ def flip_check(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     return x, y
 
 
-def trim_image(image, *, padding: int = 5) -> tuple[np.ndarray, int, int]:
+def trim_image(image: npt.NDArray, *, padding: int = 5) -> tuple[npt.NDArray, int, int]:
     """Cut images to minimum size."""
     assert image.ndim in (2, 3), "Only support 2D (Y, X) or 3D (Z, Y, X)"
     thresh = image > 0
@@ -498,7 +388,7 @@ def trim_image(image, *, padding: int = 5) -> tuple[np.ndarray, int, int]:
         return image[:, y1:y2, x1:x2], y1, x1
 
 
-def make_theta_from_xy(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+def make_theta_from_xy(x: npt.NDArray, y: npt.NDArray) -> npt.NDArray:
     assert x.ndim == 2, "x should be 2D ndarray"
     T, plot_n = x.shape
     n_segs = plot_n - 1
@@ -532,34 +422,11 @@ def make_theta_from_xy(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 ### prepare for training ###
 
 
-def calc_cap_span(image_shape: Sequence[int], plot_n: int) -> int:
-    """Calculate maximum span of trainig in terms of CUDA memory."""
-    GB = float(1024**3)
-
-    T = image_shape[0]
-    # dim_size = d0 x d1 x d2 x ... x dn
-    dim_size = np.prod(image_shape[1:]).item()
-
-    # bytes used per stack under float32 and multiple by 8 for some margin case.
-    mem_used_per_stack = float(8 * 4 * dim_size * (plot_n - 1)) / GB
-    device = torch.accelerator.current_accelerator()
-    try:
-        with torch.cuda.device(device=device):
-            free_memory, total_memory = torch.cuda.mem_get_info()  # bytes
-            free_memory_gb = free_memory / GB  # bytes to GB
-        # GB
-        # Since the continuity and center loss require two consecutive frames, the cap_span must be greater than 1.
-        cap_span = max(int(free_memory_gb / mem_used_per_stack), 5)
-    except Exception as _:
-        cap_span = T
-    return cap_span
-
-
 def pixel_value_from_dist_max_np(
-    max_dist: np.ndarray,
+    max_dist: npt.NDArray,
     contrast: float = 1.2,
     sharpness: float = 2.0,
-) -> np.ndarray:
+) -> npt.NDArray:
     """Get pixel value when distance from midline is given."""
     return 255 * (contrast * (np_sigmoid(max_dist * sharpness) - 0.5) + 0.5)
 
@@ -570,7 +437,7 @@ def worm_width_all_np(
     alpha: float,
     gamma: float,
     delta: float,
-) -> np.ndarray:
+) -> npt.NDArray:
     """Get all worm widths when segment number is given."""
     # w_i  = α√(1-|h|^2γ (1+2γδ-2γδ|h|))
     worm_x = np.linspace(-1.0, 1.0, plot_n)  # h
@@ -585,7 +452,7 @@ def worm_width_all_np(
     return width
 
 
-def make_distance_matrix_np(radius: int) -> np.ndarray:
+def make_distance_matrix_np(radius: int) -> npt.NDArray:
     diameter = radius * 2 + 1
     delta = (np.arange(diameter) - radius) ** 2
     distance_matrix = np.sqrt(delta[None, :] + delta[:, None])
@@ -605,12 +472,12 @@ def make_distance_matrix(radius: int) -> torch.Tensor:
 
 
 def make_single_image(
-    x: np.ndarray,
-    y: np.ndarray,
+    x: npt.NDArray,
+    y: npt.NDArray,
     width: int,
     height: int,
-    pixel_matrix: np.ndarray,
-) -> np.ndarray:
+    pixel_matrix: npt.NDArray,
+) -> npt.NDArray:
     cent_x = x.astype(np.int32)
     cent_y = y.astype(np.int32)
 
@@ -688,7 +555,7 @@ class TrainingBlocks:
         def __repr__(self) -> str:
             return f"({self.start:d}, {self.end:d}, {'complex' if self.is_complex else 'simple'})"
 
-    def __init__(self, losses: np.ndarray, relaxed: float, rigid: float):
+    def __init__(self, losses: npt.NDArray, relaxed: float, rigid: float):
         assert rigid > relaxed, "rigid margin must be greater than relaxed margin"
 
         # Use relaxed criteria to separate the blocks
@@ -741,7 +608,7 @@ class TrainingBlocks:
 
 
 def get_use_blocks(
-    image_losses: np.ndarray,
+    image_losses: npt.NDArray,
     image_loss_max: float,
 ) -> TrainingBlocks:
     """
@@ -752,165 +619,6 @@ def get_use_blocks(
     rigid = 0.4 * image_loss_max + 0.6 * image_losses_min
     relaxed = 0.2 * image_loss_max + 0.8 * image_losses_min
     return TrainingBlocks(losses=image_losses, relaxed=relaxed, rigid=rigid)
-
-
-def get_use_points(
-    image_losses, image_loss_max, cap_span, x, y, plot_n, show_plot=True
-):
-    """Judge flames complex or not and get span for training."""
-    T = image_losses.shape[0]
-    # find complex area
-    borderline = 0.4 * image_loss_max + 0.6 * np.min(image_losses)
-    under_borderline = 0.2 * image_loss_max + 0.8 * np.min(image_losses)
-    nont_ini, nont_end, simple_area = find_nont_area(
-        image_losses, borderline, under_borderline
-    )
-
-    try:
-        if nont_ini[0] > nont_end[0]:
-            nont_end = nont_end[1:]
-            logger.warning(
-                "Warning! The initial frame of images is difficult to skeletonize."
-            )
-            logger.warning("Beginning of Results will be incorrect.")
-        if nont_ini[-1] > nont_end[-1]:
-            logger.warning(
-                "Warning! The end frame of images is difficult to skeletonize."
-            )
-            logger.warning("End of Results will be incorrect.")
-            nont_ini = nont_ini[:-1]
-
-        # expand complex area
-        nont_span = nont_end - nont_ini
-        target_area = np.full(nont_ini.shape[0], True)
-        while sum(target_area) > 0:
-            temp_ini = nont_ini.copy()
-            temp_end = nont_end.copy()
-            temp_ini[target_area] = nont_ini[target_area] - 1
-            temp_end[target_area] = nont_end[target_area] + 1
-            enough_expanded = check_enough_expanded(nont_span, temp_ini, temp_end)
-            collision = check_collision(temp_ini, temp_end, T)
-            target_area = target_area * enough_expanded * collision
-            nont_ini[target_area] = nont_ini[target_area] - 1
-            nont_end[target_area] = nont_end[target_area] + 1
-
-        # set use_points
-        nont_flag = []
-        max_span = np.max(nont_end - nont_ini)
-        nont_end = np.append(0, nont_end + 1)
-        nont_ini = np.append(nont_ini, T - 1)
-        num_span = (nont_ini - nont_end) // max_span
-        one_span = (nont_end == nont_ini).astype(np.int32)
-        use_points = np.array([0])
-        for i in range(num_span.shape[0]):
-            use_points = np.append(
-                use_points,
-                np.linspace(
-                    nont_end[i], nont_ini[i], num_span[i] + 2 - one_span[i], dtype=int
-                ),
-            )
-            nont_flag += [0] * (num_span[i] + 1 - one_span[i])
-            nont_flag.append(1)
-        use_points = use_points[1:]
-
-        # check memory
-        if max_span > cap_span:
-            unitL = np.median(
-                np.sqrt(
-                    (
-                        (x[simple_area, :-1] - x[simple_area, 1:]) ** 2
-                        + (y[simple_area, :-1] - y[simple_area, 1:]) ** 2
-                    )
-                )
-            )
-            rescale_rec = max(np.sqrt(cap_span / max_span), 200 / unitL / plot_n)
-            Tscale_rec = 1
-            if int(max_span * rescale_rec**2) > cap_span:
-                Tscale_rec = max(max_span // 200, 1)
-                if int((max_span * rescale_rec**2) / Tscale_rec) > cap_span:
-                    rescale_rec = max(
-                        np.sqrt(Tscale_rec * cap_span / max_span), 120 / unitL / plot_n
-                    )
-                    if int((max_span * rescale_rec**2) / Tscale_rec) > cap_span:
-                        Tscale_rec = max(max_span // 150, 1)
-            if int((max_span * rescale_rec**2) / Tscale_rec) > cap_span:
-                rescale_rec = np.sqrt(cap_span / max_span)
-                logger.warning(
-                    """
-        Warning! This task uses large memory.
-        If CUDA run out of memory, please go back to setting hyperparameters and set rescale as {:.2f}, Tscale as {}.
-        The result may be not precise enough.
-        """.format(rescale_rec, Tscale_rec)
-                )
-            else:
-                logger.warning(
-                    """
-        Warning! This task uses large memory.
-        If CUDA run out of memory, please go back to setting hyperparameters and set rescale as {:.2f}, Tscale as {}.
-        """.format(rescale_rec, Tscale_rec)
-                )
-
-    except IndexError:
-        logger.warning("All frames seem to be simple; easy to skeletonize.")
-        use_points = np.linspace(0, T - 1, (T - 1) // (cap_span + 1) + 2, dtype=int)
-        nont_flag = [0] * (use_points.shape[0])
-
-    if __debug__ and show_plot:
-        plt.plot(image_losses)
-        plt.plot([borderline] * T)
-        plt.plot([under_borderline] * T)
-        plt.plot([image_loss_max] * T)
-        for i in range(len(use_points)):
-            plt.plot(
-                [use_points[i]] * 2,
-                [
-                    np.min(image_losses),
-                    0.1 * image_loss_max + 0.9 * np.min(image_losses),
-                ],
-                c="r",
-            )
-        plt.xlabel("frames", fontsize=20)
-        plt.ylabel("image loss", fontsize=20)
-        # plt.show()
-
-    return use_points, nont_flag[:-1], simple_area
-
-
-def find_nont_area(image_losses, borderline, under_borderline):
-    complex_area = (image_losses > borderline).astype(np.int32)
-    under_complex_area = (image_losses > under_borderline).astype(np.int32)
-    complex_area_check = complex_area + under_complex_area
-    checkpoint = None
-    continent = 0
-    for i in range(complex_area_check.shape[0]):
-        if complex_area_check[i] == 1:
-            if continent == 0:
-                checkpoint = i
-                continent = 1
-            if continent == 2:
-                complex_area[i] = 1
-        if complex_area_check[i] == 0:
-            checkpoint = None
-            continent = 0
-        if complex_area_check[i] == 2:
-            if continent == 1:
-                complex_area[checkpoint:i] = 1
-            continent = 2
-    nont_ini = np.where(complex_area[1:] - complex_area[:-1] == 1)[0]
-    nont_end = np.where(complex_area[1:] - complex_area[:-1] == -1)[0]
-    return nont_ini, nont_end, 1 - complex_area
-
-
-def check_enough_expanded(nont_span, temp_ini, temp_end, enough_rate=2):
-    expand_amount = temp_end - temp_ini - nont_span
-    return expand_amount < nont_span // enough_rate
-
-
-def check_collision(temp_ini, temp_end, T):
-    nont_end = np.append(0, temp_end + 1)
-    nont_ini = np.append(temp_ini, T - 1)
-    gap_span_safe = (nont_ini - nont_end) >= 0
-    return gap_span_safe[1:] & gap_span_safe[:-1]
 
 
 def prepare_for_train(pre_width, simple_area, x, y, params):
@@ -929,7 +637,10 @@ def prepare_for_train(pre_width, simple_area, x, y, params):
 
 
 ### training ###
-def make_progress_image(image: npt.ArrayLike, num_t=20):
+def make_progress_image(
+    image: np.ndarray | torch.Tensor,
+    num_t: int = 20,
+) -> np.ndarray:
     """Make one large image with images laid out on it."""
     if torch.is_tensor(image):
         image = image.clone().detach().cpu().numpy()
@@ -940,13 +651,13 @@ def make_progress_image(image: npt.ArrayLike, num_t=20):
     n_chunk = (subset.shape[0] + 1) // 5
     progress_image = np.zeros((H * n_chunk, W * 5))
     for i, chunk in enumerate(np.array_split(subset, n_chunk, axis=0)):
-        merge = np.hstack(chunk)
+        merge = np.hstack(iter(chunk))
         progress_image[i * H : (i + 1) * H, : merge.shape[1]] = merge
     return progress_image
 
 
 def save_progress(
-    image: torch.Tensor | np.ndarray,
+    image: torch.Tensor | npt.NDArray,
     output_path: os.PathLike,
     output_name: str,
     start: int,
@@ -963,13 +674,7 @@ def save_progress(
     cv2.imwrite(filename, progress_image)
 
 
-def remove_progress(output_pathh, filename):
-    remove_files = glob.glob(os.path.join(output_pathh, "progress_image", filename))
-    for f in remove_files:
-        os.remove(f)
-
-
-def get_center(binimg: torch.Tensor | np.ndarray):
+def get_center(binimg: torch.Tensor | npt.NDArray):
     """Calculate center of images."""
     if torch.is_tensor(binimg):
         binimg = binimg.clone().detach().cpu().numpy()
@@ -980,7 +685,7 @@ def get_center(binimg: torch.Tensor | np.ndarray):
 
 
 def set_init_xy(
-    imstack: torch.Tensor | np.ndarray,
+    imstack: torch.Tensor | npt.NDArray,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Set init center plots for training."""
     assert imstack.ndim == 3, "real_image is not 3-d array (T, H, W)"
@@ -1004,21 +709,7 @@ def set_init_xy(
     )
 
 
-def find_theta(theta: np.ndarray, pretheta: np.ndarray, plus: int = 1) -> int:
-    """Find min MSE theta by theta(t=0)"""
-    i = plus
-    mse_list = [np.sum((theta[0, :] - pretheta) ** 2)]
-    while True:
-        theta_cand = pretheta + i * 2 * np.pi
-        mse_0T = np.sum((theta[0, :] - theta_cand) ** 2)
-        if mse_list[-1] < mse_0T:
-            break
-        mse_list.append(mse_0T)
-        i += plus
-    return len(mse_list)
-
-
-def find_minimal_winding_number(theta1: np.ndarray, theta2: np.ndarray) -> int:
+def find_minimal_winding_number(theta1: npt.NDArray, theta2: npt.NDArray) -> int:
     # 1. Find the average numerical difference across all elements.
     avg_diff = np.mean(theta1 - theta2)
     # 2. Convert the average difference into a fractional number of 2*pi cycles.
@@ -1028,8 +719,8 @@ def find_minimal_winding_number(theta1: np.ndarray, theta2: np.ndarray) -> int:
 
 
 def make_theta_cand(
-    theta_begin: np.ndarray, theta_end: np.ndarray
-) -> Tuple[Tuple[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]]:
+    theta_begin: npt.NDArray, theta_end: npt.NDArray
+) -> tuple[tuple[npt.NDArray, npt.NDArray], tuple[npt.NDArray, npt.NDArray]]:
     k_normal = find_minimal_winding_number(theta_begin, theta_end)
     shift_fw = (np.array([0, 1, -1]) + k_normal) * 2 * np.pi
 
@@ -1531,11 +1222,11 @@ def train3(
     with torch.no_grad():
         _, _, model_image = model(batch=T, width=W, height=H)
         # Calculate the loss for display, this part does not require grad.
-        image_loss = torch.mean((model_image - real_image) ** 2, axis=(1, 2))
+        image_loss = torch.mean((model_image - real_image), dim=(1, 2))
 
         smoothness_loss = smoothness_loss_weight * torch.mean(
             (model.theta[:, :-1] - model.theta[:, 1:]) ** 2,
-            axis=1,
+            dim=1,
         )
         center_loss = center_loss_weight * (
             (model.cx - init_cx) ** 2 + (model.cy - init_cy) ** 2
@@ -1548,7 +1239,7 @@ def train3(
         else:
             continuity_loss = continuity_loss_weight * torch.mean(
                 (model.theta[:-1, :] - model.theta[1:, :]) ** 2,
-                axis=1,
+                dim=1,
             )
             length_loss = length_loss_weight * (
                 (model.unitLength[:-1] - model.unitLength[1:]) ** 2
@@ -1557,18 +1248,16 @@ def train3(
             continuity_loss = F.pad(continuity_loss, (1, 0), mode="constant", value=0.0)
             length_loss = F.pad(length_loss, (1, 0), mode="constant", value=0.0)
 
-        losses = [
+        losses = (
             image_loss,
             continuity_loss,
             smoothness_loss,
             length_loss,
             center_loss,
-        ]
-        for i in range(len(losses)):
-            losses[i] = losses[i].clone().detach().cpu().numpy()
+        )
 
         # (5, T)
-        losses = np.asarray(losses)
+        losses = np.asarray([loss.clone().detach().cpu().numpy() for loss in losses])
     if show_flag:
         logger.info(
             "{:.2f} {:.2f} {:.2f} {:.2f}".format(
@@ -1741,13 +1430,15 @@ def judge_head_frequency(x, y) -> bool:
     return cor > 0
 
 
-def clear_dir(output_path, foldername):
-    if os.path.isdir(os.path.join(output_path, foldername)):
-        shutil.rmtree(os.path.join(output_path, foldername))
-    os.mkdir(os.path.join(output_path, foldername))
-
-
-def cancel_reduction(x, y, n_input_images, start_T, end_T, Tscaled_ind, plot_n):
+def cancel_reduction(
+    x: npt.NDArray,
+    y: npt.NDArray,
+    n_input_images: int,
+    start_T: int,
+    end_T: int,
+    Tscaled_ind: Sequence[int],
+    plot_n: int,
+) -> tuple[npt.NDArray, npt.NDArray]:
     if end_T == 0:
         end_T = n_input_images - 1
 
@@ -1764,382 +1455,3 @@ def cancel_reduction(x, y, n_input_images, start_T, end_T, Tscaled_ind, plot_n):
         x_splined[:, i] = np.interp(div_linespace, Tscaled_dif_ind, x[:, i])
         y_splined[:, i] = np.interp(div_linespace, Tscaled_dif_ind, y[:, i])
     return x_splined, y_splined
-
-
-def straigthen_multi(
-    src: np.ndarray,
-    x: np.ndarray,
-    y: np.ndarray,
-    width: int,
-    height: int,
-):
-    """
-    Straightens an image based on given x and y coordinates using affine transformation and interpolation.
-
-    Args:
-        src: Input image as a NumPy array [N, H, W].
-        x: x-coordinates of points to be straightened [N, x].
-        y: y-coordinates of points to be straightened [N, y].
-        width: Desired width of the straightened image.
-        height: Desired height of the straightened image.
-
-    Returns:
-        The straightened image as a NumPy array [N, height, width].
-    """
-
-    assert src.ndim == 3, "The shape of source images is not (number, height, width)"
-    assert x.shape == y.shape, "The coordinates of x and y have different shape."
-    N, H, W = src.shape
-    assert x.shape[0] == N, (
-        "The number of frames to be straightened is different from given coordinates."
-    )
-
-    dist = np.zeros_like(x)
-    dist[:, 1:] = np.sqrt((x[:, 1:] - x[:, :-1]) ** 2 + (y[:, 1:] - y[:, :-1]) ** 2)
-
-    acc_dist = np.cumsum(dist, axis=1)
-    src_xy = np.zeros((N, width, 2))
-    xy = np.stack([x, y], axis=-1)
-    out_xcoords = np.arange(width)
-
-    # Interpolate x and y coordinates (T, width) based on accumulated distances
-    for i in range(N):
-        f_xy = CubicSpline(acc_dist[i], xy[i])
-        src_xy[i] = f_xy(out_xcoords)
-
-    # Calculate vectors (T, width-1, 2) between consecutive x and y coordinates
-    dxy = np.diff(src_xy, axis=1)
-
-    # Padding to each end with same values (T, width+1, 2)
-    dxy = np.pad(
-        dxy,
-        pad_width=((0, 0), (1, 1), (0, 0)),
-        mode="edge",
-    )
-
-    # Compute average vectors for each point (including boundary points)
-    dxya = (dxy[:, 1:] + dxy[:, :-1]) / 2.0  # (T, width)
-
-    # Tangential vectors to the centerlines
-    xt_vec = -dxya[:, :, 1]
-    yt_vec = dxya[:, :, 0]
-
-    # Calculate normalized tangential vectors to the centerlines
-    vec_norm = np.sqrt((dxya**2).sum(axis=-1))
-    xt_norm = xt_vec / vec_norm
-    yt_norm = yt_vec / vec_norm
-
-    # Create a grid of y-coordinates for interpolation
-    y_grid = np.arange(height) - (height - 1) / 2  # (height,)
-
-    src_x = src_xy[:, :, 0]
-    src_y = src_xy[:, :, 1]
-
-    # Calculate new x and y coordinates based on tangential vectors and y-grid
-    # (T, 1, width) * (1, height, 1) + (T, 1, width)
-    gx = xt_norm[:, None, :] * y_grid[None, :, None] + src_x[:, None, :]
-    gy = yt_norm[:, None, :] * y_grid[None, :, None] + src_y[:, None, :]
-
-    # Let gx and gy normalize within [-1., 1.]
-    gx = 2 * gx / W - 1.0
-    gy = 2 * gy / H - 1.0
-    gxy = np.stack((gx, gy), axis=-1).reshape((-1, height, width, 2))
-
-    # Create a 2D grid for interpolation
-    src_t = torch.from_numpy(src).reshape((N, -1, H, W)).float()
-    grid = torch.from_numpy(gxy).float()
-
-    straigthen_dst = F.grid_sample(src_t, grid, mode="bicubic", align_corners=True)
-    straigthen_dst = (
-        torch.clamp(straigthen_dst, src.min(), src.max())
-        .detach()
-        .numpy()
-        .astype(src.dtype)
-        .reshape(N, height, width)
-    )
-
-    return straigthen_dst
-
-
-def straigthen(
-    src: np.ndarray,
-    x: np.ndarray,
-    y: np.ndarray,
-    width: int,
-    height: int,
-):
-    """
-    Straightens an image based on given x and y coordinates using affine transformation and interpolation.
-
-    Args:
-        src: Input image as a NumPy array [H, W].
-        x: x-coordinates of points to be straightened.
-        y: y-coordinates of points to be straightened.
-        width: Desired width of the straightened image.
-        height: Desired height of the straightened image.
-
-    Returns:
-        The straightened image as a NumPy array [N, height, width].
-    """
-
-    assert src.ndim == 2, "The shape of source images is not (height, width)"
-    assert x.shape == y.shape, "The coordinates of x and y have different shape."
-    H, W = src.shape
-
-    dist = np.zeros_like(x)
-    dist[1:] = np.sqrt((x[1:] - x[:-1]) ** 2 + (y[1:] - y[:-1]) ** 2)
-
-    acc_dist = np.cumsum(dist)
-    src_xy = np.zeros((width, 2))
-    xy = np.stack([x, y], axis=-1)
-    out_xcoords = np.arange(width)
-
-    # Interpolate x and y coordinates based on accumulated distances
-    f_xy = CubicSpline(acc_dist, xy)
-    src_xy = f_xy(out_xcoords)
-
-    # Calculate vectors (width-1, 2) between consecutive x and y coordinates
-    dxy = src_xy[1:] - src_xy[:-1]
-
-    # Padding to each end with same values (width+1, 2)
-    dxy = np.pad(
-        dxy,
-        pad_width=((1, 1), (0, 0)),
-        mode="edge",
-    )
-
-    # Compute average vectors for each point (including boundary points)
-    dxya = (dxy[1:] + dxy[:-1]) / 2.0  # (T, width)
-
-    # Tangential vectors to the centerlines
-    xt_vec = -dxya[:, 1]
-    yt_vec = dxya[:, 0]
-
-    # Calculate normalized tangential vectors to the centerlines
-    vec_norm = np.sqrt((dxya**2).sum(axis=-1))
-    xt_norm = xt_vec / vec_norm
-    yt_norm = yt_vec / vec_norm
-
-    # Create a grid of y-coordinates for interpolation
-    y_grid = np.arange(height) - (height - 1) / 2  # (height,)
-
-    src_x = src_xy[:, 0]
-    src_y = src_xy[:, 1]
-
-    # Calculate new x and y coordinates based on tangential vectors and y-grid
-    # (1, width) * (height, 1) + (1, width)
-    gx = xt_norm[None, :] * y_grid[:, None] + src_x[None, :]
-    gy = yt_norm[None, :] * y_grid[:, None] + src_y[None, :]
-
-    # Let gx and gy normalize within [-1., 1.]
-    gx = 2 * gx / W - 1.0
-    gy = 2 * gy / H - 1.0
-    gxy = np.stack((gx, gy), axis=-1).reshape((-1, height, width, 2))
-
-    # Create a 2D grid for interpolation
-    src_t = torch.from_numpy(src).reshape((1, -1, H, W)).float()
-    grid = torch.from_numpy(gxy).float()
-
-    straigthen_dst = F.grid_sample(src_t, grid, mode="bicubic", align_corners=False)
-    straigthen_dst = (
-        torch.clamp(straigthen_dst, src.min(), src.max())
-        .detach()
-        .numpy()
-        .astype(src.dtype)
-        .reshape(height, width)
-    )
-
-    return straigthen_dst
-
-
-def centerline_to_roi_iter(
-    x: np.ndarray,
-    y: np.ndarray,
-    head_idx: int = 0,
-) -> Iterator[roifile.ImagejRoi]:
-    # (A,R,G,B)
-    RED = b"\xff\xff\x00\x00"
-    YELLOW = b"\xff\xff\xff\x00"
-    n_digit = len(str(x.shape[0]))
-
-    for pos, skel in enumerate(zip(x, y)):
-        # (2, plot_n) => (plot_n, 2)
-        centerline = np.asarray(skel).T
-        name = str(pos + 1).zfill(n_digit)
-        head_roi = roifile.ImagejRoi.frompoints(
-            [centerline[head_idx]],
-            name=name + "-Head",
-            position=pos,
-        )
-
-        head_roi.roitype = roifile.ROI_TYPE.POINT
-        head_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
-        head_roi.arrow_style_or_aspect_ratio = 3
-        head_roi.stroke_width = 5
-        head_roi.stroke_color = RED
-
-        yield head_roi
-
-        skel_roi = roifile.ImagejRoi.frompoints(
-            centerline,
-            name=name,
-            position=pos,
-        )
-        skel_roi.roitype = roifile.ROI_TYPE.POLYLINE
-        skel_roi.options |= roifile.ROI_OPTIONS.SHOW_LABELS
-        skel_roi.stroke_color = YELLOW
-        skel_roi.stroke_width = 2
-        yield skel_roi
-
-
-def save_centerline_to_roi(
-    outputpath: str,
-    x: np.ndarray,
-    y: np.ndarray,
-    head_idx: int = 0,
-) -> None:
-    roifile.roiwrite(
-        outputpath,
-        centerline_to_roi_iter(x, y, head_idx),
-        mode="w",
-    )
-
-
-def save_params_into_commented_yaml(outputpath: os.PathLike, conf: dict[str, Any]):
-    # Clone parameters
-    conf_for_save = conf.copy()
-    for key, value in conf_for_save.items():
-        if isinstance(value, (torch.Tensor, np.ndarray)):
-            conf_for_save[key] = conf_for_save[key].item()
-        if isinstance(value, Path):
-            conf_for_save[key] = str(value)
-
-    yaml = YAML(typ="rt")
-    yaml.indent(mapping=4, sequence=4, offset=2)
-    # Initialize our mapping object
-    data = CommentedMap()
-
-    # --- General Section ---
-    data.yaml_set_start_comment(
-        """This file is automatically generated by WormTracer.
-# General Settings"""
-    )
-    data["local_time_difference"] = conf_for_save["local_time_difference"]
-    data.yaml_add_eol_comment("UTC timezone", "local_time_difference")
-    data.yaml_set_comment_before_after_key(
-        "plot_n", before="\nNumber of segmented points placed on the centerline"
-    )
-    data["plot_n"] = conf_for_save["plot_n"]
-    # --- Preprocess Section ---
-    # Adding a blank line for organization before the next section
-    data.yaml_set_comment_before_after_key("start_T", before="\nPreprocess")
-    data["start_T"] = conf_for_save["start_T"]
-    data.yaml_add_eol_comment("Number of start frames (default to 0)", "start_T")
-
-    data["end_T"] = conf_for_save["end_T"]
-    data.yaml_add_eol_comment("0 = process all frames", "end_T")
-
-    data["rescale"] = conf_for_save["rescale"]
-    data.yaml_add_eol_comment("Scaling ratio of original images", "rescale")
-
-    data["Tscale"] = conf_for_save["Tscale"]
-    data.yaml_add_eol_comment("Timestep of each frame", "Tscale")
-
-    # --- Training Section ---
-    data.yaml_set_comment_before_after_key(
-        "continuity_loss_weight",
-        before="\nLoss Weights",
-    )
-    data["continuity_loss_weight"] = conf_for_save["continuity_loss_weight"]
-    data.yaml_add_eol_comment(
-        "Ensures smooth movement between time frames",
-        "continuity_loss_weight",
-    )
-
-    data["smoothness_loss_weight"] = conf_for_save["smoothness_loss_weight"]
-    data.yaml_add_eol_comment(
-        "Prevents sharp bends and keeps the body shape smooth",
-        "smoothness_loss_weight",
-    )
-
-    data["length_loss_weight"] = conf_for_save["length_loss_weight"]
-    data.yaml_add_eol_comment(
-        "Prevents the worm from stretching or shrinking unnaturally",
-        "length_loss_weight",
-    )
-    data["center_loss_weight"] = conf_for_save["center_loss_weight"]
-    data.yaml_add_eol_comment(
-        "Keeps the centerline inside the worm's silhouette",
-        "center_loss_weight",
-    )
-    data["body_ratio"] = conf_for_save["body_ratio"]
-    data.yaml_add_eol_comment(
-        "Weight ratio between the middle body and head/tail",
-        "body_ratio",
-    )
-    data.yaml_set_comment_before_after_key(
-        "speed",
-        before="\nTraining ",
-    )
-    data["speed"] = conf_for_save["speed"]
-    data["lr"] = conf_for_save["lr"]
-    data["epoch_plus"] = conf_for_save["epoch_plus"]
-    data.yaml_add_eol_comment("Additional epochs after final step", "epoch_plus")
-
-    data.yaml_set_comment_before_after_key(
-        "judge_head_method",
-        before="\nPostprocess",
-    )
-
-    data["judge_head_method"] = conf_for_save["judge_head_method"]
-    data.yaml_add_eol_comment(
-        "Judge the head or tail by `frequency` or `amplitude` (default to `frequency`)",
-        "judge_head_method",
-    )
-
-    # --- Display Section ---
-    data.yaml_set_comment_before_after_key("num_t", before="\nDisplay & Progress")
-    data["num_t"] = conf_for_save["num_t"]
-    data["ShowProgress"] = conf_for_save["ShowProgress"]
-    data["SaveProgress"] = conf_for_save["SaveProgress"]
-    data["show_progress_freq"] = conf_for_save["show_progress_freq"]
-    data["save_progress_freq"] = conf_for_save["save_progress_freq"]
-    data["save_progress_num"] = conf_for_save["save_progress_num"]
-
-    # --- Output Section ---
-    data.yaml_set_comment_before_after_key(
-        "SaveCenterlinedWormsSerial", before="\nOutput Formats"
-    )
-    data["SaveCenterlinedWormsSerial"] = conf_for_save["SaveCenterlinedWormsSerial"]
-    data["SaveCenterlinedWormsMovie"] = conf_for_save["SaveCenterlinedWormsMovie"]
-    data["SaveCenterlinedWormsMultitiff"] = conf_for_save[
-        "SaveCenterlinedWormsMultitiff"
-    ]
-
-    if "dataset_path" in conf_for_save:
-        data.yaml_set_comment_before_after_key(
-            "dataset_path", before="\nDataset and output directory"
-        )
-        data["dataset_path"] = conf_for_save["dataset_path"]
-        data["output_path"] = conf_for_save["output_path"]
-
-    # ---- Model Parameters ---
-    if "init_alpha" in conf_for_save:
-        data.yaml_set_comment_before_after_key(
-            "init_alpha", before="\nInitial Model Weights"
-        )
-        data["init_alpha"] = conf_for_save["init_alpha"]
-        data["init_gamma"] = conf_for_save["init_gamma"]
-        data["init_delta"] = conf_for_save["init_delta"]
-
-    if "alpha" in conf_for_save:
-        data.yaml_set_comment_before_after_key(
-            "alpha", before="\nTrained Model Weights"
-        )
-        data["alpha"] = conf_for_save["alpha"]
-        data["gamma"] = conf_for_save["gamma"]
-        data["delta"] = conf_for_save["delta"]
-
-    # Write to a file
-    with open(outputpath, "w") as f:
-        yaml.dump(data, f)
