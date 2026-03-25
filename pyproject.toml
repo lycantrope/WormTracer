@@ -19,7 +19,7 @@ dependencies = [
     "Pillow",
     "scikit-image",
     "scipy",
-    "roifile[all]>=2020.11.28",
+    "roifile[all]",
     "torch",
     "torchvision",
     "h5py",
