@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import functools
+import inspect
 import logging
 import os
 import sys
@@ -15,6 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tifffile
 import torch
+from loguru import logger
 from matplotlib import animation, rc
 from ruamel.yaml import YAML
 
@@ -55,9 +57,32 @@ if TYPE_CHECKING:
     from typing import Optional
 
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-logger.propagate = False
+class InterceptHandler(logging.Handler):
+    """
+    Default handler from logging to loguru.
+    See: https://loguru.readthedocs.io/en/stable/overview.html#entirely-compatible-with-standard-logging
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        # Get corresponding Loguru level if it exists.
+        level: str | int
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+
+        # Find caller from where originated the logged message.
+        frame, depth = inspect.currentframe(), 0
+        while frame and (depth == 0 or frame.f_code.co_filename == logging.__file__):
+            frame = frame.f_back
+            depth += 1
+
+        logger.opt(depth=depth, exception=record.exc_info).log(
+            level, record.getMessage()
+        )
+
+
+logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
 
 
 # 2. Setup your specific logger
@@ -66,7 +91,6 @@ def ensure_clearup(fn):
     def wrapper(*arg, **kwargs):
         tic = datetime.datetime.now()
         backend = matplotlib.get_backend()
-
         try:
             # Run function
             ret = fn(*arg, **kwargs)
@@ -75,10 +99,8 @@ def ensure_clearup(fn):
             logger.info(f"Elapse time: {elapsed_time.total_seconds():.1f} (sec)")
             return ret
         finally:
-            handlers = logger.handlers[:]
-            for h in handlers:
-                h.close()
-                logger.removeHandler(h)
+            logger.remove()
+            logger.add(sys.stderr, level="INFO")
             try:
                 matplotlib.use(backend)
             except Exception:
@@ -114,16 +136,12 @@ def run(
     if params["SaveProgress"]:
         clear_dir(output_path, output_name + "_progress_image")
 
-    # setup logger
-    fh = logging.FileHandler(
-        filename=output_path.joinpath(f"{output_name}.log"),
-        mode="w",
+    logger.add(
+        output_path.joinpath(f"{output_name}.log"),
+        format="{message}",
         encoding="utf8",
+        mode="w",
     )
-    fh.setFormatter(logging.Formatter("%(message)s"))
-    # This make sure all information was recorded into file
-    fh.setLevel(logging.DEBUG)
-    logger.addHandler(fh)
 
     # log
     logger.info(f"Code executed at {datetime.datetime.now()}")

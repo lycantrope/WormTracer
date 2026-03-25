@@ -24,6 +24,7 @@ dependencies = [
     "torchvision",
     "h5py",
     "ruamel-yaml",
+    "loguru",
 ]
 
 [project.scripts]
@@ -56,4 +57,4 @@ ignore = ["F401", "F405"]
 napari-wormtracer = { git = "https://github.com/lycantrope/napari-wormtracer" }
 
 [dependency-groups]
-dev = []
+dev = ["ruff"]
