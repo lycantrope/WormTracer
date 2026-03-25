@@ -141,6 +141,7 @@ def run(
         format="{message}",
         encoding="utf8",
         mode="w",
+        level="DEBUG",
     )
 
     # log
