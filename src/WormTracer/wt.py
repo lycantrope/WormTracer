@@ -137,10 +137,8 @@ def run(
         clear_dir(output_path, output_name + "_progress_image")
 
     logger.add(
-        output_path.joinpath(f"{output_name}.log"),
+        output_path.joinpath(f"{output_name}.log").open("a", encoding="utf8"),
         format="{message}",
-        encoding="utf8",
-        mode="w",
         level="DEBUG",
     )
 
