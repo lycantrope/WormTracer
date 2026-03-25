@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import functools
 import logging
 import os
 import sys
@@ -53,17 +54,41 @@ from WormTracer.functions import (
 if TYPE_CHECKING:
     from typing import Optional
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("__name__")
 
 
+def ensure_clearup(fn):
+    @functools.wraps(fn)
+    def wrapper(*arg, **kwargs):
+        backend = matplotlib.get_backend()
+        try:
+            tic = datetime.datetime.now()
+            ret = fn(*arg, **kwargs)
+            toc = datetime.datetime.now()
+            elapsed_time = toc - tic
+            logger.info(f"Elapse time: {elapsed_time.total_seconds():.1f} (sec)")
+            return ret
+        finally:
+            for h in logger.handlers:
+                h.close()
+                logger.removeHandler(h)
+            try:
+                matplotlib.use(backend)
+            except Exception:
+                pass
+
+    return wrapper
+
+
+@ensure_clearup
 def run(
     parameter_file: os.PathLike,
     dataset_path: os.PathLike,
     output_directory: Optional[os.PathLike] = None,
     guide_files: Optional[os.PathLike] = None,
     **kwargs,
-):  # execute the whole WormTracer process, kwargs are optional parameter=value pairs
-    tic = datetime.datetime.now()
+):
+    # execute the whole WormTracer process, kwargs are optional parameter=value pairs
     matplotlib.use("Agg")
     yaml = YAML()
     with open(parameter_file, "r") as yml:
@@ -82,15 +107,17 @@ def run(
     if params["SaveProgress"]:
         clear_dir(output_path, output_name + "_progress_image")
 
-    log_handler = logging.FileHandler(
+    # setup logger
+    fh = logging.FileHandler(
         filename=output_path.joinpath(f"{output_name}.log"),
         mode="w",
         encoding="utf8",
+        delay=True,
     )
-    log_handler.setFormatter(logging.Formatter("%(message)s"))
-    log_handler.setLevel(logging.INFO)
-    # setup logger
-    logger.addHandler(log_handler)
+    fh.setFormatter(logging.Formatter("%(message)s"))
+    # This make sure all information was recorded into file
+    fh.setLevel(logging.DEBUG)
+    logger.addHandler(fh)
 
     # log
     logger.info(f"Code executed at {datetime.datetime.now()}")
@@ -811,9 +838,6 @@ center loss : {np.mean(losses_all[(3, i)][4])}
     ):
         logger.info("Params and plots are successfully saved.")
         logger.info(f"Code finished at {datetime.datetime.now()}")
-        toc = datetime.datetime.now()
-        elapsed_time = toc - tic
-        logger.info(f"Elapse time: {elapsed_time.total_seconds():.1f} (sec)")
         return
 
     # save full of real_image and centerline as png images
@@ -930,6 +954,3 @@ center loss : {np.mean(losses_all[(3, i)][4])}
 
     logger.info("Params and plots are successfully saved.")
     logger.info(f"Code finished at {datetime.datetime.now()}")
-    toc = datetime.datetime.now()
-    elapsed_time = toc - tic
-    logger.info(f"Elapse time: {elapsed_time.total_seconds():.1f} (sec)")

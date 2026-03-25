@@ -44,6 +44,9 @@ if TYPE_CHECKING:
         Tuple,
     )
 
+    import numpy.typing as npt
+
+
 logger = logging.getLogger()
 
 
@@ -930,7 +933,7 @@ def prepare_for_train(pre_width, simple_area, x, y, params):
 
 
 ### training ###
-def make_progress_image(image: np.ndarray, num_t=20):
+def make_progress_image(image: npt.ArrayLike, num_t=20):
     """Make one large image with images laid out on it."""
     if torch.is_tensor(image):
         image = image.clone().detach().cpu().numpy()
@@ -948,7 +951,7 @@ def make_progress_image(image: np.ndarray, num_t=20):
 
 def save_progress(
     image: torch.Tensor | np.ndarray,
-    output_path: str,
+    output_path: os.PathLike,
     output_name: str,
     start: int,
     end: int,
@@ -1638,6 +1641,7 @@ def show_loss_plot(losses, title=""):
     ax.set_xlabel("loss", fontsize=20)
     ax.legend()
     # plt.show()
+    plt.close(fig)
 
 
 def find_losslarge_area(losses_all) -> Set[int]:
