@@ -1,15 +1,15 @@
-# from __future__ import annotations
+from __future__ import annotations
 
 import collections
-import functools
 import glob
 import itertools
 import logging
 import math
 import os
+import pathlib
 import shutil
 from pathlib import Path
-from typing import NamedTuple, Optional, Tuple
+from typing import TYPE_CHECKING
 
 import cv2
 import h5py
@@ -21,6 +21,8 @@ import tifffile
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from ruamel.yaml import YAML
+from ruamel.yaml.comments import CommentedMap
 from scipy import ndimage as ndi
 from scipy.interpolate import CubicSpline
 from scipy.sparse import csr_matrix
@@ -28,6 +30,19 @@ from scipy.sparse.csgraph import shortest_path
 from scipy.spatial import distance_matrix
 from scipy.special import expit as np_sigmoid
 from skimage import morphology
+
+if TYPE_CHECKING:
+    from typing import (
+        Any,
+        Generator,
+        Iterator,
+        List,
+        NamedTuple,
+        Optional,
+        Sequence,
+        Set,
+        Tuple,
+    )
 
 logger = logging.getLogger()
 
@@ -96,7 +111,7 @@ def set_output_path(dataset_path, output_directory):
     return dataset_prefix, output_path, Path(output_path).stem
 
 
-def get_filenames(dataset_path):
+def get_filenames(dataset_path: os.PathLike) -> Sequence[os.PathLike]:
     extensions_available = {
         ".bmp",
         ".dib",
@@ -139,12 +154,12 @@ def get_filenames(dataset_path):
 
 
 def get_guide_points(
-    guide_files,
-    TScale_ind,
-    plot_n,
-    n_frame,
+    guide_files: Sequence[pathlib.Path],
+    TScale_ind: Sequence[int],
+    plot_n: int,
+    n_frame: int,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    guide_file_ext = {".csv", ".h5"}
+    guide_file_ext = (".csv", ".h5")
     guide_file_map = collections.defaultdict(list)
 
     for file in guide_files:
@@ -176,6 +191,8 @@ def get_guide_points(
     guide_x = guide_x[TScale_ind]
     guide_y = guide_y[TScale_ind]
     guide_idx = np.where(np.all(np.isfinite(guide_x), axis=1))[0]
+    if guide_idx.size == 0:
+        raise ValueError(f"guide_files is empty at TScale_ind: {TScale_ind}")
 
     guide_x = np.nan_to_num(guide_x, copy=False)
     guide_y = np.nan_to_num(guide_y, copy=False)
@@ -188,7 +205,7 @@ def get_guide_points(
     return guide_x, guide_y, guide_idx
 
 
-def get_property(filenames, rescale):
+def get_property(filenames, rescale) -> Tuple[Sequence[int], bool, bool, int]:
     if filenames[0].lower().endswith((".tif", ".tiff")):
         try:
             ims = tifffile.memmap(filenames[0], mode="r")
@@ -223,7 +240,10 @@ def get_property(filenames, rescale):
     return im.shape, Worm_is_black, multi_flag, n_input_images
 
 
-def read_serial_images(filenames, Tscaled_ind):
+def read_serial_images(
+    filenames,
+    Tscaled_ind: List[int],
+):
     for ind in Tscaled_ind:
         yield cv2.imread(filenames[ind], cv2.IMREAD_GRAYSCALE)
 
@@ -325,7 +345,7 @@ def calc_xy_and_prewidth(
     return x, y, pre_width, unitLength
 
 
-def get_skeleton(im: np.ndarray, plot_n: int):
+def get_skeleton(im: np.ndarray, plot_n: int) -> tuple[np.ndarray, np.ndarray]:
     """skeletonize image and get splined plots"""
 
     # skeletonize image
@@ -379,7 +399,7 @@ def get_skeleton(im: np.ndarray, plot_n: int):
     return x_splined, y_splined
 
 
-def get_skeleton_networkx(im: np.ndarray, plot_n: int):
+def get_skeleton_networkx(im: np.ndarray, plot_n: int) -> Tuple[np.ndarray, np.ndarray]:
     """skeletonize image and get splined plots
     2024/10/01 Speed is same as previous implemenetation
     """
@@ -422,7 +442,7 @@ def get_skeleton_networkx(im: np.ndarray, plot_n: int):
     return x_splined, y_splined
 
 
-def get_width(im, x, y):
+def get_width(im: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
     """Get width of the object by measure distance of centerline to the object's surface."""
     im_filled = ndi.binary_fill_holes(im)
     assert im_filled is not None, "Err after binary_fill_holes"
@@ -437,7 +457,7 @@ def get_width(im, x, y):
     return wid
 
 
-def flip_check(x, y):
+def flip_check(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Check if plots of head and tail is flipping."""
     assert x.shape == y.shape, "The coordinates of x and y have different shape."
     gap_headtail = np.mean(
@@ -455,7 +475,7 @@ def flip_check(x, y):
     return x, y
 
 
-def trim_image(image, *, padding=5):
+def trim_image(image, *, padding: int = 5) -> tuple[np.ndarray, int, int]:
     """Cut images to minimum size."""
     assert image.ndim in (2, 3), "Only support 2D (Y, X) or 3D (Z, Y, X)"
     thresh = image > 0
@@ -513,13 +533,13 @@ def make_theta_from_xy(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 ### prepare for training ###
 
 
-def calc_cap_span(image_shape, plot_n):
+def calc_cap_span(image_shape: Sequence[int], plot_n: int) -> int:
     """Calculate maximum span of trainig in terms of CUDA memory."""
     GB = float(1024**3)
 
     T = image_shape[0]
     # dim_size = d0 x d1 x d2 x ... x dn
-    dim_size = functools.reduce(lambda acc, x: acc * x, image_shape[1:], 1)
+    dim_size = np.prod(image_shape[1:]).item()
 
     # bytes used per stack under float32 and multiple by 8 for some margin case.
     mem_used_per_stack = float(8 * 4 * dim_size * (plot_n - 1)) / GB
@@ -669,7 +689,7 @@ class TrainingBlocks:
         def __repr__(self) -> str:
             return f"({self.start:d}, {self.end:d}, {'complex' if self.is_complex else 'simple'})"
 
-    def __init__(self, losses, relaxed, rigid):
+    def __init__(self, losses: np.ndarray, relaxed: float, rigid: float):
         assert rigid > relaxed, "rigid margin must be greater than relaxed margin"
 
         # Use relaxed criteria to separate the blocks
@@ -692,10 +712,12 @@ class TrainingBlocks:
         self.nblock = len(label)
 
     @property
-    def nframe(self):
+    def nframe(self) -> int:
         return len(self.blocks)
 
-    def batch_iter(self, batchsize: Optional[int] = None):
+    def batch_iter(
+        self, batchsize: Optional[int] = None
+    ) -> Generator[TrainingBlocks.Block, None, None]:
         """Return an iterator that yields Block(idx, is_complex, start, end) within the batchsize"""
         block_sizes = np.bincount(self.blocks)
         # it will return the index of first occurence.
@@ -908,7 +930,7 @@ def prepare_for_train(pre_width, simple_area, x, y, params):
 
 
 ### training ###
-def make_progress_image(image, num_t=20):
+def make_progress_image(image: np.ndarray, num_t=20):
     """Make one large image with images laid out on it."""
     if torch.is_tensor(image):
         image = image.clone().detach().cpu().numpy()
@@ -924,7 +946,15 @@ def make_progress_image(image, num_t=20):
     return progress_image
 
 
-def save_progress(image, output_path, output_name, start, end, num_t, txt="real"):
+def save_progress(
+    image: torch.Tensor | np.ndarray,
+    output_path: str,
+    output_name: str,
+    start: int,
+    end: int,
+    num_t: int,
+    txt="real",
+) -> None:
     progress_image = make_progress_image(image, num_t)
     filename = os.path.join(
         output_path,
@@ -940,7 +970,7 @@ def remove_progress(output_pathh, filename):
         os.remove(f)
 
 
-def get_center(binimg):
+def get_center(binimg: torch.Tensor | np.ndarray):
     """Calculate center of images."""
     if torch.is_tensor(binimg):
         binimg = binimg.clone().detach().cpu().numpy()
@@ -950,7 +980,9 @@ def get_center(binimg):
     return x, y
 
 
-def set_init_xy(imstack):
+def set_init_xy(
+    imstack: torch.Tensor | np.ndarray,
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Set init center plots for training."""
     assert imstack.ndim == 3, "real_image is not 3-d array (T, H, W)"
     if torch.is_tensor(imstack):
@@ -973,7 +1005,7 @@ def set_init_xy(imstack):
     )
 
 
-def find_theta(theta, pretheta, plus=1):
+def find_theta(theta: np.ndarray, pretheta: np.ndarray, plus: int = 1) -> int:
     """Find min MSE theta by theta(t=0)"""
     i = plus
     mse_list = [np.sum((theta[0, :] - pretheta) ** 2)]
@@ -996,7 +1028,9 @@ def find_minimal_winding_number(theta1: np.ndarray, theta2: np.ndarray) -> int:
     return int(np.round(frac_shift))
 
 
-def make_theta_cand(theta_begin, theta_end):
+def make_theta_cand(
+    theta_begin: np.ndarray, theta_end: np.ndarray
+) -> Tuple[Tuple[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]]:
     k_normal = find_minimal_winding_number(theta_begin, theta_end)
     shift_fw = (np.array([0, 1, -1]) + k_normal) * 2 * np.pi
 
@@ -1181,11 +1215,11 @@ def make_model_image(cent_x, cent_y, theta, unitLength, image_info, params):
 class Model(torch.nn.Module):
     def __init__(
         self,
-        init_cx,
-        init_cy,
-        init_theta,
-        init_unitLength,
-        params,
+        init_cx: torch.Tensor,
+        init_cy: torch.Tensor,
+        init_theta: torch.Tensor,
+        init_unitLength: torch.Tensor,
+        params: dict[str, Any],
     ):
         super().__init__()
         self.cx = nn.parameter.Parameter(init_cx)
@@ -1200,7 +1234,9 @@ class Model(torch.nn.Module):
         params["delta"] = self.delta
         self.params = params
 
-    def forward(self, batch, width, height):
+    def forward(
+        self, batch: int, width: int, height: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         device = self.alpha.device
         plot_n = self.params["plot_n"]
         worm_wid = worm_width_all(plot_n, self.alpha, self.gamma, self.delta)
@@ -1299,7 +1335,7 @@ def train3(
     output_path,
     output_name,
     is_nont=True,
-    gradient_mask=None,
+    gradient_mask: Optional[torch.Tensor] = None,
 ):
     device = next(model.parameters()).device
     T, H, W = real_image.shape
@@ -1604,7 +1640,7 @@ def show_loss_plot(losses, title=""):
     # plt.show()
 
 
-def find_losslarge_area(losses_all):
+def find_losslarge_area(losses_all) -> Set[int]:
     losslarge_area = set()
     for i in range(3):
         lossi = np.concatenate([loss[i] for loss in losses_all.values()], axis=None)
@@ -1624,7 +1660,7 @@ def find_losslarge_area(losses_all):
 ### arrange and save data ###
 
 
-def judge_head_amplitude(x, y):
+def judge_head_amplitude(x, y) -> bool:
     """Judge which tip is head based on variance of body curve rate."""
     assert x.shape == y.shape, "The coordinates of x and y have different shape."
     dx = x[:, 1:] - x[:, :-1]
@@ -1649,7 +1685,7 @@ def judge_head_amplitude(x, y):
     return curve_mean1 < curve_mean2
 
 
-def judge_head_frequency(x, y):
+def judge_head_frequency(x, y) -> bool:
     """Judge which tip is head based on frequency of body curve rate."""
     assert x.shape == y.shape, "The coordinates of x and y have different shape."
     dx = x[:, 1:] - x[:, :-1]
@@ -1916,7 +1952,11 @@ def straigthen(
     return straigthen_dst
 
 
-def centerline_to_roi_iter(x, y, head_idx=0):
+def centerline_to_roi_iter(
+    x: np.ndarray,
+    y: np.ndarray,
+    head_idx: int = 0,
+) -> Iterator[roifile.ImagejRoi]:
     # (A,R,G,B)
     RED = b"\xff\xff\x00\x00"
     YELLOW = b"\xff\xff\xff\x00"
@@ -1952,9 +1992,154 @@ def centerline_to_roi_iter(x, y, head_idx=0):
         yield skel_roi
 
 
-def save_centerline_to_roi(outputpath, x, y, head_idx=0):
+def save_centerline_to_roi(
+    outputpath: str,
+    x: np.ndarray,
+    y: np.ndarray,
+    head_idx: int = 0,
+) -> None:
     roifile.roiwrite(
         outputpath,
         centerline_to_roi_iter(x, y, head_idx),
         mode="w",
     )
+
+
+def save_params_into_commented_yaml(outputpath: os.PathLike, conf: dict[str, Any]):
+    # Clone parameters
+    conf_for_save = conf.copy()
+    for key, value in conf_for_save.items():
+        if isinstance(value, (torch.Tensor, np.ndarray)):
+            conf_for_save[key] = conf_for_save[key].item()
+        if isinstance(value, Path):
+            conf_for_save[key] = str(value)
+
+    yaml = YAML(typ="rt")
+    yaml.indent(mapping=4, sequence=4, offset=2)
+    # Initialize our mapping object
+    data = CommentedMap()
+
+    # --- General Section ---
+    data.yaml_set_start_comment(
+        """This file is automatically generated by WormTracer.
+# General Settings"""
+    )
+    data["local_time_difference"] = conf_for_save["local_time_difference"]
+    data.yaml_add_eol_comment("UTC timezone", "local_time_difference")
+    data.yaml_set_comment_before_after_key(
+        "plot_n", before="\nNumber of segmented points placed on the centerline"
+    )
+    data["plot_n"] = conf_for_save["plot_n"]
+    # --- Preprocess Section ---
+    # Adding a blank line for organization before the next section
+    data.yaml_set_comment_before_after_key("start_T", before="\nPreprocess")
+    data["start_T"] = conf_for_save["start_T"]
+    data.yaml_add_eol_comment("Number of start frames (default to 0)", "start_T")
+
+    data["end_T"] = conf_for_save["end_T"]
+    data.yaml_add_eol_comment("0 = process all frames", "end_T")
+
+    data["rescale"] = conf_for_save["rescale"]
+    data.yaml_add_eol_comment("Scaling ratio of original images", "rescale")
+
+    data["Tscale"] = conf_for_save["Tscale"]
+    data.yaml_add_eol_comment("Timestep of each frame", "Tscale")
+
+    # --- Training Section ---
+    data.yaml_set_comment_before_after_key(
+        "continuity_loss_weight",
+        before="\nLoss Weights",
+    )
+    data["continuity_loss_weight"] = conf_for_save["continuity_loss_weight"]
+    data.yaml_add_eol_comment(
+        "Ensures smooth movement between time frames",
+        "continuity_loss_weight",
+    )
+
+    data["smoothness_loss_weight"] = conf_for_save["smoothness_loss_weight"]
+    data.yaml_add_eol_comment(
+        "Prevents sharp bends and keeps the body shape smooth",
+        "smoothness_loss_weight",
+    )
+
+    data["length_loss_weight"] = conf_for_save["length_loss_weight"]
+    data.yaml_add_eol_comment(
+        "Prevents the worm from stretching or shrinking unnaturally",
+        "length_loss_weight",
+    )
+    data["center_loss_weight"] = conf_for_save["center_loss_weight"]
+    data.yaml_add_eol_comment(
+        "Keeps the centerline inside the worm's silhouette",
+        "center_loss_weight",
+    )
+    data["body_ratio"] = conf_for_save["body_ratio"]
+    data.yaml_add_eol_comment(
+        "Weight ratio between the middle body and head/tail",
+        "body_ratio",
+    )
+    data.yaml_set_comment_before_after_key(
+        "speed",
+        before="\nTraining ",
+    )
+    data["speed"] = conf_for_save["speed"]
+    data["lr"] = conf_for_save["lr"]
+    data["epoch_plus"] = conf_for_save["epoch_plus"]
+    data.yaml_add_eol_comment("Additional epochs after final step", "epoch_plus")
+
+    data.yaml_set_comment_before_after_key(
+        "judge_head_method",
+        before="\nPostprocess",
+    )
+
+    data["judge_head_method"] = conf_for_save["judge_head_method"]
+    data.yaml_add_eol_comment(
+        "Judge the head or tail by `frequency` or `amplitude` (default to `frequency`)",
+        "judge_head_method",
+    )
+
+    # --- Display Section ---
+    data.yaml_set_comment_before_after_key("num_t", before="\nDisplay & Progress")
+    data["num_t"] = conf_for_save["num_t"]
+    data["ShowProgress"] = conf_for_save["ShowProgress"]
+    data["SaveProgress"] = conf_for_save["SaveProgress"]
+    data["show_progress_freq"] = conf_for_save["show_progress_freq"]
+    data["save_progress_freq"] = conf_for_save["save_progress_freq"]
+    data["save_progress_num"] = conf_for_save["save_progress_num"]
+
+    # --- Output Section ---
+    data.yaml_set_comment_before_after_key(
+        "SaveCenterlinedWormsSerial", before="\nOutput Formats"
+    )
+    data["SaveCenterlinedWormsSerial"] = conf_for_save["SaveCenterlinedWormsSerial"]
+    data["SaveCenterlinedWormsMovie"] = conf_for_save["SaveCenterlinedWormsMovie"]
+    data["SaveCenterlinedWormsMultitiff"] = conf_for_save[
+        "SaveCenterlinedWormsMultitiff"
+    ]
+
+    if "dataset_path" in conf_for_save:
+        data.yaml_set_comment_before_after_key(
+            "dataset_path", before="\nDataset and output directory"
+        )
+        data["dataset_path"] = conf_for_save["dataset_path"]
+        data["output_path"] = conf_for_save["output_path"]
+
+    # ---- Model Parameters ---
+    if "init_alpha" in conf_for_save:
+        data.yaml_set_comment_before_after_key(
+            "init_alpha", before="\nInitial Model Weights"
+        )
+        data["init_alpha"] = conf_for_save["init_alpha"]
+        data["init_gamma"] = conf_for_save["init_gamma"]
+        data["init_delta"] = conf_for_save["init_delta"]
+
+    if "alpha" in conf_for_save:
+        data.yaml_set_comment_before_after_key(
+            "alpha", before="\nTrained Model Weights"
+        )
+        data["alpha"] = conf_for_save["alpha"]
+        data["gamma"] = conf_for_save["gamma"]
+        data["delta"] = conf_for_save["delta"]
+
+    # Write to a file
+    with open(outputpath, "w") as f:
+        yaml.dump(data, f)
