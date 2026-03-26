@@ -477,8 +477,11 @@ def make_single_image(
     height: int,
     pixel_matrix: npt.NDArray,
 ) -> npt.NDArray:
-    cent_x = x.astype(np.int32)
-    cent_y = y.astype(np.int32)
+
+    cent_x = (x[:-1] + x[1:]) / 2
+    cent_x = cent_x.astype(np.int32)
+    cent_y = (y[:-1] + y[1:]) / 2
+    cent_y = cent_y.astype(np.int32)
 
     diameter = pixel_matrix.shape[1]
     radius = diameter // 2
@@ -928,30 +931,25 @@ class Model(torch.nn.Module):
         self.params = params
 
     def forward(
-        self, batch: int, width: int, height: int
+        self,
+        width: int,
+        height: int,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        device = self.alpha.device
         plot_n = self.params["plot_n"]
         worm_wid = worm_width_all(plot_n, self.alpha, self.gamma, self.delta)
-        # worm_wid_max = worm_wid.max().long().item() + 15
-        # distance_matrix = make_distance_matrix(worm_wid_max).to(device)
 
-        # distance_matrix_3d = worm_wid.unsqueeze(-1).unsqueeze(
-        #     -1
-        # ) - distance_matrix.unsqueeze(0)
-        # pixel_matrix = pixel_value_from_dist_max(distance_matrix_3d)
+        # (batch, ) => (batch, 1)
+        unitLength = self.unitLength.unsqueeze(1)
+        cx = self.cx.unsqueeze(1)
+        cy = self.cy.unsqueeze(1)
 
         x = torch.cumsum(torch.cos(self.theta), dim=1)
-        x = torch.cat((torch.zeros((batch, 1), device=device), x), dim=1)
-        x = self.unitLength.reshape((batch, 1)).to(device) * x
-        x_mean = torch.mean(x, dim=1, keepdim=True)
-        x = x - x_mean + self.cx.reshape((batch, 1))
+        x = F.pad(x, pad=(1, 0))
+        x = (x - x.mean(dim=1, keepdim=True)) * unitLength + cx
 
-        y = torch.cumsum(torch.sin(self.theta), dim=1)
-        y = torch.cat((torch.zeros((batch, 1), device=device), y), dim=1)
-        y = self.unitLength.reshape((batch, 1)).to(device) * y
-        y_mean = torch.mean(y, dim=1, keepdim=True)
-        y = y - y_mean + self.cy.reshape((batch, 1))
+        y = torch.cumsum(torch.cos(self.theta), dim=1)
+        y = F.pad(y, pad=(1, 0))
+        y = (y - y.mean(dim=1, keepdim=True)) * unitLength + cy
 
         image = make_worm(x, y, width=width, height=height, worm_wid=worm_wid)
         return x, y, image
@@ -1078,7 +1076,7 @@ def train3(
     # main optimization
     for e in range(epochs):
         optimizer.zero_grad()
-        _, _, model_image = model(batch=T, width=W, height=H)
+        _, _, model_image = model(width=W, height=H)
         model_image = model_image.to(device)
 
         if is_nont:
@@ -1186,7 +1184,7 @@ def train3(
     # minor adjustment
     for e in range(params["epoch_plus"]):
         optimizer.zero_grad()
-        _, _, model_image = model(batch=T, width=W, height=H)
+        _, _, model_image = model(width=W, height=H)
         model_image = model_image.to(device)
 
         image_loss = torch.mean((model_image - real_image) ** 2)
@@ -1223,7 +1221,7 @@ def train3(
         optimizer.step()
 
     with torch.no_grad():
-        _, _, model_image = model(batch=T, width=W, height=H)
+        _, _, model_image = model(width=W, height=H)
         # Calculate the loss for display, this part does not require grad.
         image_loss = torch.mean((model_image - real_image) ** 2, dim=(1, 2))
 

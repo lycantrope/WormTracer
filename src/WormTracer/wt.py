@@ -321,7 +321,7 @@ def run(
         # get trace information
         losses_all[(1, block.idx)] = losses
         with torch.no_grad():
-            x_model, y_model, model_image = model(batch=T, width=W, height=H)
+            x_model, y_model, model_image = model(width=W, height=H)
 
         theta_model = model.theta.detach().cpu().numpy()
 
@@ -448,7 +448,7 @@ center loss : {np.mean(losses[4])}
         losses_all[(2, block.idx)] = losses[:, l_pad : l_pad + block.size]
         # get trace information
         with torch.no_grad():
-            x_model, y_model, model_image = model(batch=T, width=W, height=H)
+            x_model, y_model, model_image = model(width=W, height=H)
 
         x_model = x_model.detach().cpu().numpy()
         y_model = y_model.detach().cpu().numpy()
@@ -480,7 +480,7 @@ center loss : {np.mean(losses[4])}
         select_ind = loss_compare([losses_all[(2, block.idx)], losses])
         if select_ind:
             with torch.no_grad():
-                x_model, y_model, model_image = model(batch=T, width=W, height=H)
+                x_model, y_model, model_image = model(width=W, height=H)
 
             x_model = x_model.detach().cpu().numpy()
             y_model = y_model.detach().cpu().numpy()
@@ -616,7 +616,7 @@ center loss : {np.mean(losses[4])}
         losses = losses[:, l_pad : l_pad + block.size]
 
         with torch.no_grad():
-            x_model, y_model, model_image = model(batch=T, width=W, height=H)
+            x_model, y_model, model_image = model(width=W, height=H)
 
         x_model = x_model.detach().cpu().numpy()
         y_model = y_model.detach().cpu().numpy()
@@ -661,7 +661,7 @@ center loss : {np.mean(losses[4])}
             print("update")
             update = 3
             with torch.no_grad():
-                x_model, y_model, model_image = model(batch=T, width=W, height=H)
+                x_model, y_model, model_image = model(width=W, height=H)
             x_model = x_model.detach().cpu().numpy()
             y_model = y_model.detach().cpu().numpy()
             theta_model = model.theta.detach().cpu().numpy()
