@@ -744,7 +744,7 @@ center loss : {np.mean(losses_all[(3, i)][4])}
         arr["center_loss"] = loss[4]
         losses_all_tmp.append(arr)
 
-    header = "step,block,index,is_complex,is_guide,image_loss,continuity_lsos,smoothing_loss,length_loss,center_loss"
+    header = "step,block,index,is_complex,is_guide,image_loss,continuity_loss,smoothing_loss,length_loss,center_loss"
     fmt = ["%i", "%i", "%i", "%i", "%i", "%f", "%f", "%f", "%f", "%f"]
     losses_arr = np.concatenate(losses_all_tmp)
     np.savetxt(
@@ -847,10 +847,11 @@ center loss : {np.mean(losses_all[(3, i)][4])}
         # for t in range(len(filenames_full)):
         # Draw the first figure as template
         fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1)
-        img = ax.imshow(real_image[0], cmap="gray")
-        line = ax.plot([x_on_img[0], y_on_img[0]], c="r", lw=3)[0]
+        ax = fig.add_subplot(111)
+        img = ax.imshow(real_image[0], cmap="gray", interpolation="none")
+        line = ax.plot(x_on_img[0], y_on_img[0], c="r", lw=3)[0]
         fig.canvas.draw()
+        n_digit = len(str(T))
         for i in range(T):
             # set data
             img.set_data(real_image[i])
@@ -860,7 +861,7 @@ center loss : {np.mean(losses_all[(3, i)][4])}
             filename = os.path.join(
                 output_path,
                 output_folder,
-                "image" + str(i + start_t).zfill(len(str(n_input_images))) + ".png",
+                f"image{str(i + start_t).zfill(n_digit)}.png",
             )
             fig.savefig(filename)
         plt.close(fig)

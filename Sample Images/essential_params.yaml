@@ -1,0 +1,10 @@
+# Number of points on centerline
+plot_n: 100
+
+# Weights for different loss functions used during optimization
+continuity_loss_weight: 10000
+smoothness_loss_weight: 100000
+length_loss_weight: 50
+center_loss_weight: 50
+
+body_ratio: 90

@@ -1,24 +1,40 @@
-local_time_difference: 9
-start_T: 0
-end_T: 0
-rescale: 1
-Tscale: 1
-continuity_loss_weight: 1000
-smoothness_loss_weight: 100000
-length_loss_weight: 50
-center_loss_weight: 5
+# General Settings
+local_time_difference: 9  # UTC timezone
+
+# Number of segmented points placed on the centerline
 plot_n: 100
-epoch_plus: 1500
+
+# Preprocess
+start_T: 0 # Number of start frames (default to 0)
+end_T: 0 # 0 = process all frames
+rescale: 1.0 # Scaling ratio of original images
+Tscale: 1 # Timestep of each frame
+
+# Loss Weights
+continuity_loss_weight: 10000 # Ensures smooth movement between time frames
+smoothness_loss_weight: 100000 # Prevents sharp bends and keeps the body shape smooth
+length_loss_weight: 50 # Prevents the worm from stretching or shrinking unnaturally
+center_loss_weight: 50 # Keeps the centerline inside the worm's silhouette
+body_ratio: 90 # Weight ratio between the middle body and head/tail
+
+# Training 
 speed: 0.05
 lr: 0.05
-body_ratio: 90
-judge_head_method: frequency
+epoch_plus: 1500  # Additional epochs after final step
+
+# Postprocess
+judge_head_method: frequency # Judge the head or tail by `frequency` or `amplitude` (default to `frequency`)
+
+# Display & Progress
 num_t: 5
 ShowProgress: false
 SaveProgress: false
 show_progress_freq: 200
 save_progress_freq: 50
 save_progress_num: 50
+
+# Output Formats
 SaveCenterlinedWormsSerial: false
 SaveCenterlinedWormsMovie: false
 SaveCenterlinedWormsMultitiff: false
+
