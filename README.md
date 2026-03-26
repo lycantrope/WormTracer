@@ -162,7 +162,7 @@ SaveCenterlinedWormsMultitiff: false
 ```
 
 And some parameters can be ignored. The following is the minimal `parameter_file.yaml` file required to run WormTracer using sample data.
-* **`essential_params.yaml`**:
+* **`essential_params.yaml`**
 ```yaml 
 # Number of points on centerline
 plot_n: 100
@@ -183,30 +183,7 @@ body_ratio: 90
 * `dataset_path`: path to your time-series binarized images, either folder or file is acceptable. Details please check [here](#preprocess-of-the-images).
 * `output_directory` (optional): If provided the final output will be save in `output_directory` but not the parent folder of `dataset_path`
 * `guide_files` (list[os.Pathlike], optional): the path to the guide files. (see [Guide Files](#guide-files))  
-### WormTracer Output Format
-WormTracer organizes all results into a structured directory for each analysis run.
-* **Output Directory**: The final output folder is located at the parent directory of `dataset_path`, or at the custom `output_directory` if one is provided. 
-* **Folder naming**: The folder name is derived from the dataset_path and suffixed with an incrementing number (e.g., hoge_mask_001). WormTracer automatically creates this directory within the Output Directory.
-Inside the result folder (e.g., `hoge_mask_001`), the following files are generated:
-* `hoge_mask_001.log`: Detailed log information of the execution process.
-* `hoge_mask_001_params.yaml`: A YAML file containing all initial parameters used for the run, supplemented with additional metadata such as the original dataset_path and the final optimized (trained) parameters.
-* `hoge_mask_001_x.csv`:  X-coordinates from start_T to end_T. Rows represent time, and columns represent positions from head to tail (T, plot_n).
-* `hoge_mask_001_y.csv`: Y-coordinates formatted identically to the X-coordinate file
-* `hoge_mask_001_skel.h5`: An HDF5 file containing two datasets, x and y.
-* `hoge_mask_001_RoiSet.zip`: A collection of ImageJ-compatible ROIs (Regions of Interest) that can be directly imported into the ImageJ RoiManager for visualization.
-* `hoge_mask_001_losses.csv`: Loss values recorded across all training steps, containing
-* * `step`: The specific training step.
-* * `block`: The training block within WormTracer.
-* * `index`: The exact frame index.
-* * `is_complex`: Boolean indicating if the frame belongs to a complex posture block.
-* * `is_guide`: Boolean indicating if the frame was used as a guide frame.
-* * `image_loss`, `continuity_loss`,`smoothing_loss`,`length_loss`, `center_loss`
-* 
-If the corresponding flags are enabled (see [Configuration](#configuration-of-wormtracer-hyperparameter)), WormTracer can generate cropped mask images with overlaid centerlines in the following formats:
-*  `hoge_mask_001/hoge_mask_001_png/`: A directory containing the image sequence in PNG format.
-*  `hoge_mask_001.mp4`: A rendered MP4 video of the tracked sequence.
-*  `hoge_mask_001.tif`: multi-page of ImageJ-Tiff
-
+  
 ### Using python scripts
 * **Run with params.yaml**
 ```python
@@ -303,6 +280,29 @@ python -m WormTracer \
   <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
 </a>
 
+### WormTracer Output Format
+WormTracer organizes all results into a structured directory for each analysis run.
+* **Output Directory**: The final output folder is located at the parent directory of `dataset_path`, or at the custom `output_directory` if one is provided. 
+* **Folder naming**: The folder name is derived from the dataset_path and suffixed with an incrementing number (e.g., hoge_mask_001). WormTracer automatically creates this directory within the Output Directory.
+Inside the result folder (e.g., `hoge_mask_001`), the following files are generated:
+* `hoge_mask_001.log`: Detailed log information of the execution process.
+* `hoge_mask_001_params.yaml`: A YAML file containing all initial parameters used for the run, supplemented with additional metadata such as the original dataset_path and the final optimized (trained) parameters.
+* `hoge_mask_001_x.csv`:  X-coordinates from start_T to end_T. Rows represent time, and columns represent positions from head to tail (T, plot_n).
+* `hoge_mask_001_y.csv`: Y-coordinates formatted identically to the X-coordinate file
+* `hoge_mask_001_skel.h5`: An HDF5 file containing two datasets, x and y.
+* `hoge_mask_001_RoiSet.zip`: A collection of ImageJ-compatible ROIs (Regions of Interest) that can be directly imported into the ImageJ RoiManager for visualization.
+* `hoge_mask_001_losses.csv`: Loss values recorded across all training steps, containing
+* * `step`: The specific training step.
+* * `block`: The training block within WormTracer.
+* * `index`: The exact frame index.
+* * `is_complex`: Boolean indicating if the frame belongs to a complex posture block.
+* * `is_guide`: Boolean indicating if the frame was used as a guide frame.
+* * `image_loss`, `continuity_loss`,`smoothing_loss`,`length_loss`, `center_loss`
+* 
+If the corresponding flags are enabled (see [Configuration](#configuration-of-wormtracer-hyperparameter)), WormTracer can generate cropped mask images with overlaid centerlines in the following formats:
+*  `hoge_mask_001/hoge_mask_001_png/`: A directory containing the image sequence in PNG format.
+*  `hoge_mask_001.mp4`: A rendered MP4 video of the tracked sequence.
+*  `hoge_mask_001.tif`: multi-page of ImageJ-Tiff
 
 ## Postprocessing or re-run WormTracer with guide points
 ### Guide Files
