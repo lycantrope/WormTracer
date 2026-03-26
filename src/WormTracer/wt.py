@@ -9,11 +9,12 @@ from typing import TYPE_CHECKING
 
 import cv2
 import h5py
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import tifffile
 import torch
-from matplotlib import animation, rc
+from matplotlib import animation
 from ruamel.yaml import YAML
 
 from WormTracer import __version__
@@ -841,67 +842,70 @@ center loss : {np.mean(losses_all[(3, i)][4])}
     x_on_img = x * rescale - org_x_st
     y_on_img = y * rescale - org_y_st
 
-    if params["SaveCenterlinedWormsSerial"]:
+    if params["SaveCenterlinedWormsSerial"] or params["SaveCenterlinedWormsMovie"]:
         output_folder = output_name + "_png"
-        clear_dir(output_path, output_name + "_png")
-        # for t in range(len(filenames_full)):
-        # Draw the first figure as template
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        img = ax.imshow(real_image[0], cmap="gray", interpolation="none")
-        line = ax.plot(x_on_img[0], y_on_img[0], c="r", lw=3)[0]
-        fig.canvas.draw()
-        n_digit = len(str(T))
-        for i in range(T):
-            # set data
-            img.set_data(real_image[i])
-            line.set_data(x_on_img[i], y_on_img[i])
-            # redraw
-            fig.canvas.draw()
-            filename = os.path.join(
-                output_path,
-                output_folder,
-                f"image{str(i + start_t).zfill(n_digit)}.png",
+        if params["SaveCenterlinedWormsSerial"]:
+            clear_dir(output_path, output_name + "_png")
+
+        mpl.rc("animation", html="jshtml")
+        fig, ax = plt.subplots(figsize=(4, 4))
+        im = ax.imshow(
+            real_image[0],
+            cmap="gray",
+            interpolation="none",
+            animated=True,
+        )
+        (ln,) = ax.plot([], [], c="r", lw=3)
+        title = ax.text(
+            0.5,
+            1.01,
+            "",
+            ha="center",
+            va="bottom",
+            transform=ax.transAxes,
+            fontsize="large",
+            color="black",
+        )
+
+        def _update(i):
+            im.set_array(real_image[i])
+            ln.set_data(x_on_img[i], y_on_img[i])
+            title.set_text(f"index: {i + start_t:d}")
+            return (im, ln, title)
+
+        ani = animation.FuncAnimation(
+            fig,
+            _update,
+            frames=range(T),
+            blit=True,
+            interval=50,
+        )
+        if params["SaveCenterlinedWormsSerial"]:
+            n_digit = len(str(T))
+            for i in range(T):
+                # Update fig
+                _update(i)
+                filename = os.path.join(
+                    output_path,
+                    output_folder,
+                    f"image{str(i + start_t).zfill(n_digit)}.png",
+                )
+                fig.savefig(filename)
+
+            logger.info(
+                f"png images saved to {output_folder} etc. at {get_time_now(tz)}"
             )
-            fig.savefig(filename)
+        if params["SaveCenterlinedWormsMovie"]:
+            # save full of real_image and centerline as mp4 movie
+            filename = os.path.join(output_path, output_name + ".mp4")
+            try:
+                # If matplotlib can not find the FFmpeg, a ValueError will be raised.
+                ani.save(filename)
+            except ValueError as e:
+                logger.error(f"Fail to save move. FFmpeg was not found: {e}")
+            logger.info(f"Movie saved to {filename} at {get_time_now(tz)}")
+
         plt.close(fig)
-        logger.info("png images saved to " + output_folder + " etc.")
-
-    # save full of real_image and centerline as mp4 movie
-    if params["SaveCenterlinedWormsMovie"]:
-        fig = plt.figure(figsize=(4, 4))
-        ax = fig.add_subplot(111)
-        ims = []
-        # for t in range(n_input_images):
-        for i in range(T):
-            if i % 100 == 0:
-                print(i + start_t, end=" ")
-            lines = []
-            lines.extend(ax.plot(x_on_img[i], y_on_img[i], c="r", lw=3))
-            lines.extend([ax.imshow(real_image[i], cmap="gray", interpolation="none")])
-            title = ax.text(
-                0.5,
-                1.01,
-                f"index: {i + start_t:d}",
-                ha="center",
-                va="bottom",
-                transform=ax.transAxes,
-                fontsize="large",
-                color="black",
-            )
-            ims.append(lines + [title])
-        ani = animation.ArtistAnimation(fig, ims, interval=50)
-        rc("animation", html="jshtml")
-        plt.close()
-        ################# ani
-        filename = os.path.join(output_path, output_name + ".mp4")
-        try:
-            # If matplotlib can not find the FFmpeg, a ValueError will be raised.
-            ani.save(filename)
-        except ValueError as e:
-            raise ValueError(f"FFmpeg was not found: {e}")
-        logger.info("Movie saved to " + filename)
-
     # save full of real_image and centerline as multipage tiff
     if params["SaveCenterlinedWormsMultitiff"]:
         filename = os.path.join(output_path, output_name + ".tif")
@@ -916,9 +920,6 @@ center loss : {np.mean(losses_all[(3, i)][4])}
         pts = np.clip(pts, 0, None).astype("i4")
 
         for i in range(T):
-            if i % 100 == 0:
-                print(i + start_t, end=" ")
-
             im_bgr = cv2.cvtColor(real_image[i], cv2.COLOR_GRAY2BGR)
             # pt is an [N, 2] array, OpenCV only use (1, N, 2) for plotting.
             im_lines = cv2.polylines(
@@ -940,7 +941,7 @@ center loss : {np.mean(losses_all[(3, i)][4])}
                 "labels": [f"index: {start_t + i:d}" for i in range(T)],
             },
         )
-        logger.info("Multipage Tiff saved to " + filename)
+        logger.info(f"Multipage Tiff saved to {filename} at {get_time_now(tz)}")
 
     logger.info("Params and plots are successfully saved.")
     logger.info(f"Code finished at {get_time_now(tz)}")
