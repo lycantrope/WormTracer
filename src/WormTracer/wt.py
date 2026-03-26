@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 
 import cv2
 import h5py
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import tifffile
@@ -47,10 +46,12 @@ from WormTracer.utils import (
     clear_dir,
     ensure_clearup,
     get_filenames,
+    get_time_now,
     remove_progress,
     save_centerline_to_roi,
     save_params_into_commented_yaml,
     set_output_path,
+    verify_parameters,
 )
 
 if TYPE_CHECKING:
@@ -68,13 +69,17 @@ def run(
     guide_files: Sequence[os.PathLike | str] | None = None,
     **kwargs,
 ):
-    # execute the whole WormTracer process, kwargs are optional parameter=value pairs
-    matplotlib.use("Agg")
     yaml = YAML()
     with open(parameter_file, "r") as yml:
         params = yaml.load(yml)
 
+    # Overwrite the parameters if existed
     params.update(kwargs)
+    # Verify final parameters
+    params = verify_parameters(params)
+
+    # Setup timezone
+    tz = datetime.timezone(datetime.timedelta(hours=params["local_time_difference"]))
 
     # Check filenames
     filenames_all = get_filenames(dataset_path)
@@ -99,7 +104,8 @@ def run(
     logger.addHandler(fh)
 
     # log
-    logger.info(f"Code executed at {datetime.datetime.now()}")
+    time_now = get_time_now(tz)
+    logger.info(f"Code executed at {time_now}")
     logger.info(f"Python: {sys.version_info}")
     logger.info("WormTracer:" + __version__)
     logger.info(f"Params : {params}")
@@ -149,7 +155,7 @@ def run(
     )
 
     guide_idx = None
-    if isinstance(guide_files, list):
+    if guide_files is not None:
         logger.info(f"Found guide_files: {guide_files}")
         guide_x, guide_y, guide_idx = get_guide_points(
             guide_files,
@@ -169,7 +175,7 @@ def run(
     theta = make_theta_from_xy(x, y)
 
     # log
-    time_now = datetime.datetime.now()
+    time_now = get_time_now(tz)
     logger.info(f"Reading images finished at {time_now}")
     logger.info(f"Original shape = {imshape} \n")
     logger.info(
@@ -219,12 +225,11 @@ def run(
     if guide_idx is not None:
         # we assigned loss in the guide_idx to ensure the frame of guide_idx will be simple (non zero ground truth)
         image_losses[guide_idx] = image_losses[best_frame_idx]
-        del guide_idx
 
     training_block = get_use_blocks(image_losses, image_loss_max)
 
     # log 3
-    time_now = datetime.datetime.now()
+    time_now = get_time_now(tz)
     logger.info(f"Determining time blocks finished at {time_now}")
     logger.info(f"Total blocks: {training_block.nblock}")
     logger.info(f"Complex blocks: {len(training_block.complex_block)}")
@@ -361,7 +366,7 @@ center loss : {np.mean(losses[4])}
             show_image(model_image, params["num_t"], title="model image")
             show_loss_plot(losses_all[(1, block.idx)], title="losses of model")
 
-    time_now = datetime.datetime.now()
+    time_now = get_time_now(tz)
     logger.info(f"STEP1 finished at {time_now}\n")
 
     shape_params = np.array(shape_params)
@@ -534,7 +539,7 @@ center loss : {np.mean(losses[4])}
 """
         )
 
-    time_now = datetime.datetime.now()
+    time_now = get_time_now(tz)
     logger.info(f"STEP2 finished at {time_now}\n")
 
     # revise areas which have too large loss
@@ -701,7 +706,7 @@ center loss : {np.mean(losses_all[(3, i)][4])}
 """
             )
 
-    time_now = datetime.datetime.now()
+    time_now = get_time_now(tz)
     logger.info(f"STEP3 finished at {time_now}\n")
     # save params and plots
     # Save all losses into csv files
@@ -711,6 +716,7 @@ center loss : {np.mean(losses_all[(3, i)][4])}
             ("block", "i4"),
             ("index", "i4"),
             ("is_complex", "?"),
+            ("is_guide", "?"),
             ("image_loss", "f8"),
             ("continuity_loss", "f8"),
             ("smoothing_loss", "f8"),
@@ -720,15 +726,17 @@ center loss : {np.mean(losses_all[(3, i)][4])}
     )
 
     losses_all_tmp = []
-    for (stage, idx), loss in losses_all.items():
+    for (stage, i), loss in losses_all.items():
         T = loss.shape[1]
         arr = np.zeros(T, dtype=dtype)
-        block = all_blocks[idx]
+        block = all_blocks[i]
 
         arr["step"] = stage
         arr["block"] = block.idx
         arr["index"] = np.arange(block.start, block.end + 1)
         arr["is_complex"] = block.is_complex
+        if guide_idx is not None:
+            arr["is_guide"] = guide_idx[arr["index"]]
         arr["image_loss"] = loss[0]
         arr["continuity_loss"] = loss[1]
         arr["smoothing_loss"] = loss[2]
@@ -736,8 +744,8 @@ center loss : {np.mean(losses_all[(3, i)][4])}
         arr["center_loss"] = loss[4]
         losses_all_tmp.append(arr)
 
-    header = "step,block,index,is_complex,image_loss,continuity_lsos,smoothing_loss,length_loss,center_loss"
-    fmt = ["%i", "%i", "%i", "%i", "%f", "%f", "%f", "%f", "%f"]
+    header = "step,block,index,is_complex,is_guide,image_loss,continuity_lsos,smoothing_loss,length_loss,center_loss"
+    fmt = ["%i", "%i", "%i", "%i", "%i", "%f", "%f", "%f", "%f", "%f"]
     losses_arr = np.concatenate(losses_all_tmp)
     np.savetxt(
         os.path.join(output_path, output_name + "_losses.csv"),
@@ -751,6 +759,10 @@ center loss : {np.mean(losses_all[(3, i)][4])}
     # cancel reduction
     # T_read_all = params['end_T'] - params['start_T'] if params['end_T'] else len(filenames_all) - params['start_T']
     x, y = flip_check(x, y)
+
+    x = x / params["rescale"]
+    y = y / params["rescale"]
+
     x, y = cancel_reduction(
         x,
         y,
@@ -775,8 +787,7 @@ center loss : {np.mean(losses_all[(3, i)][4])}
     if is_reversed:
         x, y = x[:, ::-1], y[:, ::-1]
 
-    tz = datetime.timezone(datetime.timedelta(hours=params["local_time_difference"]))
-    time_now = datetime.datetime.now(tz).strftime("%Y-%m-%d_%H:%M:%S.%f")
+    time_now = get_time_now(tz)
     # if not os.path.isdir(os.path.join(output_path, 'results')):
     #  os.mkdir(os.path.join(output_path, 'results')
 
@@ -788,28 +799,20 @@ center loss : {np.mean(losses_all[(3, i)][4])}
         params_for_save,
     )
 
-    np.savetxt(
-        os.path.join(output_path, output_name + "_x.csv"),
-        x / params["rescale"],
-        delimiter=",",
-    )
-    np.savetxt(
-        os.path.join(output_path, output_name + "_y.csv"),
-        y / params["rescale"],
-        delimiter=",",
-    )
+    np.savetxt(os.path.join(output_path, output_name + "_x.csv"), x, delimiter=",")
+    np.savetxt(os.path.join(output_path, output_name + "_y.csv"), y, delimiter=",")
 
     with h5py.File(
         os.path.join(output_path, output_name + "_skel.h5"),
         "w",
     ) as handler:
-        handler.create_dataset("x", data=x / params["rescale"])
-        handler.create_dataset("y", data=y / params["rescale"])
+        handler.create_dataset("x", data=x)
+        handler.create_dataset("y", data=y)
 
     save_centerline_to_roi(
         outputpath=os.path.join(output_path, output_name + "_RoiSet.zip"),
-        x=x / params["rescale"],
-        y=y / params["rescale"],
+        x=x,
+        y=y,
     )
 
     if not (
@@ -818,41 +821,46 @@ center loss : {np.mean(losses_all[(3, i)][4])}
         | params["SaveCenterlinedWormsMultitiff"]
     ):
         logger.info("Params and plots are successfully saved.")
-        logger.info(f"Code finished at {datetime.datetime.now()}")
+        logger.info(f"Code finished at {get_time_now(tz)}")
         return
 
     # save full of real_image and centerline as png images
     # real_image, y_st, x_st = read_image(imshape, filenames_full, params['rescale'], Worm_is_black)
+    T = x.shape[0]
+    start_t = params["start_T"]
+    # Load image start from start_t with T_scale=1
     real_image, org_y_st, org_x_st = load_image(
         filenames_all,
         params["rescale"],
         Worm_is_black,
         multi_flag,
-        list(range(n_input_images)),
+        list(range(start_t, start_t + T)),
     )
+    # Rescale the x and y to the images.
+    rescale = params["rescale"]
+    x_on_img = x * rescale - org_x_st
+    y_on_img = y * rescale - org_y_st
 
     if params["SaveCenterlinedWormsSerial"]:
         output_folder = output_name + "_png"
         clear_dir(output_path, output_name + "_png")
         # for t in range(len(filenames_full)):
-        end_T = n_input_images - 1 if params["end_T"] == 0 else params["end_T"]
         # Draw the first figure as template
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
         img = ax.imshow(real_image[0], cmap="gray")
-        line = ax.plot([x[0] - org_x_st, y[0] - org_y_st], c="r", lw=3)[0]
-
+        line = ax.plot([x_on_img[0], y_on_img[0]], c="r", lw=3)[0]
         fig.canvas.draw()
-        for i, t in enumerate(range(params["start_T"], end_T + 1)):
+        for i in range(T):
             # set data
-            img.set_data(real_image[t])
-            line.set_data(x[i] - org_x_st, y[i] - org_y_st)
+            img.set_data(real_image[i])
+            line.set_data(x_on_img[i], y_on_img[i])
             # redraw
             fig.canvas.draw()
             filename = os.path.join(
                 output_path,
                 output_folder,
-                "image" + str(t).zfill(len(str(n_input_images))) + ".png",
+                "image" + str(i + start_t).zfill(len(str(n_input_images))) + ".png",
             )
             fig.savefig(filename)
         plt.close(fig)
@@ -860,20 +868,20 @@ center loss : {np.mean(losses_all[(3, i)][4])}
 
     # save full of real_image and centerline as mp4 movie
     if params["SaveCenterlinedWormsMovie"]:
-        fig, ax = plt.subplots(figsize=(4, 4))
+        fig = plt.figure(figsize=(4, 4))
+        ax = fig.add_subplot(111)
         ims = []
         # for t in range(n_input_images):
-        end_T = n_input_images - 1 if params["end_T"] == 0 else params["end_T"]
-        for i, t in enumerate(range(params["start_T"], end_T + 1)):
+        for i in range(T):
             if i % 100 == 0:
-                print(t, end=" ")
+                print(i + start_t, end=" ")
             lines = []
-            lines.extend(ax.plot(x[i] - org_x_st, y[i] - org_y_st, c="r", lw=3))
-            lines.extend([ax.imshow(real_image[t], cmap="gray")])
+            lines.extend(ax.plot(x_on_img[i], y_on_img[i], c="r", lw=3))
+            lines.extend([ax.imshow(real_image[i], cmap="gray", interpolation="none")])
             title = ax.text(
                 0.5,
                 1.01,
-                "index: " + str(t),
+                f"index: {i + start_t:d}",
                 ha="center",
                 va="bottom",
                 transform=ax.transAxes,
@@ -897,41 +905,41 @@ center loss : {np.mean(losses_all[(3, i)][4])}
     if params["SaveCenterlinedWormsMultitiff"]:
         filename = os.path.join(output_path, output_name + ".tif")
 
-        end_T = n_input_images - 1 if params["end_T"] == 0 else params["end_T"]
         T, Y, X = real_image.shape
-        stack = tifffile.memmap(
-            filename,
-            shape=(T, 3, Y, X),
-            dtype="u1",
-            imagej=True,
-            metadata={
-                "axes": "TCYX",
-                "labels": [
-                    f"index: {i:d}" for i in range(params["start_T"], end_T + 1)
-                ],
-            },
-        )
-        pts = np.stack((x - org_x_st, y - org_y_st), axis=-1)
+
+        stack = np.zeros((T, 3, Y, X), dtype="u1")
+
+        pts = np.stack((x_on_img, y_on_img), axis=-1)
 
         # OpenCV only accept np.int32
         pts = np.clip(pts, 0, None).astype("i4")
 
-        for i, (pt, im) in enumerate(zip(pts, real_image)):
+        for i in range(T):
             if i % 100 == 0:
-                print(i + 1, end=" ")
-            im_rgb = cv2.cvtColor(im, cv2.COLOR_GRAY2BGR)
+                print(i + start_t, end=" ")
+
+            im_bgr = cv2.cvtColor(real_image[i], cv2.COLOR_GRAY2BGR)
             # pt is an [N, 2] array, OpenCV only use (1, N, 2) for plotting.
             im_lines = cv2.polylines(
-                im_rgb,
-                [pt],
+                im_bgr,
+                [pts[i]],
                 isClosed=False,
                 color=(0, 0, 255),
                 thickness=3,
             )  # (Y, X, C)
             # (Y, X, C) => (C, Y, X)
             stack[i] = np.transpose(im_lines, (2, 0, 1)).astype("u1")
-            stack.flush()
+
+        tifffile.imwrite(
+            filename,
+            data=stack,
+            imagej=True,
+            metadata={
+                "axes": "TCYX",
+                "labels": [f"index: {start_t + i:d}" for i in range(T)],
+            },
+        )
         logger.info("Multipage Tiff saved to " + filename)
 
     logger.info("Params and plots are successfully saved.")
-    logger.info(f"Code finished at {datetime.datetime.now()}")
+    logger.info(f"Code finished at {get_time_now(tz)}")

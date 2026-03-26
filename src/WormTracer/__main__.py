@@ -6,6 +6,8 @@ import pathlib
 import subprocess
 import sys
 
+import matplotlib
+
 from WormTracer import wt
 
 
@@ -119,8 +121,15 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
     conf = {k: v for k, v in vars(args).items() if v is not None}
-
+    backend = matplotlib.get_backend()
+    # Set matplotlib backend to Agg while running WormTracer as script.
+    if backend != "Agg":
+        matplotlib.use("Agg")
     wt.run(**conf)
+    try:
+        matplotlib.use(backend)
+    except Exception:
+        pass
 
 
 def main_wrapper():

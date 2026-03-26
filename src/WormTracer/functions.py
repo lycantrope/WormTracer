@@ -139,7 +139,7 @@ def get_property(
 ) -> tuple[Sequence[int], bool, bool, int]:
     if filenames[0].name.lower().endswith((".tif", ".tiff")):
         try:
-            ims = tifffile.memmap(filenames[0], mode="r")
+            ims = tifffile.imread(filenames[0])
         except ValueError as e:
             err_msg = "This file is not a valid ImageJ format. Please save your Tiff file using ImageJ: {}"
             raise ValueError(err_msg.format(e))
@@ -191,7 +191,7 @@ def load_image(
         # multipage tiff file
         if filenames[0].name.lower().endswith((".tif", ".tiff")):
             try:
-                ims = tifffile.memmap(filenames[0], mode="r")
+                ims = tifffile.imread(filenames[0])
             except ValueError as e:
                 err_msg = "This file is not a valid ImageJ format. Please save your Tiff file using ImageJ: {}"
                 raise ValueError(err_msg.format(e))

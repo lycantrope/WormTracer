@@ -9,8 +9,8 @@ import os
 import shutil
 import typing
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
-import matplotlib
 import numpy as np
 import roifile
 import torch
@@ -143,7 +143,6 @@ def ensure_clearup(logger: logging.Logger) -> Callable:
         @functools.wraps(fn)
         def wrapper(*arg, **kwargs):
             tic = datetime.datetime.now()
-            backend = matplotlib.get_backend()
             original_level = logger.getEffectiveLevel()
             for h in logger.handlers[:]:
                 h.close()
@@ -169,10 +168,6 @@ def ensure_clearup(logger: logging.Logger) -> Callable:
 
                 logger.setLevel(original_level)
                 logger.propagate = True
-                try:
-                    matplotlib.use(backend)
-                except Exception:
-                    pass
 
         return wrapper
 
@@ -370,3 +365,63 @@ def save_params_into_commented_yaml(outputpath: os.PathLike, conf: dict[str, Any
     # Write to a file
     with open(outputpath, "w") as f:
         yaml.dump(data, f)
+
+
+def verify_parameters(params: dict[str, Any]) -> dict[str, Any]:
+    # Required parameters
+    required_params = [
+        "plot_n",
+        "continuity_loss_weight",
+        "smoothness_loss_weight",
+        "length_loss_weight",
+        "center_loss_weight",
+        "body_ratio",
+    ]
+    for k in required_params:
+        if k not in params:
+            raise ValueError(f"Cannot find the parameter: {k}")
+
+    # Optional parameters
+    # Get the current time in the local system's time zone, aware of the offset
+    local_time_aware = datetime.datetime.now(ZoneInfo("UTC")).astimezone()
+    # The time difference (offset) is available via .utcoffset()
+    offset = local_time_aware.utcoffset()
+    # Timezone
+    params["local_time_difference"] = params.get("local_time_difference", offset)
+
+    # Dataset
+    params["start_T"] = params.get("start_T", 0)
+    params["end_T"] = params.get("end_T", 0)
+    params["rescale"] = params.get("rescale", 1.0)
+    params["Tscale"] = params.get("Tscale", 1)
+    # Head/Tail Judge
+    params["judge_head_method"] = params.get("judge_head_method", "frequency")
+
+    # Train
+    params["speed"] = params.get("speed", 0.05)
+    params["lr"] = params.get("lr", 0.05)
+    params["epoch_plus"] = params.get("epoch_plus", 1500)
+
+    # Display
+    params["num_t"] = params.get("num_t", 5)
+    params["ShowProgress"] = params.get("ShowProgress", False)
+    params["SaveProgress"] = params.get("SaveProgress", False)
+    params["show_progress_freq"] = params.get("show_progress_freq", False)
+    params["save_progress_freq"] = params.get("save_progress_freq", False)
+    params["save_progress_num"] = params.get("save_progress_num", False)
+    # Export
+    params["SaveCenterlinedWormsSerial"] = params.get(
+        "SaveCenterlinedWormsSerial", False
+    )
+    params["SaveCenterlinedWormsMovie"] = params.get("SaveCenterlinedWormsMovie", False)
+    params["SaveCenterlinedWormsMultitiff"] = params.get(
+        "SaveCenterlinedWormsMultitiff", False
+    )
+    return params
+
+
+def get_time_now(
+    tz: datetime.timezone,
+    fmt: str = "%Y-%m-%d_%H:%M:%S.%f",
+) -> str:
+    return datetime.datetime.now(tz).strftime(fmt)
