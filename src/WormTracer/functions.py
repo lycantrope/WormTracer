@@ -954,7 +954,7 @@ class Model(torch.nn.Module):
         x = F.pad(x, pad=(1, 0))
         x = (x - x.mean(dim=1, keepdim=True)) * unitLength + cx
 
-        y = torch.cumsum(torch.cos(self.theta), dim=1)
+        y = torch.cumsum(torch.sin(self.theta), dim=1)
         y = F.pad(y, pad=(1, 0))
         y = (y - y.mean(dim=1, keepdim=True)) * unitLength + cy
 

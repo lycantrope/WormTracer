@@ -369,7 +369,7 @@ def save_params_into_commented_yaml(outputpath: os.PathLike, conf: dict[str, Any
 
 def verify_parameters(params: dict[str, Any]) -> dict[str, Any]:
     # Required parameters
-    required_params = [
+    mandatory_params = [
         "plot_n",
         "continuity_loss_weight",
         "smoothness_loss_weight",
@@ -377,7 +377,7 @@ def verify_parameters(params: dict[str, Any]) -> dict[str, Any]:
         "center_loss_weight",
         "body_ratio",
     ]
-    for k in required_params:
+    for k in mandatory_params:
         if k not in params:
             raise ValueError(f"Cannot find the parameter: {k}")
 
