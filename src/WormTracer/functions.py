@@ -908,6 +908,12 @@ def make_model_image(cent_x, cent_y, theta, unitLength, image_info, params):
     return image
 
 
+def to_param(data: Any) -> nn.Parameter:
+    # Ensure it's a tensor first, then wrap as Parameter
+    t = data if torch.is_tensor(data) else torch.tensor(data, dtype=torch.float32)
+    return nn.Parameter(t.detach().clone())
+
+
 class Model(torch.nn.Module):
     def __init__(
         self,
@@ -918,13 +924,14 @@ class Model(torch.nn.Module):
         params: dict[str, Any],
     ):
         super().__init__()
-        self.cx = nn.parameter.Parameter(init_cx)
-        self.cy = nn.parameter.Parameter(init_cy)
-        self.theta = nn.parameter.Parameter(init_theta)
-        self.unitLength = nn.parameter.Parameter(init_unitLength)
-        self.alpha = nn.parameter.Parameter(torch.tensor(params["init_alpha"]))
-        self.gamma = nn.parameter.Parameter(torch.tensor(params["init_gamma"]))
-        self.delta = nn.parameter.Parameter(torch.tensor(params["init_delta"]))
+        self.cx = to_param(init_cx)
+        self.cy = to_param(init_cy)
+        self.theta = to_param(init_theta)
+        self.unitLength = to_param(init_unitLength)
+
+        self.alpha = to_param(params["init_alpha"])
+        self.gamma = to_param(params["init_gamma"])
+        self.delta = to_param(params["init_delta"])
         params["alpha"] = self.alpha
         params["gamma"] = self.gamma
         params["delta"] = self.delta

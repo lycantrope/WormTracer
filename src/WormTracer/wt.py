@@ -736,7 +736,7 @@ center loss : {np.mean(losses_all[(3, i)][4])}
         arr["index"] = np.arange(block.start, block.end + 1)
         arr["is_complex"] = block.is_complex
         if guide_idx is not None:
-            arr["is_guide"] = guide_idx[arr["index"]]
+            arr["is_guide"] = np.isin(arr["index"], guide_idx)
         arr["image_loss"] = loss[0]
         arr["continuity_loss"] = loss[1]
         arr["smoothing_loss"] = loss[2]
