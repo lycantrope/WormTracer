@@ -318,7 +318,7 @@ The [napari-wormtracer](https://github.com/lycantrope/napari-wormtracer) plugin 
 For further details, see https://github.com/lycantrope/napari-wormtracer
 
 ## Reference
-"WormTracer: A precise method for worm posture analysis using temporal continuity"
-Koyo Kuze, Ukyo T. Tazawa, Karin Suwazono, Chung-Kuan Chen, Yu Toyoshima, Yuichi Iino,
-Journal of Neuroscience Methods,
-https://doi.org/10.1016/j.jneumeth.2025.110644
+* "WormTracer: A precise method for worm posture analysis using temporal continuity"
+bioRxiv 2023.12.11.571048; doi: https://doi.org/10.1101/2023.12.11.571048
+* "WormTracer: A precise method for worm posture analysis using temporal continuity"
+Journal of Neuroscience Methods 427 (2026) 110644; doi: https://doi.org/10.1016/j.jneumeth.2025.110644
