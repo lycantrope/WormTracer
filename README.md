@@ -20,7 +20,7 @@ uv add "wormtracer @ git+https://github.com/lycantrope/WormTracer.git"
 ```
 ### Using git
 
-Alternatively, you can "git clone" this repository to any directory via
+Alternatively, you can `git clone` this repository to any directory via
 ```sh
 git clone https://github.com/lycantrope/WormTracer.git && cd WormTracer
 ```
@@ -51,15 +51,14 @@ napari
 
 ### Data Format  
 WormTracer requires a time series of binarized worm images. WormTracer accepts a single file containing all images that can be read by `tifffile/OpenCV`, or a folder containing image sequence (tif/png/jpeg).  
-If the folder is provided, WormTracer will grab all files from folder with the most abundant data format and WormTracer will try to load them by the name in lexicographic order. This should reflect the chornological order of your images.  
+If a folder is provided, WormTracer will identify all files using the most common data format and load them in lexicographical order. To ensure the images are processed in the correct chronological sequence, files must be named numerically or alphabetically according to your desired order (e.g., frame_001.png, frame_002.png).
 
 ### Binarization  
 Since the quality of binarized mask significantly affects the accuracy of WormTracer's centerline estimation, we recommend manually binarizing raw images.  
-ImageJ provides several methods to binarize the raw images (`"Image > Adjust > Threshold"`). After binarizing the images as mask, you can export the masks as image sequence via `"File > Save as > Image Sequence..."` or 
-as a multipage tiff file by `"File > Save as > Tiff..."`.
+ImageJ provides several methods to binarize the raw images (`"Image > Adjust > Threshold"`). After binarizing the images as mask, you can export the masks as image sequence via `"File > Save as > Image Sequence..."` or as a multipage tiff file by `"File > Save as > Tiff..."`.
 
 ### Tips
-For a movie that includes a high rate of bent postures, such as a loopy mutant or a worm behaved high rate of omega turns, it is recommended to relatively strict threshold (smaller worm area and thin body), even if holes are seen in the binarized worm body.  
+For a movie that includes a high rate of bent postures, such as a loopy mutant or a worm behaving high rate of omega turns, it is recommended to relatively strict threshold (smaller worm area and thin body), even if holes are seen in the binarized worm body.  
 When accurate positioning of the centerline at the head and tail tips are required, it is recommended to use a loose threshold so that the shape of two tips appear clearly.
 
 
@@ -161,7 +160,7 @@ SaveCenterlinedWormsMovie: false
 SaveCenterlinedWormsMultitiff: false
 ```
 
-And some parameters can be ignored. The following is the minimal `parameter_file.yaml` file required to run WormTracer using sample data.
+And some parameters can be ignored. The following is the minimal parameters required to run WormTracer using sample data.
 * **`essential_params.yaml`**
 ```yaml 
 # Number of points on centerline
@@ -292,15 +291,15 @@ Inside the result folder (e.g., `hoge_mask_001`), the following files are genera
 * `hoge_mask_001_skel.h5`: An HDF5 file containing two datasets, x and y.
 * `hoge_mask_001_RoiSet.zip`: A collection of ImageJ-compatible ROIs (Regions of Interest) that can be directly imported into the ImageJ RoiManager for visualization.
 * `hoge_mask_001_losses.csv`: Loss values recorded across all training steps, containing
-* * `step`: The specific training step.
-* * `block`: The training block within WormTracer.
-* * `index`: The exact frame index.
-* * `is_complex`: Boolean indicating if the frame belongs to a complex posture block.
-* * `is_guide`: Boolean indicating if the frame was used as a guide frame.
-* * `image_loss`, `continuity_loss`,`smoothing_loss`,`length_loss`, `center_loss`
-* 
+  * `step`: The specific training step.
+  * `block`: The training block within WormTracer.
+  * `index`: The exact frame index.
+  * `is_complex`: Boolean indicating if the frame belongs to a complex posture block.
+  * `is_guide`: Boolean indicating if the frame was used as a guide frame.
+  * And following losses: `image_loss`, `continuity_loss`, `smoothing_loss`, `length_loss`, `center_loss`
+  
 If the corresponding flags are enabled (see [Configuration](#configuration-of-wormtracer-hyperparameter)), WormTracer can generate cropped mask images with overlaid centerlines in the following formats:
-*  `hoge_mask_001/hoge_mask_001_png/`: A directory containing the image sequence in PNG format.
+*  `hoge_mask_001_png/image_%05d.png`: A directory containing the image sequence in PNG format.
 *  `hoge_mask_001.mp4`: A rendered MP4 video of the tracked sequence.
 *  `hoge_mask_001.tif`: multi-page of ImageJ-Tiff
 
@@ -308,7 +307,7 @@ If the corresponding flags are enabled (see [Configuration](#configuration-of-wo
 ### Guide Files
 In the latest version of WormTracer, you can provide guide files to serve as a ground truth for specific frames. This is particularly useful when a training block is too large or contains no "simple" postures for the algorithm to anchor to.  
 Frames marked in a guide file are treated as stationary points (fixed ground truth) during training. WormTracer will split the training block at these points, significantly improving optimization in long or complex sequences.  
-The guide file follows the exact same format as the standard WormTracer output (_x.csv, _y.csv, or .h5). During processing, any rows with *`NaN` values* will be ignored and optimized normally by the algorithm; **`only`** rows containing *`non-NaN`* values will be automatically identified as a guide point.
+The guide file follows the exact same format as the standard WormTracer output (_x.csv, _y.csv, or .h5). During processing, any rows with *`NaN` values* will be ignored and optimized normally by the algorithm; **`ONLY`** rows containing *`non-NaN`* values will be automatically identified as a guide point.
 
 ### Generating Guide Files with napari-wormtracer
 The [napari-wormtracer](https://github.com/lycantrope/napari-wormtracer) plugin allows you to refine your results through two main workflows:
