@@ -50,7 +50,7 @@ napari
 ## Preprocess of the images
 
 ### Data Format  
-WormTracer requires a time series of binarized worm images. WormTracer accepts a single file containing all images that can be read by `tifffile/OpenCV`, or a folder containing image sequence (tif/png/jpeg).  
+WormTracer requires a time series of binarized worm images. WormTracer accepts a single file containing all images that can be read by **`tifffile/OpenCV`**, or a folder containing image sequence (tif/png/jpeg).  
 If a folder is provided, WormTracer will identify all files using the most common data format and load them in lexicographical order. To ensure the images are processed in the correct chronological sequence, files must be named numerically or alphabetically according to your desired order (e.g., frame_001.png, frame_002.png).
 
 ### Binarization  
@@ -64,7 +64,7 @@ When accurate positioning of the centerline at the head and tail tips are requir
 
 ## Configuration of WormTracer Hyperparameter
 The following YAML file describes all the configurable hyperparameters used by WormTracer.
-**`all_params.yaml`**:
+* **`all_params.yaml`**
 ```yaml 
 # General Settings
 local_time_difference: 9  # UTC timezone
@@ -178,10 +178,10 @@ body_ratio: 90
 ## Centerlines Estimation
 
 ### Input arguments
-* `parameter_file`: path to your params.yaml file. Detail setup please check the [YAML configuration](#configuration-of-wormtracer-hyperparameter)
-* `dataset_path`: path to your time-series binarized images, either folder or file is acceptable. Details please check [here](#preprocess-of-the-images).
-* `output_directory` (optional): If provided the final output will be save in `output_directory` but not the parent folder of `dataset_path`
-* `guide_files` (list[os.Pathlike], optional): the path to the guide files. (see [Guide Files](#guide-files))  
+* **`parameter_file`**: path to your params.yaml file. Detail setup please check the [YAML configuration](#configuration-of-wormtracer-hyperparameter)
+* **`dataset_path`**: path to your time-series binarized images, either folder or file is acceptable. Details please check [here](#preprocess-of-the-images).
+* **`output_directory`** (optional): If provided the final output will be save in `output_directory` but not the parent folder of `dataset_path`
+* **`guide_files`** (list[os.Pathlike], optional): the path to the guide files. (see [Guide Files](#guide-files))  
   
 ### Using python scripts
 * **Run with params.yaml**
@@ -238,7 +238,7 @@ wt.run(
 
 ### Using command-line interface (CLI)
 
-* Use `-h/--help` to see further details.
+* Use **`-h/--help`** to see further details.
 ```sh
 python -m WormTracer --help
 ```
@@ -281,16 +281,16 @@ python -m WormTracer \
 
 ### WormTracer Output Format
 WormTracer organizes all results into a structured directory for each analysis run.
-* **Output Directory**: The final output folder is located at the parent directory of `dataset_path`, or at the custom `output_directory` if one is provided. 
-* **Folder naming**: The folder name is derived from the dataset_path and suffixed with an incrementing number (e.g., hoge_mask_001). WormTracer automatically creates this directory within the Output Directory.
+* **`Output Directory`**: The final output folder is located at the parent directory of `dataset_path`, or at the custom `output_directory` if one is provided. 
+* **`Folder naming`**: The folder name is derived from the dataset_path and suffixed with an incrementing number (e.g., hoge_mask_001). WormTracer automatically creates this directory within the Output Directory.
 Inside the result folder (e.g., `hoge_mask_001`), the following files are generated:
-* `hoge_mask_001.log`: Detailed log information of the execution process.
-* `hoge_mask_001_params.yaml`: A YAML file containing all initial parameters used for the run, supplemented with additional metadata such as the original dataset_path and the final optimized (trained) parameters.
-* `hoge_mask_001_x.csv`:  X-coordinates from start_T to end_T. Rows represent time, and columns represent positions from head to tail (T, plot_n).
-* `hoge_mask_001_y.csv`: Y-coordinates formatted identically to the X-coordinate file
-* `hoge_mask_001_skel.h5`: An HDF5 file containing two datasets, x and y.
-* `hoge_mask_001_RoiSet.zip`: A collection of ImageJ-compatible ROIs (Regions of Interest) that can be directly imported into the ImageJ RoiManager for visualization.
-* `hoge_mask_001_losses.csv`: Loss values recorded across all training steps, containing
+* **`hoge_mask_001.log`**: Detailed log information of the execution process.
+* **`hoge_mask_001_params.yaml`**: A YAML file containing all initial parameters used for the run, supplemented with additional metadata such as the original dataset_path and the final optimized (trained) parameters.
+* **`hoge_mask_001_x.csv`**:  X-coordinates from start_T to end_T. Rows represent time, and columns represent positions from head to tail (T, plot_n).
+* **`hoge_mask_001_y.csv`**: Y-coordinates formatted identically to the X-coordinate file
+* **`hoge_mask_001_skel.h5`**: An HDF5 file containing two datasets, x and y.
+* **`hoge_mask_001_RoiSet.zip`**: A collection of ImageJ-compatible ROIs (Regions of Interest) that can be directly imported into the ImageJ RoiManager for visualization.
+* **`hoge_mask_001_losses.csv`**: Loss values recorded across all training steps, containing
   * `step`: The specific training step.
   * `block`: The training block within WormTracer.
   * `index`: The exact frame index.
@@ -299,9 +299,9 @@ Inside the result folder (e.g., `hoge_mask_001`), the following files are genera
   * And following losses: `image_loss`, `continuity_loss`, `smoothing_loss`, `length_loss`, `center_loss`
   
 If the corresponding flags are enabled (see [Configuration](#configuration-of-wormtracer-hyperparameter)), WormTracer can generate cropped mask images with overlaid centerlines in the following formats:
-*  `hoge_mask_001_png/image_%05d.png`: A directory containing the image sequence in PNG format.
-*  `hoge_mask_001.mp4`: A rendered MP4 video of the tracked sequence.
-*  `hoge_mask_001.tif`: multi-page of ImageJ-Tiff
+*  **`hoge_mask_001_png/image_%05d.png`**: A directory containing the image sequence in PNG format.
+*  **`hoge_mask_001.mp4`**: A rendered MP4 video of the tracked sequence.
+*  **`hoge_mask_001.tif`**: multi-page of ImageJ-Tiff
 
 ## Postprocessing or re-run WormTracer with guide points
 ### Guide Files
@@ -313,7 +313,7 @@ The guide file follows the exact same format as the standard WormTracer output (
 The [napari-wormtracer](https://github.com/lycantrope/napari-wormtracer) plugin allows you to refine your results through two main workflows:
 * Direct Editing: Load a WormTracer output file to manually inspect and correct specific centerlines for difficult frames.
 
-* Export as guide file (`with_guide`): Select high-confidence frames and export them as a guide file. The plugin saves all **revised frames** as non-NaN data, while all other rows are automatically set to `NaN`. These NaN rows will then be optimized normally by the algorithm during the next run.
+* Export as guide file (`with_guide`): Select high-confidence frames and export them as a guide file. The plugin saves all **revised frames** as non-NaN data, while all other rows are automatically set to *`NaN`*. These NaN rows will then be optimized normally by the algorithm during the next run.
 
 For further details, see https://github.com/lycantrope/napari-wormtracer
 
