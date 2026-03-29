@@ -1,9 +1,9 @@
 # WormTracer
 An algorithm designed to accurately determine the centerline of a worm in time-lapse images.  
 
-[WormTracer](#reference) estimates worm centerlines from a sequence of images. This process ensures the continuity of centerlines across time points and captures complex postures, which are usually difficult to assess from an isolated image. The centerlines obtained through WormTracer exhibit higher accuracy compared to those acquired using conventional methods.
-
 ![Abstract](https://github.com/user-attachments/assets/ceae534f-2e23-40d4-808f-0a3abe929abb)
+
+[WormTracer](#reference) estimates worm centerlines from a sequence of images. This process ensures the continuity of centerlines across time points and captures complex postures, which are usually difficult to assess from an isolated image. The centerlines obtained through WormTracer exhibit higher accuracy compared to those acquired using conventional methods.
 
 ## 📑 Table of Contents
 - [WormTracer](#wormtracer)
