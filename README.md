@@ -1,10 +1,34 @@
 # WormTracer
-An algorithm designed to accurately determine the centerline of a worm in time-lapse images.
+An algorithm designed to accurately determine the centerline of a worm in time-lapse images.  
+
+[WormTracer](#reference) estimates worm centerlines from a sequence of images. This process ensures the continuity of centerlines across time points and captures complex postures, which are usually difficult to assess from an isolated image. The centerlines obtained through WormTracer exhibit higher accuracy compared to those acquired using conventional methods.
 
 ![Abstract](https://github.com/user-attachments/assets/ceae534f-2e23-40d4-808f-0a3abe929abb)
 
+## 📑 Table of Contents
+- [WormTracer](#wormtracer)
+  - [📑 Table of Contents](#-table-of-contents)
+  - [Installation](#installation)
+    - [Using pip](#using-pip)
+    - [Using uv](#using-uv)
+    - [Using git](#using-git)
+  - [Installation with napari-wormtracer](#installation-with-napari-wormtracer)
+  - [Preprocess of the images](#preprocess-of-the-images)
+    - [Data Format](#data-format)
+    - [Binarization](#binarization)
+    - [Tips](#tips)
+  - [Configuration of WormTracer Hyperparameter](#configuration-of-wormtracer-hyperparameter)
+  - [Centerlines Estimation](#centerlines-estimation)
+    - [Input arguments](#input-arguments)
+    - [Using python scripts](#using-python-scripts)
+    - [Using command-line interface (CLI)](#using-command-line-interface-cli)
+    - [Using Google Colab](#using-google-colab)
+    - [WormTracer Output Format](#wormtracer-output-format)
+  - [Postprocessing or re-run WormTracer with guide points](#postprocessing-or-re-run-wormtracer-with-guide-points)
+    - [Guide Files](#guide-files)
+    - [Generating Guide Files with napari-wormtracer](#generating-guide-files-with-napari-wormtracer)
+  - [Reference](#reference)
 
-[WormTracer](#reference) estimates worm centerlines from a sequence of images. This process ensures the continuity of centerlines across time points and captures complex postures, which are usually difficult to assess from an isolated image. The centerlines obtained through WormTracer exhibit higher accuracy compared to those acquired using conventional methods.
 
 
 

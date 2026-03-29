@@ -43,7 +43,7 @@ def set_output_path(
 
     dataset_prefix = Path(dataset_path).stem
     # If the output folder with the same name already exists, the series number is incremented by 1 from 001 to 999.
-    for i in range(1, 1001):
+    for i in range(1, 1000):
         try:
             output_path = output_dir_p.joinpath(f"{dataset_prefix}_output_{i:0>3d}")
             output_path.mkdir()

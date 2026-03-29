@@ -334,14 +334,11 @@ def get_width(im: npt.NDArray, x: npt.NDArray, y: npt.NDArray) -> npt.NDArray:
     """Get width of the object by measure distance of centerline to the object's surface."""
     im_filled = ndi.binary_fill_holes(im)
     assert im_filled is not None, "Err after binary_fill_holes"
-    x = x.reshape([-1, 1, 1])
-    y = y.reshape([-1, 1, 1])
-    y_3d = np.arange(im_filled.shape[0]).reshape([1, -1, 1])
-    x_3d = np.arange(im_filled.shape[1]).reshape([1, 1, -1])
-    segment_distance = np.sqrt((x - x_3d) ** 2 + (y - y_3d) ** 2)
-    max_dist = im_filled.shape[0] + im_filled.shape[1]
-    new_segment_distance = segment_distance + im_filled * max_dist
-    wid = new_segment_distance.min(axis=(1, 2)).max()
+    im_dist = ndi.distance_transform_edt(im_filled)
+    coordinates = [y, x]  # Shape (2, plot_n)
+    #
+    dist_to_zero = ndi.map_coordinates(im_dist, coordinates, order=1)
+    wid = dist_to_zero.max()
     return wid
 
 
@@ -357,9 +354,10 @@ def flip_check(x: npt.NDArray, y: npt.NDArray) -> tuple[npt.NDArray, npt.NDArray
         axis=1,
     )
     ex_t = gap_headtail > gap_headtail_ex
-    ex_r = np.cumsum(ex_t) % 2 == 1
-    x[1:, :][ex_r] = x[1:, ::-1][ex_r]
-    y[1:, :][ex_r] = y[1:, ::-1][ex_r]
+    ex_r = np.bitwise_xor.accumulate(ex_t)
+    idx = np.where(ex_r)[0] + 1
+    x[idx, :] = x[idx, ::-1]
+    y[idx, :] = y[idx, ::-1]
     return x, y
 
 
