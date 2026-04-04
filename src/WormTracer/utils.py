@@ -385,7 +385,12 @@ def verify_parameters(params: dict[str, Any]) -> dict[str, Any]:
     # Get the current time in the local system's time zone, aware of the offset
     local_time_aware = datetime.datetime.now(ZoneInfo("UTC")).astimezone()
     # The time difference (offset) is available via .utcoffset()
-    offset = local_time_aware.utcoffset()
+    offset_dt = local_time_aware.utcoffset()
+    if offset_dt is None:
+        offset = 0
+    else:
+        offset = int(offset_dt.total_seconds() / 3600)
+
     # Timezone
     params["local_time_difference"] = params.get("local_time_difference", offset)
 

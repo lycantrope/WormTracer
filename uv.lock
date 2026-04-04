@@ -6555,6 +6555,7 @@ dependencies = [
     { name = "torch", version = "2.9.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "torchvision", version = "0.23.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "torchvision", version = "0.24.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
+    { name = "tzdata" },
 ]
 
 [package.optional-dependencies]
@@ -6567,6 +6568,7 @@ gui = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "ipykernel" },
     { name = "ruff" },
 ]
 
@@ -6586,11 +6588,15 @@ requires-dist = [
     { name = "scipy" },
     { name = "torch" },
     { name = "torchvision" },
+    { name = "tzdata" },
 ]
 provides-extras = ["gui"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "ruff" }]
+dev = [
+    { name = "ipykernel", specifier = ">=6.31.0" },
+    { name = "ruff" },
+]
 
 [[package]]
 name = "wrapt"
