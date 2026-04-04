@@ -1371,7 +1371,7 @@ def show_loss_plot(losses, title=""):
     plt.close(fig)
 
 
-def find_losslarge_area(losses_all) -> dict[int, int]:
+def find_losslarge_area(losses_all) -> list[tuple[int, int]]:
     losslarge_area = dict()
     for i in range(3):
         lossi = np.concatenate([loss[i] for loss in losses_all.values()], axis=None)
@@ -1386,7 +1386,7 @@ def find_losslarge_area(losses_all) -> dict[int, int]:
                 # removing the idx from losslarge_area
                 losslarge_area.pop(idx)
 
-    return losslarge_area
+    return [(step, idx) for idx, step in losslarge_area.items()]
 
 
 ### arrange and save data ###

@@ -549,7 +549,7 @@ center loss : {np.mean(losses[4])}
         "STEP3 : re-optimization for unsuccessful blocks with complex postures\n"
     )
 
-    for step, i in losslarge_area.items():
+    for step, i in losslarge_area:
         block = all_blocks[i]
         if not block.is_complex:
             continue
