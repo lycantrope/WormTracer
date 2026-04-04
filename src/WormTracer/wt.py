@@ -549,7 +549,7 @@ center loss : {np.mean(losses[4])}
         "STEP3 : re-optimization for unsuccessful blocks with complex postures\n"
     )
 
-    for i in losslarge_area:
+    for step, i in losslarge_area.items():
         block = all_blocks[i]
         if not block.is_complex:
             continue
@@ -628,8 +628,8 @@ center loss : {np.mean(losses[4])}
         y_model = y_model.detach().cpu().numpy()
         theta_model = model.theta.detach().cpu().numpy()
         # get trace information if loss is smaller
-        # Here, the losses was compared with step2 loss
-        if loss_compare([losses_all[(2, i)], losses]):
+        # Here, the losses was compared with loss from previous step
+        if loss_compare([losses_all[(step, i)], losses]):
             print("update")
             update = 2
             # We stored the losses in (step3, i)

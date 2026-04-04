@@ -1371,19 +1371,20 @@ def show_loss_plot(losses, title=""):
     plt.close(fig)
 
 
-def find_losslarge_area(losses_all) -> Set[int]:
-    losslarge_area = set()
+def find_losslarge_area(losses_all) -> dict[int, int]:
+    losslarge_area = dict()
     for i in range(3):
         lossi = np.concatenate([loss[i] for loss in losses_all.values()], axis=None)
         q75, q50, q25 = np.percentile(lossi, [75, 50, 25])
         for (step, idx), loss in losses_all.items():
             if np.max(loss[i]) - q50 > (q75 - q25) * 4:
-                losslarge_area.add(idx)
+                # Can be step 1 or 2
+                losslarge_area[idx] = step
             elif idx in losslarge_area:
                 # Assume that loss in step2 is lower than step1
                 # If the loss in the step2 passed the criteria
                 # removing the idx from losslarge_area
-                losslarge_area.remove(idx)
+                losslarge_area.pop(idx)
 
     return losslarge_area
 

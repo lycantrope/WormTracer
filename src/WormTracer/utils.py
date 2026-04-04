@@ -383,12 +383,14 @@ def verify_parameters(params: dict[str, Any]) -> dict[str, Any]:
 
     # Optional parameters
     # Get the current time in the local system's time zone, aware of the offset
+    # requirement: tzdata
     local_time_aware = datetime.datetime.now(ZoneInfo("UTC")).astimezone()
     # The time difference (offset) is available via .utcoffset()
-    offset_dt = local_time_aware.utcoffset()
+    offset_dt = local_time_aware.utcoffset()  # timedelta or None
     if offset_dt is None:
         offset = 0
     else:
+        # timedelta to hours
         offset = int(offset_dt.total_seconds() / 3600)
 
     # Timezone
