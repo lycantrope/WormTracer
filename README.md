@@ -264,7 +264,7 @@ wt.run(
 
 * Use **`-h/--help`** to see further details.
 ```sh
-python -m wormtracer --help                                                                 
+python -m WormTracer --help                                                                 
 usage: WormTracer [-h] [-o OUTPUT_DIRECTORY] [-g GUIDE_FILES [GUIDE_FILES ...]] [--start_T START_T]
                   [--end_T END_T] [--rescale RESCALE] [--Tscale TSCALE]
                   [--continuity_loss_weight CONTINUITY_LOSS_WEIGHT]
