@@ -1147,7 +1147,7 @@ def train3(
             break
         optimizer.step()
 
-        if e % save_progress_freq > 0:
+        if not (show_flag or save_flag) or e % save_progress_freq > 0:
             continue
 
         # Save Progress

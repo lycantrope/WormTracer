@@ -85,17 +85,17 @@ def get_parser():
     parser.add_argument(
         "--show_progress_freq",
         type=int,
-        help="This value is epoch frequency of displaying tracing progress.",
+        help="This value is epoch frequency of displaying tracing progress. (default: 200)",
     )
     parser.add_argument(
         "--save_progress_freq",
         type=int,
-        help="This value is epoch frequency of saving tracing progress.",
+        help="This value is epoch frequency of saving tracing progress. (default: 50)",
     )
     parser.add_argument(
         "--save_progress_num",
         type=int,
-        help="This value is the number of images that are included in saved progress tracing.",
+        help="This value is the number of images that are included in saved progress tracing. (default: 50)",
     )
 
     parser.add_argument(

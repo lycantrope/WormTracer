@@ -411,9 +411,9 @@ def verify_parameters(params: dict[str, Any]) -> dict[str, Any]:
     params["num_t"] = params.get("num_t", 5)
     params["ShowProgress"] = params.get("ShowProgress", False)
     params["SaveProgress"] = params.get("SaveProgress", False)
-    params["show_progress_freq"] = params.get("show_progress_freq", False)
-    params["save_progress_freq"] = params.get("save_progress_freq", False)
-    params["save_progress_num"] = params.get("save_progress_num", False)
+    params["show_progress_freq"] = params.get("show_progress_freq", 200)
+    params["save_progress_freq"] = params.get("save_progress_freq", 50)
+    params["save_progress_num"] = params.get("save_progress_num", 50)
     # Export
     params["SaveCenterlinedWormsSerial"] = params.get(
         "SaveCenterlinedWormsSerial", False
