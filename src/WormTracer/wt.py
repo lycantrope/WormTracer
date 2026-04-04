@@ -629,7 +629,8 @@ center loss : {np.mean(losses[4])}
         theta_model = model.theta.detach().cpu().numpy()
         # get trace information if loss is smaller
         # Here, the losses was compared with loss from previous step
-        if loss_compare([losses_all[(step, i)], losses]):
+        prev_loss = losses_all[(step, i)]
+        if loss_compare([prev_loss, losses]):
             print("update")
             update = 2
             # We stored the losses in (step3, i)
@@ -663,7 +664,7 @@ center loss : {np.mean(losses[4])}
         losses = losses[:, l_pad : l_pad + block.size]
 
         # get trace information if loss is smaller
-        if loss_compare([losses_all[(3, i)], losses]):
+        if loss_compare([losses_all.get((3, i), prev_loss), losses]):
             print("update")
             update = 3
             with torch.no_grad():
