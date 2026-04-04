@@ -592,7 +592,8 @@ class TrainingBlocks:
         self.simple_area = np.bitwise_not(self.complex_area)
 
         # Merge remaining non-complex blocks
-        distinct_from_prev = self.complex_area[:-1] ^ self.complex_area[1:]
+        distinct_from_prev = np.zeros_like(complex_area).astype(bool)
+        distinct_from_prev[1:] = self.complex_area[:-1] ^ self.complex_area[1:]
         merged_blocks = distinct_from_prev.astype(int).cumsum()
         self.blocks = merged_blocks
         complex_block_count = np.bincount(merged_blocks, weights=self.complex_area)
