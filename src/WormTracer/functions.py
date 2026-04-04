@@ -587,11 +587,17 @@ class TrainingBlocks:
         complex_block_count = np.bincount(blocks, weights=(losses > rigid))
         complex_block = np.where(complex_block_count > 0)[0]
 
-        self.blocks = blocks
-        self.complex_block = complex_block
-
+        # Get mask of complex_area that is segmented by relaxed criteria that fulfilled rigid criteria
         self.complex_area = np.isin(blocks, complex_block)
         self.simple_area = np.bitwise_not(self.complex_area)
+
+        # Merge remaining non-complex blocks
+        distinct_from_prev = self.complex_area[:-1] ^ self.complex_area[1:]
+        merged_blocks = distinct_from_prev.astype(int).cumsum()
+        self.blocks = merged_blocks
+        complex_block_count = np.bincount(merged_blocks, weights=self.complex_area)
+        complex_block = np.where(complex_block_count > 0)[0]
+        self.complex_block = complex_block
 
         label = np.unique(self.blocks)
         self.nblock = len(label)
