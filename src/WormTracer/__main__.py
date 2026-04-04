@@ -15,13 +15,15 @@ def get_parser():
     parser = argparse.ArgumentParser("WormTracer")
 
     parser.add_argument(
-        "parameter_file",
+        "--parameter_file",
         type=pathlib.Path,
         help="Path to the parameter file (*.yaml) containing configuration for wormtracer.",
+        required=True,
     )
 
     parser.add_argument(
-        "dataset_path",
+        "--dataset_path",
+        required=True,
         help="Path to a folder containing the input images for analyzing",
     )
     parser.add_argument(
