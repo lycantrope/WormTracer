@@ -265,18 +265,23 @@ wt.run(
 * Use **`-h/--help`** to see further details.
 ```sh
 python -m WormTracer --help                                                                 
-usage: WormTracer [-h] [-o OUTPUT_DIRECTORY] [-g GUIDE_FILES [GUIDE_FILES ...]] [--start_T START_T]
+usage: WormTracer [-h] --parameter_file PARAMETER_FILE
+                  --dataset_path DATASET_PATH [-o OUTPUT_DIRECTORY]
+                  [-g GUIDE_FILES [GUIDE_FILES ...]] [--start_T START_T]
                   [--end_T END_T] [--rescale RESCALE] [--Tscale TSCALE]
                   [--continuity_loss_weight CONTINUITY_LOSS_WEIGHT]
                   [--smoothness_loss_weight SMOOTHNESS_LOSS_WEIGHT]
-                  [--length_loss_weight LENGTH_LOSS_WEIGHT] [--center_loss_weight CENTER_LOSS_WEIGHT]
-                  [--plot_n PLOT_N] [--epoch_plus EPOCH_PLUS] [--speed SPEED] [--lr LR]
-                  [--body_ratio BODY_RATIO] [--judge_head_method {amplitude,frequency}] [--num_t NUM_T]
-                  [--ShowProgress] [--SaveProgress] [--show_progress_freq SHOW_PROGRESS_FREQ]
-                  [--save_progress_freq SAVE_PROGRESS_FREQ] [--save_progress_num SAVE_PROGRESS_NUM]
+                  [--length_loss_weight LENGTH_LOSS_WEIGHT]
+                  [--center_loss_weight CENTER_LOSS_WEIGHT] [--plot_n PLOT_N]
+                  [--epoch_plus EPOCH_PLUS] [--speed SPEED] [--lr LR]
+                  [--body_ratio BODY_RATIO]
+                  [--judge_head_method {amplitude,frequency}] [--num_t NUM_T]
+                  [--ShowProgress] [--SaveProgress]
+                  [--show_progress_freq SHOW_PROGRESS_FREQ]
+                  [--save_progress_freq SAVE_PROGRESS_FREQ]
+                  [--save_progress_num SAVE_PROGRESS_NUM]
                   [--SaveCenterlinedWormsSerial] [--SaveCenterlinedWormsMovie]
                   [--SaveCenterlinedWormsMultitiff]
-                  parameter_file dataset_path
 ```
 
 * **without guide**
