@@ -1,5 +1,5 @@
 # WormTracer
-An algorithm designed to accurately determine the centerline of a worm in time-lapse images.  
+**An algorithm designed to accurately determine the centerline of a worm in time-lapse images.**  
 
 ![Abstract](https://github.com/user-attachments/assets/ceae534f-2e23-40d4-808f-0a3abe929abb)
 
@@ -264,7 +264,19 @@ wt.run(
 
 * Use **`-h/--help`** to see further details.
 ```sh
-python -m WormTracer --help
+python -m wormtracer --help                                                                 
+usage: WormTracer [-h] [-o OUTPUT_DIRECTORY] [-g GUIDE_FILES [GUIDE_FILES ...]] [--start_T START_T]
+                  [--end_T END_T] [--rescale RESCALE] [--Tscale TSCALE]
+                  [--continuity_loss_weight CONTINUITY_LOSS_WEIGHT]
+                  [--smoothness_loss_weight SMOOTHNESS_LOSS_WEIGHT]
+                  [--length_loss_weight LENGTH_LOSS_WEIGHT] [--center_loss_weight CENTER_LOSS_WEIGHT]
+                  [--plot_n PLOT_N] [--epoch_plus EPOCH_PLUS] [--speed SPEED] [--lr LR]
+                  [--body_ratio BODY_RATIO] [--judge_head_method {amplitude,frequency}] [--num_t NUM_T]
+                  [--ShowProgress] [--SaveProgress] [--show_progress_freq SHOW_PROGRESS_FREQ]
+                  [--save_progress_freq SAVE_PROGRESS_FREQ] [--save_progress_num SAVE_PROGRESS_NUM]
+                  [--SaveCenterlinedWormsSerial] [--SaveCenterlinedWormsMovie]
+                  [--SaveCenterlinedWormsMultitiff]
+                  parameter_file dataset_path
 ```
 
 * **without guide**
@@ -307,6 +319,22 @@ python -m WormTracer \
 WormTracer organizes all results into a structured directory for each analysis run.
 * **`Output Directory`**: The final output folder is located at the parent directory of `dataset_path`, or at the custom `output_directory` if one is provided. 
 * **`Folder naming`**: The folder name is derived from the dataset_path and suffixed with an incrementing number (e.g., hoge_mask_001). WormTracer automatically creates this directory within the Output Directory.
+```
+hoge_mask_001
+└── hoge_mask_001.log          
+└── hoge_mask_001_params.yaml
+└── hoge_mask_001_x.csv
+└── hoge_mask_001_y.csv
+└── hoge_mask_001_skel.h5
+└── hoge_mask_001_RoiZet.zip
+└── hoge_mask_001_losses.csv
+└── hoge_mask_001_losses.csv
+ [optional]
+└── hoge_mask_001.mp4 
+└── hoge_mask_001.tif
+└── hoge_mask_001_png
+           └── image_%05d.png 
+```
 Inside the result folder (e.g., `hoge_mask_001`), the following files are generated:
 * **`hoge_mask_001.log`**: Detailed log information of the execution process.
 * **`hoge_mask_001_params.yaml`**: A YAML file containing all initial parameters used for the run, supplemented with additional metadata such as the original dataset_path and the final optimized (trained) parameters.
