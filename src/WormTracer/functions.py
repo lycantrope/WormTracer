@@ -662,7 +662,7 @@ def make_progress_image(
     n_chunk = (subset.shape[0] + 1) // 5
     progress_image = np.zeros((H * n_chunk, W * 5))
     for i, chunk in enumerate(np.array_split(subset, n_chunk, axis=0)):
-        merge = np.hstack(iter(chunk))
+        merge = np.hstack(list(chunk))
         progress_image[i * H : (i + 1) * H, : merge.shape[1]] = merge
     return progress_image
 
