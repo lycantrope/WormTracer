@@ -330,7 +330,7 @@ def run(
         with torch.no_grad():
             x_model, y_model, model_image = model(width=W, height=H)
 
-        theta_model = model.theta.detach().cpu().numpy()
+        # theta_model = model.theta.detach().cpu().numpy()
 
         shape_params.append(
             (
@@ -350,7 +350,7 @@ def run(
 
         x[block.start : block.end + 1, :] = x_model
         y[block.start : block.end + 1, :] = y_model
-        theta[block.start : block.end + 1, :] = theta_model
+        # theta[block.start : block.end + 1, :] = theta_model
 
         # log
         logger.info(
@@ -381,6 +381,9 @@ center loss : {np.mean(losses[4])}
     params["init_alpha"] = torch.tensor(weighted_params[0])
     params["init_gamma"] = torch.tensor(weighted_params[1])
     params["init_delta"] = torch.tensor(weighted_params[2])
+
+    # Ensuring the continuity of theta
+    theta = make_theta_from_xy(x, y)
 
     logger.info("STEP2 : optimization for complex posture blocks\n")
 
@@ -466,7 +469,7 @@ center loss : {np.mean(losses[4])}
 
         x_model = x_model.detach().cpu().numpy()
         y_model = y_model.detach().cpu().numpy()
-        theta_model = model.theta.detach().cpu().numpy()
+        # theta_model = model.theta.detach().cpu().numpy()
 
         # flip final theta to trace again
         theta_[cand_start : cand_end + 1] = theta_cand_rv
@@ -499,21 +502,21 @@ center loss : {np.mean(losses[4])}
 
             x_model = x_model.detach().cpu().numpy()
             y_model = y_model.detach().cpu().numpy()
-            theta_model = model.theta.detach().cpu().numpy()
+            # theta_model = model.theta.detach().cpu().numpy()
 
             losses_all[(2, block.idx)] = losses
 
         # Trim padding
         x_model = x_model[l_pad : l_pad + block.size]
         y_model = y_model[l_pad : l_pad + block.size]
-        theta_model = theta_model[l_pad : l_pad + block.size, :]
+        # theta_model = theta_model[l_pad : l_pad + block.size, :]
         # Add x_st, y_st to restore original position before reconstruction.
         x_model += x_st
         y_model += y_st
 
         x[block.start : block.end + 1, :] = x_model
         y[block.start : block.end + 1, :] = y_model
-        theta[block.start : block.end + 1, :] = theta_model
+        # theta[block.start : block.end + 1, :] = theta_model
 
         # (scale, y_t, x_t)
         if params.get("SaveProgress"):
@@ -557,6 +560,9 @@ center loss : {np.mean(losses[4])}
     logger.info(
         "STEP3 : re-optimization for unsuccessful blocks with complex postures\n"
     )
+
+    # Ensuring the continuity of theta
+    theta = make_theta_from_xy(x, y)
 
     for step, i in losslarge_area:
         block = all_blocks[i]
@@ -642,7 +648,7 @@ center loss : {np.mean(losses[4])}
 
         x_model = x_model.detach().cpu().numpy()
         y_model = y_model.detach().cpu().numpy()
-        theta_model = model.theta.detach().cpu().numpy()
+        # theta_model = model.theta.detach().cpu().numpy()
         # get trace information if loss is smaller
         # Here, the losses was compared with loss from previous step
         prev_loss = losses_all[(step, i)]
@@ -688,7 +694,7 @@ center loss : {np.mean(losses[4])}
                 x_model, y_model, model_image = model(width=W, height=H)
             x_model = x_model.detach().cpu().numpy()
             y_model = y_model.detach().cpu().numpy()
-            theta_model = model.theta.detach().cpu().numpy()
+            # theta_model = model.theta.detach().cpu().numpy()
             losses_all[(3, i)] = losses
             remove_progress(output_path, "{}-{}_id[0-2]*.png".format(start, end))
         else:
@@ -699,7 +705,7 @@ center loss : {np.mean(losses[4])}
             # Trim padding
             x_model = x_model[l_pad : l_pad + block.size]
             y_model = y_model[l_pad : l_pad + block.size]
-            theta_model = theta_model[l_pad : l_pad + block.size, :]
+            # theta_model = theta_model[l_pad : l_pad + block.size, :]
             # Add x_st, y_st to restore original position before reconstruction.
             x_model += x_st
             y_model += y_st
@@ -711,7 +717,7 @@ center loss : {np.mean(losses[4])}
 
             x[block.start : block.end + 1, :] = x_model
             y[block.start : block.end + 1, :] = y_model
-            theta[block.start : block.end + 1, :] = theta_model
+            # theta[block.start : block.end + 1, :] = theta_model
 
             # log
             logger.info(
