@@ -374,7 +374,7 @@ center loss : {np.mean(losses[4])}
             show_image(model_image, params["num_t"], title="model image")
             show_loss_plot(losses_all[(0, block.idx)], title="losses of model")
 
-    logger.info(f"STEP1 finished at {time_now}\n")
+    logger.info(f"STEP simple finished at {time_now}\n")
 
     shape_params = np.array(shape_params)
     # Calculating weighted average parameters
@@ -387,20 +387,20 @@ center loss : {np.mean(losses[4])}
     params["init_gamma"] = torch.tensor(weighted_params[1])
     params["init_delta"] = torch.tensor(weighted_params[2])
 
-    number_of_iter = params.get("n_steps", 100)
+    number_of_iter = params.get("n_steps", 5)
     for step in range(number_of_iter):
         training_block = get_use_blocks(image_losses, image_loss_max)
 
         time_now = get_time_now(tz)
         all_blocks = list(training_block.batch_iter(cap_span))
-        if not any(block.is_complex for block in all_blocks):
+        if step != 0 and not any(block.is_complex for block in all_blocks[1:-1]):
             logger.info(f"No complex area found, break optimization at {time_now}\n")
             break
 
         # Ensuring the continuity of theta
         theta = make_theta_from_xy(x, y)
 
-        logger.info(f"STEP{step} : optimization for complex posture blocks\n")
+        logger.info(f"STEP{step}-1: optimization for complex posture blocks\n")
 
         # main loop 2
         for i, block in enumerate(all_blocks):
@@ -560,12 +560,12 @@ center loss : {np.mean(losses[4])}
             # log
             logger.info(
                 f"""image loss : {np.mean(losses[0])}
-    continuity loss : {np.mean(losses[1])}
-    smoothing loss : {np.mean(losses[2])}
-    length loss : {np.mean(losses[3])}
-    center loss : {np.mean(losses[4])}
+continuity loss : {np.mean(losses[1])}
+smoothing loss : {np.mean(losses[2])}
+length loss : {np.mean(losses[3])}
+center loss : {np.mean(losses[4])}
 
-    """
+"""
             )
 
         time_now = get_time_now(tz)
@@ -574,7 +574,7 @@ center loss : {np.mean(losses[4])}
         # revise areas which have too large loss
         losslarge_area = find_losslarge_area(losses_all)
         logger.info(
-            "STEP{step}-2 : re-optimization for unsuccessful blocks with complex postures\n"
+            f"STEP{step}-2 : re-optimization for unsuccessful blocks with complex postures\n"
         )
 
         # Ensuring the continuity of theta
@@ -742,13 +742,13 @@ center loss : {np.mean(losses[4])}
                 # log
                 logger.info(
                     f"""{str(block)} updated
-    image loss : {np.mean(losses_all[(step, i)][0])}
-    continuity loss : {np.mean(losses_all[(step, i)][1])}
-    smoothing loss : {np.mean(losses_all[(step, i)][2])}
-    length loss : {np.mean(losses_all[(step, i)][3])}
-    center loss : {np.mean(losses_all[(step, i)][4])}
+image loss : {np.mean(losses_all[(step, i)][0])}
+continuity loss : {np.mean(losses_all[(step, i)][1])}
+smoothing loss : {np.mean(losses_all[(step, i)][2])}
+length loss : {np.mean(losses_all[(step, i)][3])}
+center loss : {np.mean(losses_all[(step, i)][4])}
 
-    """
+"""
                 )
 
         time_now = get_time_now(tz)
