@@ -165,6 +165,7 @@ def run(
             n_input_images,
         )
 
+        assert guide_x.shape == x.shape
         # We assumed that non-nan in guide_x is served as guide, we overwrite the x, y by guide_x, guide_y
         # Since the guide points were made after restoring the resacle, we need to multiple the rescale to guide_x and guide_y
         x[guide_idx] = guide_x[guide_idx] * params["rescale"]
@@ -421,11 +422,15 @@ center loss : {np.mean(losses[4])}
         T, H, W = real_image.shape
         logger.info(f"im_shape: {real_image.shape}")
         # make flipping theta candidate
-        theta_cand, _ = make_theta_cand(theta_[0], theta_[-1])
+        # make theta_candidate only in complex area
+        theta_cand, _ = make_theta_cand(theta_[l_pad], theta_[l_pad + block.size])
 
+        theta_cand_fw = np.linspace(theta_[l_pad, :], theta_cand[0], block.size)
+        theta_cand_rv = np.linspace(theta_[l_pad, :], theta_cand[1], block.size)
         # set init value
         init_cx, init_cy = set_init_xy(real_image)
-        init_theta = torch.from_numpy(np.linspace(theta_[0, :], theta_cand[0], T))
+        theta_[l_pad : l_pad + block.size] = theta_cand_fw
+        init_theta = torch.from_numpy(np.copy(theta_))
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
 
         # gradient_mask for simple area
@@ -461,7 +466,8 @@ center loss : {np.mean(losses[4])}
         theta_model = model.theta.detach().cpu().numpy()
 
         # flip final theta to trace again
-        init_theta = torch.from_numpy(np.linspace(theta_[0, :], theta_cand[1], T))
+        theta_[l_pad : l_pad + block.size] = theta_cand_rv
+        init_theta = torch.from_numpy(np.copy(theta_))
 
         # make model instance and training
         model = (
@@ -587,11 +593,15 @@ center loss : {np.mean(losses[4])}
         T, H, W = real_image.shape
 
         # make flipping candidate
-        _, theta_cand = make_theta_cand(theta_[0], theta_[-1])
+        _, theta_cand = make_theta_cand(theta_[l_pad], theta_[l_pad + block.size])
+
+        theta_cand_fw = np.linspace(theta_[l_pad, :], theta_cand[0], block.size)
+        theta_cand_rv = np.linspace(theta_[l_pad, :], theta_cand[1], block.size)
 
         # set init value
         init_cx, init_cy = set_init_xy(real_image)
-        init_theta = torch.from_numpy(np.linspace(theta_[0, :], theta_cand[0], T))
+        theta_[l_pad : l_pad + block.size, :] = theta_cand_fw
+        init_theta = torch.from_numpy(np.copy(theta_))
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
 
         # The gradient mask will be all zeros except loss large area.
@@ -641,7 +651,8 @@ center loss : {np.mean(losses[4])}
             remove_progress(output_path, "{}-{}_id2*.png".format(start, end))
 
         # flip final theta and trace again
-        init_theta = torch.from_numpy(np.linspace(theta_[0, :], theta_cand[1], T))
+        theta_[l_pad : l_pad + block.size, :] = theta_cand_rv
+        init_theta = torch.from_numpy(np.copy(theta_))
 
         # make model instance and training
         model = (
