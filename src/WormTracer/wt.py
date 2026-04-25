@@ -423,13 +423,16 @@ center loss : {np.mean(losses[4])}
         logger.info(f"im_shape: {real_image.shape}")
         # make flipping theta candidate
         # make theta_candidate only in complex area
-        theta_cand, _ = make_theta_cand(theta_[l_pad], theta_[l_pad + block.size])
+        cand_start = max(l_pad - 1, 0)
+        cand_end = min(l_pad + block.size + 1, l_pad + block.size)
+        cand_size = cand_end - cand_start + 1
+        theta_cand, _ = make_theta_cand(theta_[cand_start], theta_[cand_end])
 
-        theta_cand_fw = np.linspace(theta_[l_pad, :], theta_cand[0], block.size)
-        theta_cand_rv = np.linspace(theta_[l_pad, :], theta_cand[1], block.size)
+        theta_cand_fw = np.linspace(theta_[cand_start, :], theta_cand[0], cand_size)
+        theta_cand_rv = np.linspace(theta_[cand_start, :], theta_cand[1], cand_size)
         # set init value
         init_cx, init_cy = set_init_xy(real_image)
-        theta_[l_pad : l_pad + block.size] = theta_cand_fw
+        theta_[cand_start:cand_end] = theta_cand_fw
         init_theta = torch.from_numpy(np.copy(theta_))
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
 
@@ -466,7 +469,7 @@ center loss : {np.mean(losses[4])}
         theta_model = model.theta.detach().cpu().numpy()
 
         # flip final theta to trace again
-        theta_[l_pad : l_pad + block.size] = theta_cand_rv
+        theta_[cand_start:cand_end] = theta_cand_rv
         init_theta = torch.from_numpy(np.copy(theta_))
 
         # make model instance and training
@@ -593,14 +596,17 @@ center loss : {np.mean(losses[4])}
         T, H, W = real_image.shape
 
         # make flipping candidate
-        _, theta_cand = make_theta_cand(theta_[l_pad], theta_[l_pad + block.size])
+        cand_start = max(l_pad - 1, 0)
+        cand_end = min(l_pad + block.size + 1, l_pad + block.size)
+        cand_size = cand_end - cand_start + 1
+        _, theta_cand = make_theta_cand(theta_[cand_start], theta_[cand_end])
 
-        theta_cand_fw = np.linspace(theta_[l_pad, :], theta_cand[0], block.size)
-        theta_cand_rv = np.linspace(theta_[l_pad, :], theta_cand[1], block.size)
+        theta_cand_fw = np.linspace(theta_[cand_start, :], theta_cand[0], cand_size)
+        theta_cand_rv = np.linspace(theta_[cand_start, :], theta_cand[1], cand_size)
 
         # set init value
         init_cx, init_cy = set_init_xy(real_image)
-        theta_[l_pad : l_pad + block.size, :] = theta_cand_fw
+        theta_[cand_start:cand_end, :] = theta_cand_fw
         init_theta = torch.from_numpy(np.copy(theta_))
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
 
@@ -651,7 +657,7 @@ center loss : {np.mean(losses[4])}
             remove_progress(output_path, "{}-{}_id2*.png".format(start, end))
 
         # flip final theta and trace again
-        theta_[l_pad : l_pad + block.size, :] = theta_cand_rv
+        theta_[cand_start:cand_end, :] = theta_cand_rv
         init_theta = torch.from_numpy(np.copy(theta_))
 
         # make model instance and training
