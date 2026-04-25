@@ -1272,13 +1272,9 @@ def train3(
         # (5, T)
         losses = np.asarray([loss.clone().detach().cpu().numpy() for loss in losses])
     if show_flag:
+        mean_loss = losses.mean(axis=1)
         logger.info(
-            "{:.2f} {:.2f} {:.2f} {:.2f}".format(
-                image_loss.item(),
-                continuity_loss.item(),
-                smoothness_loss.item(),
-                length_loss.item(),
-            )
+            f"avg:{mean_loss[0]:.2f} {mean_loss[1]:.2f} {mean_loss[2]:.2f} {mean_loss[3]:.2f} {mean_loss[4]:.2f}"
         )
         if __debug__:
             show_image(model_image, params["num_t"], title="final")
