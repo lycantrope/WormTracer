@@ -510,7 +510,7 @@ center loss : {np.mean(losses[4])}
             # Trim the padding losses
             losses = losses[:, l_pad : l_pad + block.size]
             # get trace information if loss is smaller
-            select_ind = loss_compare([losses_all[(step, block.idx)], losses])
+            select_ind = loss_compare([losses_all[(2, block.idx)], losses])
             if select_ind:
                 with torch.no_grad():
                     x_model, y_model, model_image = model(width=W, height=H)
