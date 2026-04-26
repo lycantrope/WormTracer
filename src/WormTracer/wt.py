@@ -240,9 +240,6 @@ def run(
     all_blocks = list(training_block.batch_iter(cap_span))
     logger.info(f"{all_blocks}")
 
-    assert any(not block.is_complex for block in all_blocks), (
-        "No simple block detect, please create the simple block via providing guide frames"
-    )
     assert all_blocks, "The training block is empty. Something goes wrong."
     if all_blocks[0].is_complex:
         logger.warning(
@@ -267,7 +264,7 @@ def run(
         np.sqrt(np.mean(np.sum(np.diff((x[simple_area], y[simple_area])) ** 2, axis=0)))
     )
 
-    logger.info("STEP simple : optimization for simple posture blocks\n")
+    logger.info("STEP1 : optimization for simple posture blocks\n")
 
     # main loop 1
     for block in all_blocks:
@@ -317,7 +314,7 @@ def run(
             .to(device)
         )
         optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
-        params["id"] = "0-0"
+        params["id"] = 0
         losses = train3(
             model,
             real_image,
@@ -329,7 +326,7 @@ def run(
         )
 
         # get trace information
-        losses_all[(0, block.idx)] = losses
+        losses_all[(1, block.idx)] = losses
         with torch.no_grad():
             x_model, y_model, model_image = model(width=W, height=H)
 
@@ -364,14 +361,14 @@ length loss : {np.mean(losses[3])}
 center loss : {np.mean(losses[4])}
 """
         )
-        # We can update the image_losses here
-        image_losses[block.start : block.end + 1] = losses[0]
+
         if __debug__:
             # Only compute the model_image, if we want to show the result.
             show_image(real_image, params["num_t"], title="real image")
             show_image(model_image, params["num_t"], title="model image")
             show_loss_plot(losses_all[(1, block.idx)], title="losses of model")
 
+    time_now = get_time_now(tz)
     logger.info(f"STEP1 finished at {time_now}\n")
 
     shape_params = np.array(shape_params)
@@ -385,98 +382,121 @@ center loss : {np.mean(losses[4])}
     params["init_gamma"] = torch.tensor(weighted_params[1])
     params["init_delta"] = torch.tensor(weighted_params[2])
 
-    number_of_iter = params.get("n_steps", 100)
-    for step in range(number_of_iter):
-        training_block = get_use_blocks(image_losses, image_loss_max)
+    # Ensuring the continuity of theta
+    theta = make_theta_from_xy(x, y)
 
-        time_now = get_time_now(tz)
-        all_blocks = list(training_block.batch_iter(cap_span))
-        if not any(block.is_complex for block in all_blocks):
-            logger.info(f"No complex area found, break optimization at {time_now}\n")
-            break
+    logger.info("STEP2 : optimization for complex posture blocks\n")
 
-        # Ensuring the continuity of theta
-        theta = make_theta_from_xy(x, y)
+    # main loop 2
+    for i, block in enumerate(all_blocks):
+        if not block.is_complex:
+            continue
 
-        logger.info(f"STEP{step} : optimization for complex posture blocks\n")
+        logger.info(str(block))
+        # padding the complex block of 1/10 length, minimal to 3
+        padding = max(block.size // 10, 3)
 
-        # main loop 2
-        for i, block in enumerate(all_blocks):
-            if not block.is_complex:
-                continue
+        l_pad = 0
+        if i > 0:
+            l_pad = min(padding, all_blocks[i - 1].size)
 
-            logger.info(str(block))
-            # padding the complex block of 1/10 length, minimal to 3
-            padding = max(block.size // 10, 3)
+        r_pad = 0
+        if i + 1 < len(all_blocks):
+            r_pad = min(padding, all_blocks[i + 1].size)
 
-            l_pad = 0
-            if i > 0:
-                l_pad = min(padding, all_blocks[i - 1].size)
+        # Inclusive both end [Start-l_pad, end+r_pad]
+        start = block.start - l_pad
+        end = block.end + r_pad
 
-            r_pad = 0
-            if i + 1 < len(all_blocks):
-                r_pad = min(padding, all_blocks[i + 1].size)
+        # This is only for saving the output during training
+        params["use_area"] = block
+        # filenames_ = filenames[use_area[0]:use_area[1]+1]
+        theta_ = theta[start : end + 1, :].copy()
 
-            # Inclusive both end [Start-l_pad, end+r_pad]
-            start = block.start - l_pad
-            end = block.end + r_pad
+        # read and preprocess images
+        real_image, y_st, x_st = load_image(
+            filenames_all,
+            params["rescale"],
+            Worm_is_black,
+            multi_flag,
+            Tscaled_ind[start : end + 1],
+        )
 
-            # This is only for saving the output during training
-            params["use_area"] = block
-            # filenames_ = filenames[use_area[0]:use_area[1]+1]
-            theta_ = theta[start : end + 1, :].copy()
+        T, H, W = real_image.shape
+        logger.info(f"im_shape: {real_image.shape}")
+        # make flipping theta candidate
+        # make theta_candidate only in complex area
+        cand_start = max(l_pad - 1, 0)
+        cand_end = min(l_pad + block.size + 1, l_pad + block.size)
+        cand_size = cand_end - cand_start + 1
+        theta_cand, _ = make_theta_cand(theta_[cand_start], theta_[cand_end])
 
-            # read and preprocess images
-            real_image, y_st, x_st = load_image(
-                filenames_all,
-                params["rescale"],
-                Worm_is_black,
-                multi_flag,
-                Tscaled_ind[start : end + 1],
-            )
+        theta_cand_fw = np.linspace(theta_[cand_start, :], theta_cand[0], cand_size)
+        theta_cand_rv = np.linspace(theta_[cand_start, :], theta_cand[1], cand_size)
+        # set init value
+        init_cx, init_cy = set_init_xy(real_image)
+        theta_[cand_start : cand_end + 1] = theta_cand_fw
+        init_theta = torch.from_numpy(np.copy(theta_))
+        init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
 
-            T, H, W = real_image.shape
-            logger.info(f"im_shape: {real_image.shape}")
-            # make flipping theta candidate
-            # make theta_candidate only in complex area
-            cand_start = max(l_pad - 1, 0)
-            cand_end = min(l_pad + block.size + 1, l_pad + block.size)
-            cand_size = cand_end - cand_start + 1
-            theta_cand, _ = make_theta_cand(theta_[cand_start], theta_[cand_end])
+        # gradient_mask for simple area
+        mask = training_block.complex_area[start : end + 1].astype("f4")
+        gradient_mask = torch.from_numpy(mask).to(device)
 
-            theta_cand_fw = np.linspace(theta_[cand_start, :], theta_cand[0], cand_size)
-            theta_cand_rv = np.linspace(theta_[cand_start, :], theta_cand[1], cand_size)
-            # set init value
-            init_cx, init_cy = set_init_xy(real_image)
-            theta_[cand_start : cand_end + 1] = theta_cand_fw
-            init_theta = torch.from_numpy(np.copy(theta_))
-            init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
+        # make model instance and training
+        model = (
+            Model(init_cx, init_cy, init_theta, init_unitLength, params)
+            .to(torch.float32)
+            .to(device)
+        )
+        optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
+        params["id"] = 0
+        losses = train3(
+            model,
+            real_image,
+            optimizer,
+            params,
+            output_path,
+            output_name,
+            gradient_mask=gradient_mask,
+        )
 
-            # gradient_mask for simple area
-            mask = training_block.complex_area[start : end + 1].astype("f4")
-            gradient_mask = torch.from_numpy(mask).to(device)
+        # Trim the padding losses
+        losses_all[(2, block.idx)] = losses[:, l_pad : l_pad + block.size]
+        # get trace information
+        with torch.no_grad():
+            x_model, y_model, model_image = model(width=W, height=H)
 
-            # make model instance and training
-            model = (
-                Model(init_cx, init_cy, init_theta, init_unitLength, params)
-                .to(torch.float32)
-                .to(device)
-            )
-            optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
-            params["id"] = f"{step:d}-0"
-            losses = train3(
-                model,
-                real_image,
-                optimizer,
-                params,
-                output_path,
-                output_name,
-                gradient_mask=gradient_mask,
-            )
+        x_model = x_model.detach().cpu().numpy()
+        y_model = y_model.detach().cpu().numpy()
+        # theta_model = model.theta.detach().cpu().numpy()
 
-            # Trim the padding losses
-            losses_all[(step, block.idx)] = losses[:, l_pad : l_pad + block.size]
-            # get trace information
+        # flip final theta to trace again
+        theta_[cand_start : cand_end + 1] = theta_cand_rv
+        init_theta = torch.from_numpy(np.copy(theta_))
+
+        # make model instance and training
+        model = (
+            Model(init_cx, init_cy, init_theta, init_unitLength, params)
+            .to(torch.float32)
+            .to(device)
+        )
+        optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
+        params["id"] = 1
+        losses = train3(
+            model,
+            real_image,
+            optimizer,
+            params,
+            output_path,
+            output_name,
+            gradient_mask=gradient_mask,
+        )
+        # Trim the padding losses
+        losses = losses[:, l_pad : l_pad + block.size]
+        # get trace information if loss is smaller
+        select_ind = loss_compare([losses_all[(2, block.idx)], losses])
+        if select_ind:
             with torch.no_grad():
                 x_model, y_model, model_image = model(width=W, height=H)
 
@@ -484,41 +504,204 @@ center loss : {np.mean(losses[4])}
             y_model = y_model.detach().cpu().numpy()
             # theta_model = model.theta.detach().cpu().numpy()
 
-            # flip final theta to trace again
-            theta_[cand_start : cand_end + 1] = theta_cand_rv
-            init_theta = torch.from_numpy(np.copy(theta_))
+            losses_all[(2, block.idx)] = losses
 
-            # make model instance and training
-            model = (
-                Model(init_cx, init_cy, init_theta, init_unitLength, params)
-                .to(torch.float32)
-                .to(device)
+        # Trim padding
+        x_model = x_model[l_pad : l_pad + block.size]
+        y_model = y_model[l_pad : l_pad + block.size]
+        # theta_model = theta_model[l_pad : l_pad + block.size, :]
+        # Add x_st, y_st to restore original position before reconstruction.
+        x_model += x_st
+        y_model += y_st
+
+        x[block.start : block.end + 1, :] = x_model
+        y[block.start : block.end + 1, :] = y_model
+        # theta[block.start : block.end + 1, :] = theta_model
+
+        # (scale, y_t, x_t)
+        if params.get("SaveProgress"):
+            remove_progress(
+                output_path,
+                "{}-{}_id{}*.png".format(start, end, 1 - select_ind),
             )
-            optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
-            params["id"] = f"{step:d}-1"
-            losses = train3(
-                model,
+            save_progress(
                 real_image,
-                optimizer,
-                params,
                 output_path,
                 output_name,
-                gradient_mask=gradient_mask,
+                start,
+                end,
+                params["save_progress_num"],
+                txt="real",
             )
-            # Trim the padding losses
-            losses = losses[:, l_pad : l_pad + block.size]
-            # get trace information if loss is smaller
-            select_ind = loss_compare([losses_all[(2, block.idx)], losses])
-            if select_ind:
-                with torch.no_grad():
-                    x_model, y_model, model_image = model(width=W, height=H)
 
-                x_model = x_model.detach().cpu().numpy()
-                y_model = y_model.detach().cpu().numpy()
-                # theta_model = model.theta.detach().cpu().numpy()
+        if __debug__:
+            show_image(real_image, params["num_t"], title="real image")
+            show_image(model_image, params["num_t"], title="model image")
+            show_loss_plot(
+                losses_all[(2, block.idx)], title="losses of model{}".format(select_ind)
+            )
 
-                losses_all[(2, block.idx)] = losses
+        # log
+        logger.info(
+            f"""image loss : {np.mean(losses[0])}
+continuity loss : {np.mean(losses[1])}
+smoothing loss : {np.mean(losses[2])}
+length loss : {np.mean(losses[3])}
+center loss : {np.mean(losses[4])}
 
+"""
+        )
+
+    time_now = get_time_now(tz)
+    logger.info(f"STEP2 finished at {time_now}\n")
+
+    # revise areas which have too large loss
+    losslarge_area = find_losslarge_area(losses_all)
+    logger.info(
+        "STEP3 : re-optimization for unsuccessful blocks with complex postures\n"
+    )
+
+    # Ensuring the continuity of theta
+    theta = make_theta_from_xy(x, y)
+
+    for step, i in losslarge_area:
+        block = all_blocks[i]
+        if not block.is_complex:
+            continue
+
+        # padding the complex block of 1/10 length, minimal to 3
+        padding = max(block.size // 10, 3)
+
+        l_pad = 0
+        if i > 0:
+            l_pad = min(padding, all_blocks[i - 1].size)
+
+        r_pad = 0
+        if i + 1 < len(all_blocks):
+            r_pad = min(padding, all_blocks[i + 1].size)
+
+        # Inclusive both end [Start-l_pad, end+r_pad]
+        start = block.start - l_pad
+        end = block.end + r_pad
+
+        # This is only for saving the output during training
+        params["use_area"] = block
+        logger.info(f"{str(block)}: too large loss!")
+
+        theta_ = theta[start : end + 1, :].copy()
+
+        # read and preprocess images
+        # real_image, y_st, x_st = read_image(imshape, filenames_, params['rescale'], Worm_is_black)
+        real_image, y_st, x_st = load_image(
+            filenames_all,
+            params["rescale"],
+            Worm_is_black,
+            multi_flag,
+            Tscaled_ind[start : end + 1],
+        )
+        T, H, W = real_image.shape
+
+        # make flipping candidate
+        cand_start = max(l_pad - 1, 0)
+        cand_end = min(l_pad + block.size + 1, l_pad + block.size)
+        cand_size = cand_end - cand_start + 1
+        _, theta_cand = make_theta_cand(theta_[cand_start], theta_[cand_end])
+
+        theta_cand_fw = np.linspace(theta_[cand_start, :], theta_cand[0], cand_size)
+        theta_cand_rv = np.linspace(theta_[cand_start, :], theta_cand[1], cand_size)
+
+        # set init value
+        init_cx, init_cy = set_init_xy(real_image)
+        theta_[cand_start : cand_end + 1] = theta_cand_fw
+        init_theta = torch.from_numpy(np.copy(theta_))
+        init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
+
+        # The gradient mask will be all zeros except loss large area.
+        mask = np.zeros(T, dtype="f4")
+        mask[l_pad : l_pad + block.size] = 1.0
+        gradient_mask = torch.from_numpy(mask).to(device)
+
+        # make model instance and training
+        update = 0
+        model = (
+            Model(init_cx, init_cy, init_theta, init_unitLength, params)
+            .to(torch.float32)
+            .to(device)
+        )
+        optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
+        params["id"] = 2
+        losses = train3(
+            model,
+            real_image,
+            optimizer,
+            params,
+            output_path,
+            output_name,
+            gradient_mask=gradient_mask,
+        )
+
+        # Trim the padding losses
+        losses = losses[:, l_pad : l_pad + block.size]
+
+        with torch.no_grad():
+            x_model, y_model, model_image = model(width=W, height=H)
+
+        x_model = x_model.detach().cpu().numpy()
+        y_model = y_model.detach().cpu().numpy()
+        # theta_model = model.theta.detach().cpu().numpy()
+        # get trace information if loss is smaller
+        # Here, the losses was compared with loss from previous step
+        prev_loss = losses_all[(step, i)]
+        if loss_compare([prev_loss, losses]):
+            print("update")
+            update = 2
+            # We stored the losses in (step3, i)
+            losses_all[(3, i)] = losses
+            remove_progress(output_path, "{}-{}_id[0-1]*.png".format(start, end))
+        else:
+            print("no update")
+            remove_progress(output_path, "{}-{}_id2*.png".format(start, end))
+
+        # flip final theta and trace again
+        theta_[cand_start : cand_end + 1] = theta_cand_rv
+        init_theta = torch.from_numpy(np.copy(theta_))
+
+        # make model instance and training
+        model = (
+            Model(init_cx, init_cy, init_theta, init_unitLength, params)
+            .to(torch.float32)
+            .to(device)
+        )
+        optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
+        params["id"] = 3
+        losses = train3(
+            model,
+            real_image,
+            optimizer,
+            params,
+            output_path,
+            output_name,
+            gradient_mask=gradient_mask,
+        )
+        # Trim the padding losses
+        losses = losses[:, l_pad : l_pad + block.size]
+
+        # get trace information if loss is smaller
+        if loss_compare([losses_all.get((3, i), prev_loss), losses]):
+            print("update")
+            update = 3
+            with torch.no_grad():
+                x_model, y_model, model_image = model(width=W, height=H)
+            x_model = x_model.detach().cpu().numpy()
+            y_model = y_model.detach().cpu().numpy()
+            # theta_model = model.theta.detach().cpu().numpy()
+            losses_all[(3, i)] = losses
+            remove_progress(output_path, "{}-{}_id[0-2]*.png".format(start, end))
+        else:
+            print("no update")
+            remove_progress(output_path, "{}-{}_id3*.png".format(start, end))
+
+        if update:
             # Trim padding
             x_model = x_model[l_pad : l_pad + block.size]
             y_model = y_model[l_pad : l_pad + block.size]
@@ -527,230 +710,29 @@ center loss : {np.mean(losses[4])}
             x_model += x_st
             y_model += y_st
 
+            if __debug__:
+                show_image(real_image, params["num_t"], title="real image")
+                show_image(model_image, params["num_t"], title="model image")
+                show_loss_plot(losses_all[(3, i)], title="losses of new model")
+
             x[block.start : block.end + 1, :] = x_model
             y[block.start : block.end + 1, :] = y_model
             # theta[block.start : block.end + 1, :] = theta_model
 
-            # (scale, y_t, x_t)
-            if params.get("SaveProgress"):
-                remove_progress(
-                    output_path,
-                    "{}-{}_id{}-{}*.png".format(start, end, step, 1 - select_ind),
-                )
-                save_progress(
-                    real_image,
-                    output_path,
-                    output_name,
-                    start,
-                    end,
-                    params["save_progress_num"],
-                    txt="real",
-                )
-
-            if __debug__:
-                show_image(real_image, params["num_t"], title="real image")
-                show_image(model_image, params["num_t"], title="model image")
-                show_loss_plot(
-                    losses_all[(2, block.idx)],
-                    title="losses of model{}".format(select_ind),
-                )
-
             # log
             logger.info(
-                f"""image loss : {np.mean(losses[0])}
-    continuity loss : {np.mean(losses[1])}
-    smoothing loss : {np.mean(losses[2])}
-    length loss : {np.mean(losses[3])}
-    center loss : {np.mean(losses[4])}
+                f"""{str(block)} updated
+image loss : {np.mean(losses_all[(3, i)][0])}
+continuity loss : {np.mean(losses_all[(3, i)][1])}
+smoothing loss : {np.mean(losses_all[(3, i)][2])}
+length loss : {np.mean(losses_all[(3, i)][3])}
+center loss : {np.mean(losses_all[(3, i)][4])}
 
-    """
+"""
             )
 
-        time_now = get_time_now(tz)
-        logger.info(f"STEP{step}-1 finished at {time_now}\n")
-
-        # revise areas which have too large loss
-        losslarge_area = find_losslarge_area(losses_all)
-        logger.info(
-            "STEP{step}-2 : re-optimization for unsuccessful blocks with complex postures\n"
-        )
-
-        # Ensuring the continuity of theta
-        theta = make_theta_from_xy(x, y)
-
-        for pre_step, i in losslarge_area:
-            block = all_blocks[i]
-            if not block.is_complex:
-                continue
-
-            # padding the complex block of 1/10 length, minimal to 3
-            padding = max(block.size // 10, 3)
-
-            l_pad = 0
-            if i > 0:
-                l_pad = min(padding, all_blocks[i - 1].size)
-
-            r_pad = 0
-            if i + 1 < len(all_blocks):
-                r_pad = min(padding, all_blocks[i + 1].size)
-
-            # Inclusive both end [Start-l_pad, end+r_pad]
-            start = block.start - l_pad
-            end = block.end + r_pad
-
-            # This is only for saving the output during training
-            params["use_area"] = block
-            logger.info(f"{str(block)}: too large loss!")
-
-            theta_ = theta[start : end + 1, :].copy()
-
-            # read and preprocess images
-            # real_image, y_st, x_st = read_image(imshape, filenames_, params['rescale'], Worm_is_black)
-            real_image, y_st, x_st = load_image(
-                filenames_all,
-                params["rescale"],
-                Worm_is_black,
-                multi_flag,
-                Tscaled_ind[start : end + 1],
-            )
-            T, H, W = real_image.shape
-
-            # make flipping candidate
-            cand_start = max(l_pad - 1, 0)
-            cand_end = min(l_pad + block.size + 1, l_pad + block.size)
-            cand_size = cand_end - cand_start + 1
-            _, theta_cand = make_theta_cand(theta_[cand_start], theta_[cand_end])
-
-            theta_cand_fw = np.linspace(theta_[cand_start, :], theta_cand[0], cand_size)
-            theta_cand_rv = np.linspace(theta_[cand_start, :], theta_cand[1], cand_size)
-
-            # set init value
-            init_cx, init_cy = set_init_xy(real_image)
-            theta_[cand_start : cand_end + 1] = theta_cand_fw
-            init_theta = torch.from_numpy(np.copy(theta_))
-            init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
-
-            # The gradient mask will be all zeros except loss large area.
-            mask = np.zeros(T, dtype="f4")
-            mask[l_pad : l_pad + block.size] = 1.0
-            gradient_mask = torch.from_numpy(mask).to(device)
-
-            # make model instance and training
-            update = 0
-            model = (
-                Model(init_cx, init_cy, init_theta, init_unitLength, params)
-                .to(torch.float32)
-                .to(device)
-            )
-            optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
-            params["id"] = f"{step:d}-2"
-            losses = train3(
-                model,
-                real_image,
-                optimizer,
-                params,
-                output_path,
-                output_name,
-                gradient_mask=gradient_mask,
-            )
-
-            # Trim the padding losses
-            losses = losses[:, l_pad : l_pad + block.size]
-
-            with torch.no_grad():
-                x_model, y_model, model_image = model(width=W, height=H)
-
-            x_model = x_model.detach().cpu().numpy()
-            y_model = y_model.detach().cpu().numpy()
-            # theta_model = model.theta.detach().cpu().numpy()
-            # get trace information if loss is smaller
-            # Here, the losses was compared with loss from previous step
-            prev_loss = losses_all[(pre_step, i)]
-            if loss_compare([prev_loss, losses]):
-                print("update")
-                update = 2
-                # We stored the losses in (step3, i)
-                losses_all[(step, i)] = losses
-                remove_progress(output_path, "{}-{}_id[0-1]*.png".format(start, end))
-            else:
-                print("no update")
-                remove_progress(output_path, "{}-{}_id2*.png".format(start, end))
-
-            # flip final theta and trace again
-            theta_[cand_start : cand_end + 1] = theta_cand_rv
-            init_theta = torch.from_numpy(np.copy(theta_))
-
-            # make model instance and training
-            model = (
-                Model(init_cx, init_cy, init_theta, init_unitLength, params)
-                .to(torch.float32)
-                .to(device)
-            )
-            optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
-            params["id"] = f"{step}-3"
-            losses = train3(
-                model,
-                real_image,
-                optimizer,
-                params,
-                output_path,
-                output_name,
-                gradient_mask=gradient_mask,
-            )
-            # Trim the padding losses
-            losses = losses[:, l_pad : l_pad + block.size]
-
-            # get trace information if loss is smaller
-            if loss_compare([losses_all.get((step, i), prev_loss), losses]):
-                print("update")
-                update = 3
-                with torch.no_grad():
-                    x_model, y_model, model_image = model(width=W, height=H)
-                x_model = x_model.detach().cpu().numpy()
-                y_model = y_model.detach().cpu().numpy()
-                # theta_model = model.theta.detach().cpu().numpy()
-                losses_all[(step, i)] = losses
-                remove_progress(
-                    output_path, "{}-{}_id{}-[0-2]*.png".format(start, end, step)
-                )
-            else:
-                print("no update")
-                remove_progress(
-                    output_path, "{}-{}_id{}-3*.png".format(start, end, step)
-                )
-
-            if update:
-                # Trim padding
-                x_model = x_model[l_pad : l_pad + block.size]
-                y_model = y_model[l_pad : l_pad + block.size]
-                # theta_model = theta_model[l_pad : l_pad + block.size, :]
-                # Add x_st, y_st to restore original position before reconstruction.
-                x_model += x_st
-                y_model += y_st
-
-                if __debug__:
-                    show_image(real_image, params["num_t"], title="real image")
-                    show_image(model_image, params["num_t"], title="model image")
-                    show_loss_plot(losses_all[(step, i)], title="losses of new model")
-
-                x[block.start : block.end + 1, :] = x_model
-                y[block.start : block.end + 1, :] = y_model
-                # theta[block.start : block.end + 1, :] = theta_model
-
-                # log
-                logger.info(
-                    f"""{str(block)} updated
-    image loss : {np.mean(losses_all[(step, i)][0])}
-    continuity loss : {np.mean(losses_all[(step, i)][1])}
-    smoothing loss : {np.mean(losses_all[(step, i)][2])}
-    length loss : {np.mean(losses_all[(step, i)][3])}
-    center loss : {np.mean(losses_all[(step, i)][4])}
-
-    """
-                )
-
-        time_now = get_time_now(tz)
-        logger.info(f"STEP{step} finished at {time_now}\n")
+    time_now = get_time_now(tz)
+    logger.info(f"STEP3 finished at {time_now}\n")
     # save params and plots
     # Save all losses into csv files
     dtype = np.dtype(
