@@ -251,9 +251,7 @@ def run(
         logger.warning("Beginning of Results will be incorrect.")
 
     if all_blocks[-1].is_complex:
-        logger.warning(
-            "Warning! The last frame of images is diffsicult to skeletonize."
-        )
+        logger.warning("Warning! The last frame of images is difficult to skeletonize.")
         logger.warning("Last of Results will be incorrect.")
 
     losses_all = {}
@@ -372,7 +370,7 @@ center loss : {np.mean(losses[4])}
             # Only compute the model_image, if we want to show the result.
             show_image(real_image, params["num_t"], title="real image")
             show_image(model_image, params["num_t"], title="model image")
-            show_loss_plot(losses_all[(0, block.idx)], title="losses of model")
+            show_loss_plot(losses_all[(1, block.idx)], title="losses of model")
 
     logger.info(f"STEP1 finished at {time_now}\n")
 
@@ -519,7 +517,7 @@ center loss : {np.mean(losses[4])}
                 y_model = y_model.detach().cpu().numpy()
                 # theta_model = model.theta.detach().cpu().numpy()
 
-                losses_all[(step, block.idx)] = losses
+                losses_all[(2, block.idx)] = losses
 
             # Trim padding
             x_model = x_model[l_pad : l_pad + block.size]
@@ -553,7 +551,7 @@ center loss : {np.mean(losses[4])}
                 show_image(real_image, params["num_t"], title="real image")
                 show_image(model_image, params["num_t"], title="model image")
                 show_loss_plot(
-                    losses_all[(step, block.idx)],
+                    losses_all[(2, block.idx)],
                     title="losses of model{}".format(select_ind),
                 )
 
