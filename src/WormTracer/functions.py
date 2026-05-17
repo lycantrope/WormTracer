@@ -941,7 +941,7 @@ def make_model_image(cent_x, cent_y, theta, unitLength, image_info, params):
 
 def to_param(data: Any) -> nn.Parameter:
     # Ensure it's a tensor first, then wrap as Parameter
-    t = data if torch.is_tensor(data) else torch.tensor(data, dtype=torch.float32)
+    t = data if torch.is_tensor(data) else torch.tensor(data, dtype=np.dtype(data).name)
     return nn.Parameter(t.detach().clone())
 
 
