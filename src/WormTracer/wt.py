@@ -434,8 +434,8 @@ center loss : {np.mean(losses[4])}
                 1j
                 * np.linspace(0.0, 1.0, cand_size)
                 * np.angle(np.mean(theta_[cand_start, :] - theta_cand[0]))
-            )
-            * theta_[cand_start, :]
+            )[:, None]
+            * theta_[cand_start, :][None, :]
         )
 
         theta_cand_rv = (
@@ -443,8 +443,8 @@ center loss : {np.mean(losses[4])}
                 1j
                 * np.linspace(0.0, 1.0, cand_size)
                 * np.angle(theta_[cand_start, :] - theta_cand[1])
-            )
-            * theta_[cand_start, :]
+            )[:, None]
+            * theta_[cand_start, :][None, :]
         )
         # set init value
         init_cx, init_cy = set_init_xy(real_image)
