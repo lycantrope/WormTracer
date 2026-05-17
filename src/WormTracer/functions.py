@@ -386,33 +386,46 @@ def trim_image(image: npt.NDArray, *, padding: int = 5) -> tuple[npt.NDArray, in
 
 
 def make_theta_from_xy(x: npt.NDArray, y: npt.NDArray) -> npt.NDArray:
-    assert x.ndim == 2, "x should be 2D ndarray"
+    assert x.ndim == 2 and (x.shape == y.shape), "x, y should be 2D ndarray"
+
     T, plot_n = x.shape
     n_segs = plot_n - 1
     dx = x[:, 1:] - x[:, :-1]
     dy = y[:, 1:] - y[:, :-1]
-    theta = np.arctan2(dy, dx)
-    # Arrange theta if the gap is larget than pi
-    # Adjust the middle theta between time point
-    mid = n_segs // 2
-    t_gap = theta[1:, mid] - theta[:-1, mid]
-    t_adjust = np.sign(t_gap) * 2 * np.pi
-    t_adjust[np.abs(t_gap) < np.pi] = 0
-    theta[1:, :] -= t_adjust.cumsum().reshape(-1, 1)
+    l = np.sqrt(dx**2 + dy**2)
+    # polar coordinates
+    theta = (dx + 1j * dy) / (l + 1e-8)
 
-    gap = theta[:, 1:] - theta[:, :-1]
-    # adjust right hand side of theta within same time points
-    r_gap = gap[:, mid:]
-    r_adjust = np.sign(r_gap) * 2 * np.pi
-    r_adjust[np.abs(r_gap) < np.pi] = 0
-    theta[:, mid + 1 :] -= r_adjust.cumsum(axis=1)
+    if T > 1:
+        mid = n_segs // 2
+        alignment = np.real(theta[1:, mid] * np.conj(theta[:-1, mid]))
+        flip_mask = np.bitwise_xor.accumulate(alignment < 0.0)
+        where_to_flip = np.where(flip_mask)[0] + 1
+        theta[where_to_flip, :] *= -1.0
 
-    # adjust left hand side
-    l_gap = gap[:, :mid]
-    l_adjust = np.sign(l_gap * -1) * 2 * np.pi
-    l_adjust[np.abs(l_gap) < np.pi] = 0
-    l_adjust_rev = np.flip(l_adjust, axis=1)
-    theta[:, :mid] -= np.flip(np.cumsum(l_adjust_rev, axis=1), axis=1)
+    # theta = np.arctan2(dy, dx)
+    # # Arrange theta if the gap is largest than pi
+    # # Adjust the middle theta between time point
+    # mid = n_seqs // 2
+    # theta /= theta[0, mid]
+    # t_gap = theta[1:, mid] - theta[:-1, mid]
+    # t_adjust = np.sign(t_gap) * 2 * np.pi
+    # t_adjust[np.abs(t_gap) < np.pi] = 0
+    # theta[1:, :] -= t_adjust.cumsum().reshape(-1, 1)
+    #
+    # gap = theta[:, 1:] - theta[:, :-1]
+    # # adjust right-hand side of theta within same time points
+    # r_gap = gap[:, mid:]
+    # r_adjust = np.sign(r_gap) * 2 * np.pi
+    # r_adjust[np.abs(r_gap) < np.pi] = 0
+    # theta[:, mid + 1 :] -= r_adjust.cumsum(axis=1)
+    #
+    # # adjust left-hand side
+    # l_gap = gap[:, :mid]
+    # l_adjust = np.sign(l_gap * -1) * 2 * np.pi
+    # l_adjust[np.abs(l_gap) < np.pi] = 0
+    # l_adjust_rev = np.flip(l_adjust, axis=1)
+    # theta[:, :mid] -= np.flip(np.cumsum(l_adjust_rev, axis=1), axis=1)
     return theta
 
 
@@ -729,6 +742,19 @@ def find_minimal_winding_number(theta1: npt.NDArray, theta2: npt.NDArray) -> int
     return int(np.round(frac_shift))
 
 
+def make_polar_cand(
+    theta_begin: npt.NDArray, theta_end: npt.NDArray
+) -> tuple[np.NDArray, np.NDArray]:
+    loss_fwd = np.sum(np.abs(theta_begin - theta_end))
+    theta_end_rev = theta_end[::-1] * -1
+    loss_rev = np.sum(np.abs(theta_begin - theta_end_rev))
+
+    if loss_fwd < loss_rev:
+        return theta_end, theta_end_rev
+    else:
+        return theta_end_rev, theta_end
+
+
 def make_theta_cand(
     theta_begin: npt.NDArray, theta_end: npt.NDArray
 ) -> tuple[tuple[npt.NDArray, npt.NDArray], tuple[npt.NDArray, npt.NDArray]]:
@@ -954,14 +980,11 @@ class Model(torch.nn.Module):
         unitLength = self.unitLength.unsqueeze(1)
         cx = self.cx.unsqueeze(1)
         cy = self.cy.unsqueeze(1)
+        theta_acc = F.pad(torch.cumsum(self.theta, dim=1), pad=(1, 0))
+        theta_acc = (theta_acc - theta_acc.mean(dim=1, keepdim=True)) * unitLength
 
-        x = torch.cumsum(torch.cos(self.theta), dim=1)
-        x = F.pad(x, pad=(1, 0))
-        x = (x - x.mean(dim=1, keepdim=True)) * unitLength + cx
-
-        y = torch.cumsum(torch.sin(self.theta), dim=1)
-        y = F.pad(y, pad=(1, 0))
-        y = (y - y.mean(dim=1, keepdim=True)) * unitLength + cy
+        x = torch.real(theta_acc) + cx
+        y = torch.imag(theta_acc) + cy
 
         image = make_worm(x, y, width=width, height=height, worm_wid=worm_wid)
         return x, y, image
@@ -1105,7 +1128,7 @@ def train3(
 
         smoothness_loss = (
             torch.mean(
-                ((model.theta[:, :-1] - model.theta[:, 1:]) * body_axis_weight) ** 2,
+                torch.abs(model.theta[:, :-1] - model.theta[:, 1:]) * body_axis_weight,
                 dim=1,
             )
             * annealing_weight
@@ -1126,7 +1149,7 @@ def train3(
             length_loss = torch.zeros(1, device=device)
         else:
             continuity_loss = torch.mean(
-                (model.theta[:-1, :] - model.theta[1:, :]) ** 2,
+                torch.abs(model.theta[:-1, :] - model.theta[1:, :]),
                 dim=1,
             )
             continuity_loss = continuity_loss_weight * torch.mean(continuity_loss)
@@ -1202,7 +1225,7 @@ def train3(
         image_loss = torch.mean((model_image - real_image) ** 2)
 
         smoothness_loss = smoothness_loss_weight * torch.mean(
-            ((model.theta[:, :-1] - model.theta[:, 1:]) * body_axis_weight) ** 2
+            torch.abs(model.theta[:, :-1] - model.theta[:, 1:]) * body_axis_weight
         )
 
         if T < 2:
@@ -1211,7 +1234,7 @@ def train3(
             length_loss = torch.zeros(1, device=device)
         else:
             continuity_loss = continuity_loss_weight * torch.mean(
-                (model.theta[:-1, :] - model.theta[1:, :]) ** 2
+                torch.abs(model.theta[:-1, :] - model.theta[1:, :])
             )
 
             length_loss = (
@@ -1238,7 +1261,7 @@ def train3(
         image_loss = torch.mean((model_image - real_image) ** 2, dim=(1, 2))
 
         smoothness_loss = smoothness_loss_weight * torch.mean(
-            (model.theta[:, :-1] - model.theta[:, 1:]) ** 2,
+            torch.abs(model.theta[:, :-1] - model.theta[:, 1:]),
             dim=1,
         )
         center_loss = center_loss_weight * (
@@ -1251,7 +1274,7 @@ def train3(
             length_loss = torch.zeros(1, device=model.unitLength.device)
         else:
             continuity_loss = continuity_loss_weight * torch.mean(
-                (model.theta[:-1, :] - model.theta[1:, :]) ** 2,
+                torch.abs(model.theta[:-1, :] - model.theta[1:, :]),
                 dim=1,
             )
             length_loss = length_loss_weight * (
