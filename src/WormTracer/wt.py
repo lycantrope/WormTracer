@@ -485,11 +485,7 @@ center loss : {np.mean(losses[4])}
         init_theta = torch.from_numpy(np.copy(theta_))
 
         # make model instance and training
-        model = (
-            Model(init_cx, init_cy, init_theta, init_unitLength, params)
-            .to(torch.float32)
-            .to(device)
-        )
+        model = Model(init_cx, init_cy, init_theta, init_unitLength, params).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
         params["id"] = 1
         losses = train3(

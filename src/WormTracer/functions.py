@@ -939,9 +939,9 @@ def make_model_image(cent_x, cent_y, theta, unitLength, image_info, params):
     return image
 
 
-def to_param(data: Any) -> nn.Parameter:
+def to_param(data: Any, dtype=torch.float32) -> nn.Parameter:
     # Ensure it's a tensor first, then wrap as Parameter
-    t = data if torch.is_tensor(data) else torch.tensor(data, dtype=np.dtype(data).name)
+    t = data if torch.is_tensor(data) else torch.tensor(data, dtype=dtype)
     return nn.Parameter(t.detach().clone())
 
 
@@ -957,7 +957,7 @@ class Model(torch.nn.Module):
         super().__init__()
         self.cx = to_param(init_cx)
         self.cy = to_param(init_cy)
-        self.theta = to_param(init_theta)
+        self.theta = to_param(init_theta, dtype=torch.complex64)
         self.unitLength = to_param(init_unitLength)
 
         self.alpha = to_param(params["init_alpha"])
