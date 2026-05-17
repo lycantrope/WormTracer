@@ -309,11 +309,7 @@ def run(
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
 
         # make model instance and training
-        model = (
-            Model(init_cx, init_cy, init_theta, init_unitLength, params)
-            .to(torch.float32)
-            .to(device)
-        )
+        model = Model(init_cx, init_cy, init_theta, init_unitLength, params).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
         params["id"] = 0
         losses = train3(
@@ -455,11 +451,7 @@ center loss : {np.mean(losses[4])}
         gradient_mask = torch.from_numpy(mask).to(device)
 
         # make model instance and training
-        model = (
-            Model(init_cx, init_cy, init_theta, init_unitLength, params)
-            .to(torch.float32)
-            .to(device)
-        )
+        model = Model(init_cx, init_cy, init_theta, init_unitLength, params).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
         params["id"] = 0
         losses = train3(
