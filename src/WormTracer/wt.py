@@ -429,16 +429,22 @@ center loss : {np.mean(losses[4])}
         # polar candidates
         theta_cand = make_polar_cand(theta_[cand_start], theta_[cand_end])
 
-        theta_cand_fw = np.exp(
-            1j
-            * np.linspace(0.0, 1.0, cand_size)
-            * np.angle(theta_[cand_start, :] - theta_cand[0])
+        theta_cand_fw = (
+            np.exp(
+                1j
+                * np.linspace(0.0, 1.0, cand_size)
+                * np.angle(np.mean(theta_[cand_start, :] - theta_cand[0]))
+            )
+            * theta_[cand_start, :]
         )
 
-        theta_cand_rv = np.exp(
-            1j
-            * np.linspace(0.0, 1.0, cand_size)
-            * np.angle(theta_[cand_start, :] - theta_cand[1])
+        theta_cand_rv = (
+            np.exp(
+                1j
+                * np.linspace(0.0, 1.0, cand_size)
+                * np.angle(theta_[cand_start, :] - theta_cand[1])
+            )
+            * theta_[cand_start, :]
         )
         # set init value
         init_cx, init_cy = set_init_xy(real_image)
