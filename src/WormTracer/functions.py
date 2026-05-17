@@ -1125,8 +1125,8 @@ def train3(
         )  # (T, W, H) => (T, )
 
         image_loss = torch.mean(image_loss)
-        model.theta = model.theta / (torch.abs(model.theta) + 1e-8)
-        rotation_at_t = model.theta[:, :-1] * torch.conj(model.theta[:, 1:])
+        theta_normalized = model.theta / (torch.abs(model.theta) + 1e-8)
+        rotation_at_t = theta_normalized[:, :-1] * torch.conj(theta_normalized[:, 1:])
         smoothness_loss = (
             torch.mean(
                 torch.abs(rotation_at_t - 1.0) ** 2 * body_axis_weight,
@@ -1149,7 +1149,9 @@ def train3(
             continuity_loss = torch.zeros(1, device=device)
             length_loss = torch.zeros(1, device=device)
         else:
-            rotation_along_t = model.theta[:-1, :] * torch.conj(model.theta[1:, :])
+            rotation_along_t = theta_normalized[:-1, :] * torch.conj(
+                theta_normalized[1:, :]
+            )
 
             continuity_loss = torch.mean(
                 torch.abs(rotation_along_t - 1.0) ** 2,
@@ -1226,9 +1228,9 @@ def train3(
         model_image = model_image.to(device)
 
         image_loss = torch.mean((model_image - real_image) ** 2)
-        model.theta = model.theta / (torch.abs(model.theta) + 1e-8)
+        theta_normalized = model.theta / (torch.abs(model.theta) + 1e-8)
 
-        rotation_at_t = model.theta[:, :-1] * torch.conj(model.theta[:, 1:])
+        rotation_at_t = theta_normalized[:, :-1] * torch.conj(theta_normalized[:, 1:])
 
         smoothness_loss = smoothness_loss_weight * torch.mean(
             torch.abs(rotation_at_t - 1.0) ** 2 * body_axis_weight
@@ -1239,7 +1241,9 @@ def train3(
             continuity_loss = torch.zeros(1, device=device)
             length_loss = torch.zeros(1, device=device)
         else:
-            rotation_along_t = model.theta[:-1, :] * torch.conj(model.theta[1:, :])
+            rotation_along_t = theta_normalized[:-1, :] * torch.conj(
+                theta_normalized[1:, :]
+            )
 
             continuity_loss = continuity_loss_weight * torch.mean(
                 torch.abs(rotation_along_t - 1.0) ** 2
@@ -1267,8 +1271,8 @@ def train3(
         _, _, model_image = model(width=W, height=H)
         # Calculate the loss for display, this part does not require grad.
         image_loss = torch.mean((model_image - real_image) ** 2, dim=(1, 2))
-        model.theta = model.theta / (torch.abs(model.theta) + 1e-8)
-        rotation_at_t = model.theta[:, :-1] * torch.conj(model.theta[:, 1:])
+        theta_normalized = model.theta / (torch.abs(model.theta) + 1e-8)
+        rotation_at_t = theta_normalized[:, :-1] * torch.conj(theta_normalized[:, 1:])
 
         smoothness_loss = smoothness_loss_weight * torch.mean(
             torch.abs(rotation_at_t - 1.0) ** 2,
@@ -1283,7 +1287,9 @@ def train3(
             continuity_loss = torch.zeros(1, device=model.theta.device)
             length_loss = torch.zeros(1, device=model.unitLength.device)
         else:
-            rotation_along_t = model.theta[:-1, :] * torch.conj(model.theta[1:, :])
+            rotation_along_t = theta_normalized[:-1, :] * torch.conj(
+                theta_normalized[1:, :]
+            )
 
             continuity_loss = continuity_loss_weight * torch.mean(
                 torch.abs(rotation_along_t - 1.0) ** 2,
