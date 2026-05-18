@@ -976,18 +976,16 @@ class Model(torch.nn.Module):
         plot_n = self.params["plot_n"]
         worm_wid = worm_width_all(plot_n, self.alpha, self.gamma, self.delta)
 
+        theta_unit = (self.theta / (torch.abs(self.theta) + 1e-8)).detach()
         # (batch, ) => (batch, 1)
         unitLength = self.unitLength.unsqueeze(1)
         cx = self.cx.unsqueeze(1)
         cy = self.cy.unsqueeze(1)
+        xy = F.pad(torch.cumsum(theta_unit, dim=1), pad=(1, 0))
+        xy = (xy - xy.mean(axis=1, keepdim=True)) * unitLength
 
-        dx = torch.real(self.theta)
-        dy = torch.imag(self.theta)
-        x = F.pad(torch.cumsum(dx, dim=1), pad=(1, 0))
-        y = F.pad(torch.cumsum(dy, dim=1), pad=(1, 0))
-
-        x = (x - x.mean(axis=1, keepdim=True)) * unitLength + cx
-        y = (y - y.mean(axis=1, keepdim=True)) * unitLength + cy
+        x = torch.real(xy) + cx
+        y = torch.imag(xy) + cy
 
         image = make_worm(x, y, width=width, height=height, worm_wid=worm_wid)
         return x, y, image
