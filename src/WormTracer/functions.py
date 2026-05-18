@@ -396,11 +396,9 @@ def make_theta_from_xy(x: npt.NDArray, y: npt.NDArray) -> npt.NDArray:
     theta = (dx + 1j * dy) / (length + 1e-8)
 
     if T > 1:
-        loss_fwd = np.sum(np.abs(theta[1:] - theta[:-1]), axis=1)
-        theta_rv = theta[1:, ::-1] * -1
-        loss_rev = np.sum(np.abs(theta_rv - theta[:-1]), axis=1)
-
-        flip_mask = np.bitwise_xor.accumulate(loss_fwd > loss_rev)
+        dot_products = theta[1:, :] * np.conj(theta[:-1, :])
+        global_alignment = np.sum(np.real(dot_products), axis=1)
+        flip_mask = np.bitwise_xor.accumulate(global_alignment < 0.0)
         where_to_flip = np.where(flip_mask)[0] + 1
         theta[where_to_flip, :] *= -1.0
 
