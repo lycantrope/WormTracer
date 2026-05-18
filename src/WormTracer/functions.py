@@ -976,7 +976,7 @@ class Model(torch.nn.Module):
         plot_n = self.params["plot_n"]
         worm_wid = worm_width_all(plot_n, self.alpha, self.gamma, self.delta)
 
-        theta_unit = (self.theta / (torch.abs(self.theta) + 1e-8)).detach()
+        theta_unit = self.theta / (torch.abs(self.theta) + 1e-8)
         # (batch, ) => (batch, 1)
         unitLength = self.unitLength.unsqueeze(1)
         cx = self.cx.unsqueeze(1)
