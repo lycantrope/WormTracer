@@ -389,7 +389,6 @@ def make_theta_from_xy(x: npt.NDArray, y: npt.NDArray) -> npt.NDArray:
     assert x.ndim == 2 and (x.shape == y.shape), "x, y should be 2D ndarray"
 
     T, plot_n = x.shape
-    n_segs = plot_n - 1
     dx = x[:, 1:] - x[:, :-1]
     dy = y[:, 1:] - y[:, :-1]
     length = np.sqrt(dx**2 + dy**2)
@@ -397,9 +396,11 @@ def make_theta_from_xy(x: npt.NDArray, y: npt.NDArray) -> npt.NDArray:
     theta = (dx + 1j * dy) / (length + 1e-8)
 
     if T > 1:
-        mid = n_segs // 2
-        alignment = np.real(theta[1:, mid] * np.conj(theta[:-1, mid]))
-        flip_mask = np.bitwise_xor.accumulate(alignment < 0.0)
+        loss_fwd = np.sum(np.abs(theta[1:] - theta[:-1]), axis=1)
+        theta_rv = theta[1:, ::-1] * -1
+        loss_rev = np.sum(np.abs(theta_rv - theta[:-1]), axis=1)
+
+        flip_mask = np.bitwise_xor.accumulate(loss_fwd > loss_rev)
         where_to_flip = np.where(flip_mask)[0] + 1
         theta[where_to_flip, :] *= -1.0
 
