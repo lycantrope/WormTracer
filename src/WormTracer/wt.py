@@ -248,7 +248,7 @@ def run(
     if max_complex_block > cap_span:
         logger.warning("Warning! Some complex block are too large!")
 
-    all_blocks = list(training_block.batch_iter(min(cap_span, max_complex_block + 2)))
+    all_blocks = list(training_block.batch_iter(min(cap_span, max_complex_block * 3)))
     logger.info(f"{all_blocks}")
 
     assert all_blocks, "The training block is empty. Something goes wrong."
