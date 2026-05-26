@@ -301,8 +301,8 @@ def run(
             )
 
         # set init value
-        theta_cand, _ = make_theta_cand(theta_[0], theta_[-1])
-        theta_[-1, :] = theta_cand[0]
+        # theta_cand, _ = make_theta_cand(theta_[0], theta_[-1])
+        # theta_[-1, :] = theta_cand[0]
         init_cx, init_cy = set_init_xy(real_image)
         init_theta = torch.tensor(theta_)
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
