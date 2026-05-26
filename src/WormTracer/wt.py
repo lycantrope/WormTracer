@@ -237,7 +237,18 @@ def run(
     logger.info(f"Complex blocks: {len(training_block.complex_block)}")
     logger.info(f"Capspan: {cap_span}")
 
-    all_blocks = list(training_block.batch_iter(cap_span))
+    max_complex_block = min(
+        max(
+            (b.size for b in training_block.batch_iter()),
+            default=0,
+        ),
+        cap_span,
+    )
+
+    if max_complex_block > cap_span:
+        logger.warning("Warning! Some complex block are too large!")
+
+    all_blocks = list(training_block.batch_iter(min(cap_span, max_complex_block + 2)))
     logger.info(f"{all_blocks}")
 
     assert all_blocks, "The training block is empty. Something goes wrong."
