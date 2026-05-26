@@ -239,7 +239,7 @@ def run(
 
     max_complex_block = min(
         max(
-            (b.size for b in training_block.batch_iter()),
+            (b.size for b in training_block.batch_iter() if b.is_complex),
             default=0,
         ),
         cap_span,
