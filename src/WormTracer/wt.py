@@ -562,7 +562,7 @@ center loss : {np.mean(losses[4])}
     )
 
     # Ensuring the continuity of theta
-    theta = make_theta_from_xy(x, y)
+    # theta = make_theta_from_xy(x, y)
 
     for step, i in losslarge_area:
         block = all_blocks[i]
