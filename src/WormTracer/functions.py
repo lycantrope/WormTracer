@@ -243,28 +243,14 @@ def calc_xy_and_prewidth(
     y = np.zeros((T, plot_n))
     pre_width = np.zeros(T)
 
-    x[0, :], y[0, :] = get_skeleton(imagestack[0], plot_n)
-    pre_width[0] = get_width(imagestack[0], x[0], y[0])
     print("")
-    for t in range(1, T):
+    for t, im in enumerate(imagestack):
         if __debug__:
             bar = "\rget_skeleton and width:[{:<100}] {}/{}".format(
                 "▉" * round((t + 1) * 100 / T), t + 1, T
             )
             print(bar, end="")
-        im = imagestack[t]
-        x1, y1 = get_skeleton(im, plot_n)
-
-        x0, y0 = x[t - 1, :], y[t - 1, :]
-
-        gap_headtail = ((x1 - x0) ** 2 + (y1 - y0) ** 2).sum()
-        gap_headtail_rev = ((x1 - x0[::-1]) ** 2 + (y1 - y0[::-1]) ** 2).sum()
-
-        x[t, :], y[t, :] = x1, y1
-        if gap_headtail > gap_headtail_rev:
-            x[t, :] = x1[::-1]
-            y[t, :] = y1[::-1]
-
+        x[t], y[t] = get_skeleton(im, plot_n)
         pre_width[t] = get_width(im, x[t], y[t])
 
     print("")
@@ -273,6 +259,7 @@ def calc_xy_and_prewidth(
     )
     x += x_st
     y += y_st
+    x, y = flip_check(x, y)
     return x, y, pre_width, unitLength
 
 

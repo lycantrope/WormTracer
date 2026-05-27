@@ -155,6 +155,27 @@ def run(
         y_st,
     )
 
+    init_x = np.copy(x / params["rescale"])
+    init_y = np.copy(y / params["rescale"])
+
+    init_x, init_y = cancel_reduction(
+        init_x,
+        init_y,
+        n_input_images,
+        params["start_T"],
+        params["end_T"],
+        Tscaled_ind,
+        params["plot_n"],
+    )
+
+    with h5py.File(
+        os.path.join(output_path, output_name + "_skel_coarse.h5"),
+        "w",
+    ) as handler:
+        handler.create_dataset("x", data=init_x)
+        handler.create_dataset("y", data=init_y)
+    del init_x, init_y
+
     guide_idx = None
     if guide_files is not None:
         logger.info(f"Found guide_files: {guide_files}")
@@ -839,8 +860,16 @@ center loss : {np.mean(losses_all[(3, i)][4])}
         params_for_save,
     )
 
-    np.savetxt(os.path.join(output_path, output_name + "_x.csv"), x, delimiter=",")
-    np.savetxt(os.path.join(output_path, output_name + "_y.csv"), y, delimiter=",")
+    np.savetxt(
+        os.path.join(output_path, output_name + "_x.csv"),
+        x,
+        delimiter=",",
+    )
+    np.savetxt(
+        os.path.join(output_path, output_name + "_y.csv"),
+        y,
+        delimiter=",",
+    )
 
     with h5py.File(
         os.path.join(output_path, output_name + "_skel.h5"),
