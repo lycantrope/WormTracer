@@ -174,7 +174,13 @@ def run(
     ) as handler:
         handler.create_dataset("x", data=init_x)
         handler.create_dataset("y", data=init_y)
+    logger.info(f"Original centerlines saved at {get_time_now(tz)}")
+
     del init_x, init_y
+
+    if params.get("DryRun"):
+        logger.info(f"DryRun mode: WormTracer terminated at {get_time_now(tz)}")
+        return
 
     guide_idx = None
     if guide_files is not None:

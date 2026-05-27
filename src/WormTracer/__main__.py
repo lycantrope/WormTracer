@@ -116,6 +116,12 @@ def get_parser():
         help="If True, saves input images with estimated centerline as a multipage tiff full_line_images.tif",
         default=None,
     )
+    parser.add_argument(
+        "--DryRun",
+        action="store_true",
+        help="If True, WormTracer will be terminated after coarse centerlines were saved",
+        default=None,
+    )
     return parser
 
 
