@@ -721,11 +721,30 @@ def set_init_xy(
 
 
 def find_minimal_winding_number(theta1: npt.NDArray, theta2: npt.NDArray) -> int:
-    # 1. Find the average numerical difference across all elements.
-    avg_diff = np.mean(theta1 - theta2)
-    # 2. Convert the average difference into a fractional number of 2*pi cycles.
-    frac_shift = avg_diff / (2 * np.pi)
-    # 3. Round to the nearest integer to find the optimal winding number (k).
+    # 1. Handle any NaN safety checks up front
+    if np.any(np.isnan(theta1)) or np.any(np.isnan(theta2)):
+        return 0  # Or handle tracking loss gracefully
+
+    # 2. Convert both radian series into complex polar unit vectors
+    z1 = np.exp(1j * theta1)
+    z2 = np.exp(1j * theta2)
+
+    # 3. Perform complex subtraction via conjugate multiplication: z1 * conj(z2)
+    # This yields a vector representing the clean, unwrapped rotation between them
+    relative_rotation = z1 * np.conj(z2)
+
+    # 4. Take the MEAN in the 2D vector domain (not the 1D scalar domain!)
+    # This takes a robust geometric "majority vote" of the overall rotation
+    mean_vector = np.mean(relative_rotation)
+
+    # 5. Extract the true average angular difference using arctan2
+    # This is completely immune to the -pi/pi boundary cliff!
+    avg_diff = np.arctan2(np.imag(mean_vector), np.real(mean_vector))
+
+    # 6. Find the optimal 2*pi winding cycle adjustment
+    # We calculate how far the raw linear difference deviates from the true spatial difference
+    raw_linear_diff = np.mean(theta1 - theta2)
+    frac_shift = (raw_linear_diff - avg_diff) / (2 * np.pi)
     return int(np.round(frac_shift))
 
 
