@@ -245,7 +245,7 @@ def run(
         cap_span,
     )
 
-    batchsize = min(cap_span, max_complex_block * 3)
+    batchsize = min(cap_span, max_complex_block + 40)
     if max_complex_block == 0:
         logger.warning("No complex block detected")
         batchsize = min(50, cap_span)
@@ -413,11 +413,11 @@ center loss : {np.mean(losses[4])}
 
         l_pad = 0
         if i > 0:
-            l_pad = min(padding, all_blocks[i - 1].size)
+            l_pad = min(padding, all_blocks[i - 1].size, 20)
 
         r_pad = 0
         if i + 1 < len(all_blocks):
-            r_pad = min(padding, all_blocks[i + 1].size)
+            r_pad = min(padding, all_blocks[i + 1].size, 20)
 
         # Inclusive both end [Start-l_pad, end+r_pad]
         start = block.start - l_pad
@@ -589,11 +589,11 @@ center loss : {np.mean(losses[4])}
 
         l_pad = 0
         if i > 0:
-            l_pad = min(padding, all_blocks[i - 1].size)
+            l_pad = min(padding, all_blocks[i - 1].size, 20)
 
         r_pad = 0
         if i + 1 < len(all_blocks):
-            r_pad = min(padding, all_blocks[i + 1].size)
+            r_pad = min(padding, all_blocks[i + 1].size, 20)
 
         # Inclusive both end [Start-l_pad, end+r_pad]
         start = block.start - l_pad
