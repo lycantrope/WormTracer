@@ -245,10 +245,14 @@ def run(
         cap_span,
     )
 
-    if max_complex_block > cap_span:
+    batchsize = min(cap_span, max_complex_block * 3)
+    if max_complex_block == 0:
+        logger.warning("No complex block detected")
+        batchsize = min(50, cap_span)
+    elif max_complex_block > cap_span:
         logger.warning("Warning! Some complex block are too large!")
 
-    all_blocks = list(training_block.batch_iter(min(cap_span, max_complex_block * 3)))
+    all_blocks = list(training_block.batch_iter(batchsize))
     logger.info(f"{all_blocks}")
 
     assert all_blocks, "The training block is empty. Something goes wrong."
