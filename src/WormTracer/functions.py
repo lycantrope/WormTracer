@@ -710,6 +710,7 @@ def set_init_xy(
 def find_minimal_winding_number(theta1: npt.NDArray, theta2: npt.NDArray) -> int:
     # 1. Handle any NaN safety checks up front
     if np.any(np.isnan(theta1)) or np.any(np.isnan(theta2)):
+        logger.error(f"{theta1=}, {theta2=}")
         return 0  # Or handle tracking loss gracefully
 
     # 2. Convert both radian series into complex polar unit vectors
@@ -731,7 +732,9 @@ def find_minimal_winding_number(theta1: npt.NDArray, theta2: npt.NDArray) -> int
     # 6. Find the optimal 2*pi winding cycle adjustment
     # We calculate how far the raw linear difference deviates from the true spatial difference
     raw_linear_diff = np.mean(theta1 - theta2)
+
     frac_shift = (raw_linear_diff - avg_diff) / (2 * np.pi)
+    logger.info(f"{mean_vector=}, {avg_diff=}, {frac_shift=}")
     return int(np.round(frac_shift))
 
 
@@ -741,7 +744,7 @@ def make_theta_cand(
     k_normal = find_minimal_winding_number(theta_begin, theta_end)
     shift_fw = (np.array([0, 1, -1]) + k_normal) * 2 * np.pi
 
-    theta_cands_normal = shift_fw[:, None] + theta_end
+    theta_cands_normal = shift_fw[:, None] + theta_end[None, :]
     loss_normal = np.sum((theta_cands_normal - theta_begin) ** 2, axis=1)
     sort_indices = np.argsort(loss_normal)
     theta_cands_normal = theta_cands_normal[sort_indices]
@@ -750,7 +753,7 @@ def make_theta_cand(
     k_reverse = find_minimal_winding_number(theta_begin, theta_rev)
     shift_rv = (np.array([0, 1, -1]) + k_reverse) * 2 * np.pi
 
-    theta_cands_reversal = shift_rv[:, None] + theta_rev
+    theta_cands_reversal = shift_rv[:, None] + theta_rev[None, :]
     loss_reversal = np.sum((theta_cands_reversal - theta_begin) ** 2, axis=1)
     sort_indices = np.argsort(loss_reversal)
     theta_cands_reversal = theta_cands_reversal[sort_indices]
@@ -1146,7 +1149,17 @@ def train3(
         loss = (
             image_loss + continuity_loss + smoothness_loss + length_loss + center_loss
         )
-
+        if torch.isnan(loss):
+            logger.info(
+                "{:.2f} {:.2f} {:.2f} {:.2f} {:.2f}".format(
+                    image_loss.item(),
+                    continuity_loss.item(),
+                    smoothness_loss.item(),
+                    length_loss.item(),
+                    center_loss.item(),
+                )
+            )
+            break
         model.zero_masked_gradients(mask)
         loss.backward()
         if torch.min(annealing_weight) > 0.99:
