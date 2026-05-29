@@ -453,7 +453,6 @@ center loss : {np.mean(losses[4])}
         # This is only for saving the output during training
         params["use_area"] = block
         # filenames_ = filenames[use_area[0]:use_area[1]+1]
-        theta_ = theta[start : end + 1, :].copy()
 
         # read and preprocess images
         real_image, y_st, x_st = load_image(
@@ -471,8 +470,9 @@ center loss : {np.mean(losses[4])}
         cand_start = max(l_pad - 1, 0)
         cand_end = min(l_pad + block.size + 1, l_pad + block.size)
         cand_size = cand_end - cand_start + 1
-        theta_cand, _ = make_theta_cand(theta_[cand_start], theta_[cand_end])
 
+        theta_ = theta[start : end + 1, :].copy()
+        theta_cand, _ = make_theta_cand(theta_[cand_start], theta_[cand_end])
         theta_cand_fw = np.linspace(theta_[cand_start, :], theta_cand[0], cand_size)
         theta_cand_rv = np.linspace(theta_[cand_start, :], theta_cand[1], cand_size)
         # set init value
@@ -515,6 +515,7 @@ center loss : {np.mean(losses[4])}
 
         # flip final theta to trace again
         theta_[cand_start : cand_end + 1] = theta_cand_rv
+        theta_[cand_end + 1 :] = np.unwrap(theta[cand_end + 1 :, ::-1] + np.pi)
         init_theta = torch.from_numpy(np.copy(theta_))
 
         # make model instance and training
@@ -547,6 +548,8 @@ center loss : {np.mean(losses[4])}
             theta_model = model.theta.detach().cpu().numpy()
 
             losses_all[(2, block.idx)] = losses
+            # Since reverting theta give us  better results, we will flip the follow theta as well.
+            theta[block.end + 1 :] = np.unwrap(theta[block.end + 1 :, ::-1] + np.pi)
 
         # Trim padding
         x_model = x_model[l_pad : l_pad + block.size]
