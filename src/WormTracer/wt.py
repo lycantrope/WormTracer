@@ -1008,7 +1008,7 @@ center loss : {np.mean(losses_all[(3, i)][4])}
                 color=(0, 255, 255),
                 thickness=3,
             )  # (Y, X, C)
-            im_bgr = cv2.circle(im_bgr, pts[i], 3, (0, 0, 255), 1)
+            im_bgr = cv2.circle(im_bgr, pts[i, 0], 3, (0, 0, 255), 1)
             # (Y, X, C) => (C, Y, X)
             im_rgb = cv2.cvtColor(im_bgr, cv2.COLOR_BGR2RGB)
             stack[i] = np.transpose(im_rgb, (2, 0, 1)).astype("u1")
