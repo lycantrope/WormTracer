@@ -1001,23 +1001,36 @@ center loss : {np.mean(losses_all[(3, i)][4])}
         for i in range(T):
             im_bgr = cv2.cvtColor(real_image[i], cv2.COLOR_GRAY2BGR)
             # pt is an [N, 2] array, OpenCV only use (1, N, 2) for plotting.
-            im_lines = cv2.polylines(
+            im_bgr = cv2.polylines(
                 im_bgr,
                 [pts[i]],
                 isClosed=False,
-                color=(0, 0, 255),
+                color=(0, 255, 255),
                 thickness=3,
             )  # (Y, X, C)
+            im_bgr = cv2.circle(im_bgr, pts[i], 3, (0, 0, 255), 1)
             # (Y, X, C) => (C, Y, X)
-            stack[i] = np.transpose(im_lines, (2, 0, 1)).astype("u1")
+            im_rgb = cv2.cvtColor(im_bgr, cv2.COLOR_BGR2RGB)
+            stack[i] = np.transpose(im_rgb, (2, 0, 1)).astype("u1")
+
+        lut_red = np.zeros((3, 256), dtype="u1")
+        lut_red[0, :] = np.arange(256, dtype="u1")  # Red channel
+
+        lut_green = np.zeros((3, 256), dtype="u1")
+        lut_green[1, :] = np.arange(256, dtype="u1")  # Green channel
+
+        lut_blue = np.zeros((3, 256), dtype="u1")
+        lut_blue[2, :] = np.arange(256, dtype="u1")  # Blue channel
 
         tifffile.imwrite(
             filename,
             data=stack,
             imagej=True,
             metadata={
+                "Composite mode": "composite",  # Forces ImageJ's composite display
                 "axes": "TCYX",
-                "labels": [f"index: {start_t + i:d}" for i in range(T)],
+                "LUTs": [lut_red, lut_green, lut_blue],
+                "labels": ["Ch1 (Red)", "Ch2 (Green)", "Ch3 (Blue)"],
             },
         )
         logger.info(f"Multipage Tiff saved to {filename} at {get_time_now(tz)}")
