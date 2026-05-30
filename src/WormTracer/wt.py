@@ -468,7 +468,7 @@ center loss : {np.mean(losses[4])}
         # make flipping theta candidate
         # make theta_candidate only in complex area
         cand_start = max(l_pad - 1, 0)
-        cand_end = min(l_pad + block.size + 1, l_pad + block.size)
+        cand_end = min(l_pad + block.size, end - 1)
         cand_size = cand_end - cand_start + 1
 
         theta_ = theta[start : end + 1, :].copy()
@@ -648,7 +648,7 @@ center loss : {np.mean(losses[4])}
 
         # make flipping candidate
         cand_start = max(l_pad - 1, 0)
-        cand_end = min(l_pad + block.size + 1, l_pad + block.size)
+        cand_end = min(l_pad + block.size, end - 1)
         cand_size = cand_end - cand_start + 1
         _, theta_cand = make_theta_cand(theta_[cand_start], theta_[cand_end])
 
