@@ -343,8 +343,9 @@ def run(
             )
 
         # set init value
-        theta_cand, _ = make_theta_cand(sub_theta[0], sub_theta[-1])
-        sub_theta[-1, :] = theta_cand[0]
+        if len(sub_theta) > 1:
+            theta_cand, _ = make_theta_cand(sub_theta[0], sub_theta[-1])
+            sub_theta[-1, :] = theta_cand[0]
         init_cx, init_cy = set_init_xy(real_image)
         init_theta = torch.tensor(sub_theta)
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
@@ -470,7 +471,7 @@ center loss : {np.mean(losses[4])}
         sub_theta = theta[start : end + 1, :].copy()
 
         cand_start = max(l_pad - 1, 0)
-        cand_end = min(l_pad + block.size, end - start + 1)
+        cand_end = min(l_pad + block.size, end - start)
         cand_size = cand_end - cand_start + 1
 
         theta_cand, _ = make_theta_cand(sub_theta[cand_start], sub_theta[cand_end])
@@ -648,7 +649,7 @@ center loss : {np.mean(losses[4])}
         # make flipping candidate
         sub_theta = theta[start : end + 1, :].copy()
         cand_start = max(l_pad - 1, 0)
-        cand_end = min(l_pad + block.size, end - start + 1)
+        cand_end = min(l_pad + block.size, end - start)
         cand_size = cand_end - cand_start + 1
         _, theta_cand = make_theta_cand(sub_theta[cand_start], sub_theta[cand_end])
 
