@@ -515,7 +515,7 @@ center loss : {np.mean(losses[4])}
 
         # flip final theta to trace again
         theta_[cand_start : cand_end + 1] = theta_cand_rv
-        theta_[cand_end + 1 :] = np.unwrap(theta[cand_end + 1 :, ::-1] + np.pi)
+        theta_[cand_end + 1 :] = np.unwrap(theta_[cand_end + 1 :, ::-1] + np.pi)
         init_theta = torch.from_numpy(np.copy(theta_))
 
         # make model instance and training
