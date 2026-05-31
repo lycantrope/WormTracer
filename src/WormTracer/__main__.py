@@ -64,10 +64,7 @@ def get_parser():
     parser.add_argument("--body_ratio", type=float)
     parser.add_argument("--judge_head_method", choices=["amplitude", "frequency"])
 
-    parser.add_argument(
-        "--num_t",
-        type=int,
-    )
+    parser.add_argument("--num_t", type=int)
 
     parser.add_argument(
         "--ShowProgress",
@@ -119,7 +116,7 @@ def get_parser():
     parser.add_argument(
         "--DryRun",
         action="store_true",
-        help="If True, WormTracer will be terminated after coarse centerlines were saved",
+        help="If True, WormTracer will be terminated just after saving the coarse centerlines",
         default=None,
     )
     return parser
@@ -134,10 +131,7 @@ def main():
     if backend != "Agg":
         matplotlib.use("Agg")
     wt.run(**conf)
-    try:
-        matplotlib.use(backend)
-    except Exception:
-        pass
+    matplotlib.use(backend)
 
 
 def main_wrapper():

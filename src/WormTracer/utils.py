@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import collections
 import datetime
-import functools
 import glob
 import logging
 import os
@@ -135,43 +134,6 @@ def calc_cap_span(image_shape: Sequence[int], plot_n: int) -> int:
     except Exception as _:
         cap_span = T
     return cap_span
-
-
-# 2. Setup your specific logger
-def ensure_clearup(logger: logging.Logger) -> Callable:
-    def decorator(fn):
-        @functools.wraps(fn)
-        def wrapper(*arg, **kwargs):
-            tic = datetime.datetime.now()
-            original_level = logger.getEffectiveLevel()
-            for h in logger.handlers[:]:
-                h.close()
-                logger.removeHandler(h)
-
-            logger.handlers = []
-            logger.propagate = False
-            logger.setLevel(logging.DEBUG)
-            stream_stderr = logging.StreamHandler()
-            stream_stderr.setLevel(logging.DEBUG)
-            logger.addHandler(stream_stderr)
-            try:
-                # Run function
-                ret = fn(*arg, **kwargs)
-                toc = datetime.datetime.now()
-                elapsed_time = toc - tic
-                logger.info(f"Elapse time: {elapsed_time.total_seconds():.1f} (sec)")
-                return ret
-            finally:
-                for h in logger.handlers[:]:
-                    h.close()
-                    logger.removeHandler(h)
-
-                logger.setLevel(original_level)
-                logger.propagate = True
-
-        return wrapper
-
-    return decorator
 
 
 def centerline_to_roi_iter(

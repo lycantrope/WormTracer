@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import functools
 import logging
 import os
 import sys
@@ -45,7 +46,6 @@ from WormTracer.functions import (
 from WormTracer.utils import (
     calc_cap_span,
     clear_dir,
-    ensure_clearup,
     get_filenames,
     get_time_now,
     remove_progress,
@@ -62,7 +62,21 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@ensure_clearup(logger)
+# 2. Setup your specific logger
+def timer(fn):
+    @functools.wraps(fn)
+    def wrapper(*arg, **kwargs):
+        tic = datetime.datetime.now()
+        ret = fn(*arg, **kwargs)
+        toc = datetime.datetime.now()
+        elapsed_time = toc - tic
+        logger.info(f"Elapse time: {elapsed_time.total_seconds():.1f} (sec)")
+        return ret
+
+    return wrapper
+
+
+@timer
 def run(
     parameter_file: str | os.PathLike,
     dataset_path: str | os.PathLike,
@@ -316,7 +330,7 @@ def run(
         logger.info(str(block))
         params["use_area"] = block
         # filenames_ = filenames[use_area[0]:use_area[1]+1]
-        theta_ = theta[block.start : block.end + 1, :].copy()
+        sub_theta = theta[block.start : block.end + 1, :].copy()
 
         # read and preprocess images
         real_image, y_st, x_st = load_image(
@@ -343,10 +357,10 @@ def run(
             )
 
         # set init value
-        # theta_cand, _ = make_theta_cand(theta_[0], theta_[-1])
-        # theta_[-1, :] = theta_cand[0]
+        theta_cand, _ = make_theta_cand(sub_theta[0], sub_theta[-1])
+        sub_theta[-1, :] = theta_cand[0]
         init_cx, init_cy = set_init_xy(real_image)
-        init_theta = torch.tensor(theta_)
+        init_theta = torch.tensor(sub_theta)
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
 
         # make model instance and training
@@ -453,7 +467,6 @@ center loss : {np.mean(losses[4])}
         # This is only for saving the output during training
         params["use_area"] = block
         # filenames_ = filenames[use_area[0]:use_area[1]+1]
-        theta_ = theta[start : end + 1, :].copy()
 
         # read and preprocess images
         real_image, y_st, x_st = load_image(
@@ -468,17 +481,19 @@ center loss : {np.mean(losses[4])}
         logger.info(f"im_shape: {real_image.shape}")
         # make flipping theta candidate
         # make theta_candidate only in complex area
-        cand_start = max(l_pad - 1, 0)
-        cand_end = min(l_pad + block.size + 1, l_pad + block.size)
-        cand_size = cand_end - cand_start + 1
-        theta_cand, _ = make_theta_cand(theta_[cand_start], theta_[cand_end])
+        sub_theta = theta[start : end + 1, :].copy()
 
-        theta_cand_fw = np.linspace(theta_[cand_start, :], theta_cand[0], cand_size)
-        theta_cand_rv = np.linspace(theta_[cand_start, :], theta_cand[1], cand_size)
+        cand_start = max(l_pad - 1, 0)
+        cand_end = min(l_pad + block.size, end - start)
+        cand_size = cand_end - cand_start + 1
+
+        theta_cand, _ = make_theta_cand(sub_theta[cand_start], sub_theta[cand_end])
+        theta_cand_fw = np.linspace(sub_theta[cand_start, :], theta_cand[0], cand_size)
+        theta_cand_rv = np.linspace(sub_theta[cand_start, :], theta_cand[1], cand_size)
         # set init value
         init_cx, init_cy = set_init_xy(real_image)
-        theta_[cand_start : cand_end + 1] = theta_cand_fw
-        init_theta = torch.from_numpy(np.copy(theta_))
+        sub_theta[cand_start : cand_end + 1] = theta_cand_fw
+        init_theta = torch.from_numpy(np.copy(sub_theta))
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
 
         # gradient_mask for simple area
@@ -514,8 +529,9 @@ center loss : {np.mean(losses[4])}
         theta_model = model.theta.detach().cpu().numpy()
 
         # flip final theta to trace again
-        theta_[cand_start : cand_end + 1] = theta_cand_rv
-        init_theta = torch.from_numpy(np.copy(theta_))
+        sub_theta[cand_start : cand_end + 1] = theta_cand_rv
+        sub_theta[cand_end + 1 :] = sub_theta[cand_end + 1 :, ::-1] + np.pi
+        init_theta = torch.from_numpy(np.copy(sub_theta))
 
         # make model instance and training
         model = (
@@ -547,6 +563,8 @@ center loss : {np.mean(losses[4])}
             theta_model = model.theta.detach().cpu().numpy()
 
             losses_all[(2, block.idx)] = losses
+            # Since reverting theta give us better results, we will flip the follow theta as well.
+            theta[block.end + 1 :] = theta[block.end + 1 :, ::-1] + np.pi
 
         # Trim padding
         x_model = x_model[l_pad : l_pad + block.size]
@@ -630,8 +648,6 @@ center loss : {np.mean(losses[4])}
         params["use_area"] = block
         logger.info(f"{str(block)}: too large loss!")
 
-        theta_ = theta[start : end + 1, :].copy()
-
         # read and preprocess images
         # real_image, y_st, x_st = read_image(imshape, filenames_, params['rescale'], Worm_is_black)
         real_image, y_st, x_st = load_image(
@@ -644,18 +660,19 @@ center loss : {np.mean(losses[4])}
         T, H, W = real_image.shape
 
         # make flipping candidate
+        sub_theta = theta[start : end + 1, :].copy()
         cand_start = max(l_pad - 1, 0)
-        cand_end = min(l_pad + block.size + 1, l_pad + block.size)
+        cand_end = min(l_pad + block.size, end - start)
         cand_size = cand_end - cand_start + 1
-        _, theta_cand = make_theta_cand(theta_[cand_start], theta_[cand_end])
+        _, theta_cand = make_theta_cand(sub_theta[cand_start], sub_theta[cand_end])
 
-        theta_cand_fw = np.linspace(theta_[cand_start, :], theta_cand[0], cand_size)
-        theta_cand_rv = np.linspace(theta_[cand_start, :], theta_cand[1], cand_size)
+        theta_cand_fw = np.linspace(sub_theta[cand_start, :], theta_cand[0], cand_size)
+        theta_cand_rv = np.linspace(sub_theta[cand_start, :], theta_cand[1], cand_size)
 
         # set init value
         init_cx, init_cy = set_init_xy(real_image)
-        theta_[cand_start : cand_end + 1] = theta_cand_fw
-        init_theta = torch.from_numpy(np.copy(theta_))
+        sub_theta[cand_start : cand_end + 1] = theta_cand_fw
+        init_theta = torch.from_numpy(np.copy(sub_theta))
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
 
         # The gradient mask will be all zeros except loss large area.
@@ -705,8 +722,9 @@ center loss : {np.mean(losses[4])}
             remove_progress(output_path, "{}-{}_id2*.png".format(start, end))
 
         # flip final theta and trace again
-        theta_[cand_start : cand_end + 1] = theta_cand_rv
-        init_theta = torch.from_numpy(np.copy(theta_))
+        sub_theta[cand_start : cand_end + 1] = theta_cand_rv
+        sub_theta[cand_end + 1 :] = sub_theta[cand_end + 1 :, ::-1] + np.pi
+        init_theta = torch.from_numpy(np.copy(sub_theta))
 
         # make model instance and training
         model = (
@@ -996,23 +1014,36 @@ center loss : {np.mean(losses_all[(3, i)][4])}
         for i in range(T):
             im_bgr = cv2.cvtColor(real_image[i], cv2.COLOR_GRAY2BGR)
             # pt is an [N, 2] array, OpenCV only use (1, N, 2) for plotting.
-            im_lines = cv2.polylines(
+            im_bgr = cv2.polylines(
                 im_bgr,
                 [pts[i]],
                 isClosed=False,
-                color=(0, 0, 255),
+                color=(0, 255, 255),
                 thickness=3,
             )  # (Y, X, C)
+            im_bgr = cv2.circle(im_bgr, pts[i, 0], 3, (0, 0, 255), 1)
             # (Y, X, C) => (C, Y, X)
-            stack[i] = np.transpose(im_lines, (2, 0, 1)).astype("u1")
+            im_rgb = cv2.cvtColor(im_bgr, cv2.COLOR_BGR2RGB)
+            stack[i] = np.transpose(im_rgb, (2, 0, 1)).astype("u1")
+
+        lut_red = np.zeros((3, 256), dtype="u1")
+        lut_red[0, :] = np.arange(256, dtype="u1")  # Red channel
+
+        lut_green = np.zeros((3, 256), dtype="u1")
+        lut_green[1, :] = np.arange(256, dtype="u1")  # Green channel
+
+        lut_blue = np.zeros((3, 256), dtype="u1")
+        lut_blue[2, :] = np.arange(256, dtype="u1")  # Blue channel
 
         tifffile.imwrite(
             filename,
             data=stack,
             imagej=True,
             metadata={
+                "Composite mode": "composite",  # Forces ImageJ's composite display
                 "axes": "TCYX",
-                "labels": [f"index: {start_t + i:d}" for i in range(T)],
+                "LUTs": [lut_red, lut_green, lut_blue],
+                "labels": ["ch1", "ch2", "ch3"],
             },
         )
         logger.info(f"Multipage Tiff saved to {filename} at {get_time_now(tz)}")

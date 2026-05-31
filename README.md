@@ -48,7 +48,7 @@ Alternatively, you can `git clone` this repository to any directory via
 ```sh
 git clone https://github.com/lycantrope/WormTracer.git && cd WormTracer
 ```
-Then, pip or uv install it with pip or uv
+Then, install WormTracer using pip or uv
 ```sh
 pip install .
 ```
@@ -282,6 +282,7 @@ usage: WormTracer [-h] --parameter_file PARAMETER_FILE
                   [--save_progress_num SAVE_PROGRESS_NUM]
                   [--SaveCenterlinedWormsSerial] [--SaveCenterlinedWormsMovie]
                   [--SaveCenterlinedWormsMultitiff]
+                  [--DryRun]
 ```
 
 * **without guide**
@@ -330,8 +331,9 @@ hoge_mask_001
 └── hoge_mask_001_params.yaml
 └── hoge_mask_001_x.csv
 └── hoge_mask_001_y.csv
+└── hoge_mask_001_skel_coarse.h5
 └── hoge_mask_001_skel.h5
-└── hoge_mask_001_RoiZet.zip
+└── hoge_mask_001_RoiSet.zip
 └── hoge_mask_001_losses.csv
 └── hoge_mask_001_losses.csv
  [optional]
@@ -345,6 +347,7 @@ Inside the result folder (e.g., `hoge_mask_001`), the following files are genera
 * **`hoge_mask_001_params.yaml`**: A YAML file containing all initial parameters used for the run, supplemented with additional metadata such as the original dataset_path and the final optimized (trained) parameters.
 * **`hoge_mask_001_x.csv`**:  X-coordinates from start_T to end_T. Rows represent time, and columns represent positions from head to tail (T, plot_n).
 * **`hoge_mask_001_y.csv`**: Y-coordinates formatted identically to the X-coordinate file
+* **`hoge_mask_001_skel_coarse.h5`**: Centerlines obtained by thinning method.
 * **`hoge_mask_001_skel.h5`**: An HDF5 file containing two datasets, x and y.
 * **`hoge_mask_001_RoiSet.zip`**: A collection of ImageJ-compatible ROIs (Regions of Interest) that can be directly imported into the ImageJ RoiManager for visualization.
 * **`hoge_mask_001_losses.csv`**: Loss values recorded across all training steps, containing
