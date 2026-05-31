@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import functools
 import logging
 import os
 import sys
@@ -45,7 +46,6 @@ from WormTracer.functions import (
 from WormTracer.utils import (
     calc_cap_span,
     clear_dir,
-    ensure_clearup,
     get_filenames,
     get_time_now,
     remove_progress,
@@ -62,7 +62,21 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@ensure_clearup(logger)
+# 2. Setup your specific logger
+def timer(fn):
+    @functools.wraps(fn)
+    def wrapper(*arg, **kwargs):
+        tic = datetime.datetime.now()
+        ret = fn(*arg, **kwargs)
+        toc = datetime.datetime.now()
+        elapsed_time = toc - tic
+        logger.info(f"Elapse time: {elapsed_time.total_seconds():.1f} (sec)")
+        return ret
+
+    return wrapper
+
+
+@timer
 def run(
     parameter_file: str | os.PathLike,
     dataset_path: str | os.PathLike,
@@ -343,9 +357,8 @@ def run(
             )
 
         # set init value
-        if len(sub_theta) > 1:
-            theta_cand, _ = make_theta_cand(sub_theta[0], sub_theta[-1])
-            sub_theta[-1, :] = theta_cand[0]
+        theta_cand, _ = make_theta_cand(sub_theta[0], sub_theta[-1])
+        sub_theta[-1, :] = theta_cand[0]
         init_cx, init_cy = set_init_xy(real_image)
         init_theta = torch.tensor(sub_theta)
         init_unitLength = torch.ones(T, dtype=torch.float) * unitLength
@@ -517,7 +530,7 @@ center loss : {np.mean(losses[4])}
 
         # flip final theta to trace again
         sub_theta[cand_start : cand_end + 1] = theta_cand_rv
-        sub_theta[cand_end + 1 :] = np.unwrap(sub_theta[cand_end + 1 :, ::-1] + np.pi)
+        sub_theta[cand_end + 1 :] = sub_theta[cand_end + 1 :, ::-1] + np.pi
         init_theta = torch.from_numpy(np.copy(sub_theta))
 
         # make model instance and training
@@ -550,8 +563,8 @@ center loss : {np.mean(losses[4])}
             theta_model = model.theta.detach().cpu().numpy()
 
             losses_all[(2, block.idx)] = losses
-            # Since reverting theta give us  better results, we will flip the follow theta as well.
-            theta[block.end + 1 :] = np.unwrap(theta[block.end + 1 :, ::-1] + np.pi)
+            # Since reverting theta give us better results, we will flip the follow theta as well.
+            theta[block.end + 1 :] = theta[block.end + 1 :, ::-1] + np.pi
 
         # Trim padding
         x_model = x_model[l_pad : l_pad + block.size]
@@ -710,7 +723,7 @@ center loss : {np.mean(losses[4])}
 
         # flip final theta and trace again
         sub_theta[cand_start : cand_end + 1] = theta_cand_rv
-        sub_theta[cand_end + 1 :] = np.unwrap(sub_theta[cand_end + 1 :, ::-1] + np.pi)
+        sub_theta[cand_end + 1 :] = sub_theta[cand_end + 1 :, ::-1] + np.pi
         init_theta = torch.from_numpy(np.copy(sub_theta))
 
         # make model instance and training
@@ -1030,7 +1043,7 @@ center loss : {np.mean(losses_all[(3, i)][4])}
                 "Composite mode": "composite",  # Forces ImageJ's composite display
                 "axes": "TCYX",
                 "LUTs": [lut_red, lut_green, lut_blue],
-                "labels": ["Ch1 (Red)", "Ch2 (Green)", "Ch3 (Blue)"],
+                "labels": ["ch1", "ch2", "ch3"],
             },
         )
         logger.info(f"Multipage Tiff saved to {filename} at {get_time_now(tz)}")
