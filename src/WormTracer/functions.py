@@ -37,6 +37,7 @@ if typing.TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def show_image(

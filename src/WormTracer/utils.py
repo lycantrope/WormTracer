@@ -24,6 +24,7 @@ if typing.TYPE_CHECKING:
 
 ### read, preprocess images and get information ###
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def set_output_path(

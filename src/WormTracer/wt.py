@@ -60,6 +60,13 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+stdout = logging.StreamHandler(sys.stdout)
+stdout.setLevel(logging.DEBUG)
+logger.addHandler(stdout)
+stderr = logging.StreamHandler(sys.stderr)
+stderr.setLevel(logging.WARNING)
+logger.addHandler(stderr)
 
 
 # 2. Setup your specific logger
