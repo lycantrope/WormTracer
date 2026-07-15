@@ -735,7 +735,7 @@ def find_minimal_winding_number(theta1: npt.NDArray, theta2: npt.NDArray) -> int
     raw_linear_diff = np.mean(theta1 - theta2)
 
     frac_shift = (raw_linear_diff - avg_diff) / (2 * np.pi)
-    logger.info(f"{mean_vector=}, {avg_diff=}, {frac_shift=}")
+    # logger.info(f"{mean_vector=}, {avg_diff=}, {frac_shift=}")
     return int(np.round(frac_shift))
 
 
@@ -1365,7 +1365,7 @@ def loss_compare(loss_pair) -> bool:
                 (smo_select, smo_exrate),
             ],
             key=lambda x: x[1],
-        )
+        )[0]
     )
 
 
@@ -1476,15 +1476,15 @@ def judge_head_frequency(x, y) -> bool:
     # logger.info('correlation =', cor)
 
     # show power spectrum plot
-    if __debug__:
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        ax.imshow(spat)
-        ax.set_aspect(0.1)
-        ax.set_xlabel("body segment", fontsize=20)
-        ax.set_ylabel("peak curve freq", fontsize=20)
-        ax.set_title(f"Correlation = {cor:.3g}")
-        # plt.show()
+    # if __debug__:
+    #     fig = plt.figure()
+    #     ax = fig.add_subplot(111)
+    #     ax.imshow(spat)
+    #     ax.set_aspect(0.1)
+    #     ax.set_xlabel("body segment", fontsize=20)
+    #     ax.set_ylabel("peak curve freq", fontsize=20)
+    #     ax.set_title(f"Correlation = {cor:.3g}")
+    #     plt.show()
 
     return cor > 0
 
